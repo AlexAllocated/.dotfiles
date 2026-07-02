@@ -358,11 +358,11 @@ in
                 fi
                 rm "$target"
               elif [ -e "$target" ]; then
-                backup="$target.pre-nix-backup"
+                backup="$target.dotfiles-backup"
                 index=0
                 while [ -e "$backup" ]; do
                   index=$((index + 1))
-                  backup="$target.pre-nix-backup.$index"
+                  backup="$target.dotfiles-backup.$index"
                 done
                 mv "$target" "$backup"
                 echo "Moved existing $target to $backup"

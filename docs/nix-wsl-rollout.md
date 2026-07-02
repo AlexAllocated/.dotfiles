@@ -1,6 +1,7 @@
 # NixOS-WSL Rollout
 
-The current Ubuntu WSL distro stays installed until NixOS is validated.
+NixOS is the primary WSL target. Keep an existing Ubuntu WSL distro installed
+only as a fallback while validating a new NixOS setup.
 
 ## Install side-by-side
 
@@ -10,8 +11,8 @@ From the existing Ubuntu control-plane distro:
 ./dot-bootstrap nixos-wsl
 ```
 
-The bootstrap installs a WSL distro named `NixOS` in `D:\WSL\NixOS` using the latest `nixos.wsl`
-asset from NixOS-WSL.
+The bootstrap installs a WSL distro named `NixOS` in `D:\WSL\NixOS` using the
+latest `nixos.wsl` asset from NixOS-WSL.
 
 ## First apply
 
@@ -27,7 +28,8 @@ dotctl doctor
 
 ## Cutover
 
-After validation, run this from an elevated Windows PowerShell if Developer Mode is not enabled:
+After validation, run this from an elevated Windows PowerShell if Developer Mode
+is not enabled:
 
 ```powershell
 .\scripts\windows\apply-wsl-links.ps1 -DistroName NixOS
