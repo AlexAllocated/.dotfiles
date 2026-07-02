@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -24,6 +25,7 @@
     inputs@{
       self,
       nixpkgs,
+      nixpkgs-unstable,
       home-manager,
       nixos-wsl,
       nix-darwin,
@@ -38,6 +40,7 @@
         "aarch64-darwin"
         "x86_64-darwin"
       ];
+      linuxSystems = [ "x86_64-linux" ];
 
       mkPkgs =
         system:
@@ -46,7 +49,16 @@
           config.allowUnfree = true;
         };
 
+      mkToolPkgs =
+        system:
+        import nixpkgs-unstable {
+          inherit system;
+          config.allowUnfree = true;
+        };
+
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f (mkPkgs system));
+      forLinuxSystems =
+        f: nixpkgs.lib.genAttrs linuxSystems (system: f (mkPkgs system) (mkToolPkgs system));
 
       homeModules = {
         core = ./modules/home/core.nix;
@@ -77,7 +89,7 @@
           meta.description = "Run dotctl from the dotfiles flake.";
         };
 
-      mkSpecialArgs = user: {
+      mkSpecialArgs = system: user: {
         inherit
           inputs
           self
@@ -85,6 +97,7 @@
           fullName
           userEmail
           ;
+        toolPkgs = mkToolPkgs system;
       };
 
       mkHome =
@@ -96,7 +109,7 @@
         }:
         home-manager.lib.homeManagerConfiguration {
           pkgs = mkPkgs system;
-          extraSpecialArgs = (mkSpecialArgs user) // {
+          extraSpecialArgs = (mkSpecialArgs system user) // {
             inherit profile;
           };
           modules = [
@@ -120,7 +133,7 @@
         system: profile: user:
         nix-darwin.lib.darwinSystem {
           inherit system;
-          specialArgs = (mkSpecialArgs user) // {
+          specialArgs = (mkSpecialArgs system user) // {
             inherit profile;
           };
           modules = [
@@ -139,7 +152,7 @@
     {
       nixosConfigurations.nixos-wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = (mkSpecialArgs user) // {
+        specialArgs = (mkSpecialArgs "x86_64-linux" user) // {
           profile = "nixos-wsl";
         };
         modules = [
@@ -150,7 +163,7 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = (mkSpecialArgs user) // {
+            home-manager.extraSpecialArgs = (mkSpecialArgs "x86_64-linux" user) // {
               profile = "nixos-wsl";
             };
             home-manager.users.${user} = {
@@ -175,6 +188,20 @@
       };
 
       inherit homeModules;
+
+      packages = forLinuxSystems (
+        pkgs: toolPkgs:
+        import ./modules/docker/images.nix {
+          inherit
+            pkgs
+            toolPkgs
+            user
+            fullName
+            userEmail
+            ;
+          source = self.outPath;
+        }
+      );
 
       apps = forAllSystems (pkgs: {
         dotctl = mkDotctlApp pkgs;

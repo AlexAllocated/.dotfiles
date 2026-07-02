@@ -35,10 +35,6 @@ in
     home.file.".p10k.zsh".source = sourceRoot + "/.p10k.zsh";
     home.file.".tool-versions".source = sourceRoot + "/.tool-versions";
     home.file."rustfmt.toml".source = sourceRoot + "/rustfmt.toml";
-    home.file.".local/bin/bootstrap-env-from-1password" = {
-      source = sourceRoot + "/bootstrap-env-from-1password";
-      executable = true;
-    };
     home.file.".local/bin/dotctl" = {
       source = sourceRoot + "/scripts/dotctl";
       executable = true;
@@ -186,8 +182,7 @@ in
         setup_1password_ssh_agent
 
         # Shell startup should not authenticate external services. Use explicit
-        # commands such as `op`, `gh auth login`, or `dotctl secrets` when
-        # credentials need refreshing.
+        # commands such as `op` or `gh auth login` when credentials need refreshing.
       '';
     };
   };

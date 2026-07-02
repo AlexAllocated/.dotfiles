@@ -2,11 +2,13 @@
   config,
   lib,
   pkgs,
+  toolPkgs ? pkgs,
   ...
 }:
 let
   cfg = config.dotfiles;
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
+  codexPackage = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
 in
 {
   imports = [ ./core.nix ];
@@ -19,9 +21,10 @@ in
 
   config = lib.mkMerge [
     {
-      home.packages = with pkgs; [
-        bun
-        nodejs
+      home.packages = [
+        codexPackage
+        pkgs.bun
+        pkgs.nodejs
       ];
     }
     (lib.mkIf cfg.codex.manageConfig {

@@ -3,6 +3,7 @@
   user,
   inputs,
   self,
+  toolPkgs,
   fullName,
   userEmail,
   profile ? "macos",
@@ -56,6 +57,7 @@
       self
       user
       fullName
+      toolPkgs
       userEmail
       ;
     inherit profile;

@@ -1,4 +1,5 @@
 model = "gpt-5.5"
+check_for_update_on_startup = false
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 approval_policy = "never"

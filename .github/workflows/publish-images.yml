@@ -1,0 +1,55 @@
+name: Publish Docker images
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check flake
+        run: nix flake check
+
+      - name: Build image tarballs
+        run: |
+          nix build .#docker-linux -o result-linux
+          nix build .#docker-pocket-knife -o result-pocket-knife
+
+      - name: Load images
+        run: |
+          docker load -i result-linux
+          docker load -i result-pocket-knife
+
+      - name: Tag images
+        run: |
+          short_sha="${GITHUB_SHA::12}"
+          docker tag ghcr.io/alexallocated/dotfiles-linux:latest "ghcr.io/alexallocated/dotfiles-linux:sha-${short_sha}"
+          docker tag ghcr.io/alexallocated/dotfiles-pocket-knife:latest "ghcr.io/alexallocated/dotfiles-pocket-knife:sha-${short_sha}"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push images
+        run: |
+          short_sha="${GITHUB_SHA::12}"
+          docker push ghcr.io/alexallocated/dotfiles-linux:latest
+          docker push "ghcr.io/alexallocated/dotfiles-linux:sha-${short_sha}"
+          docker push ghcr.io/alexallocated/dotfiles-pocket-knife:latest
+          docker push "ghcr.io/alexallocated/dotfiles-pocket-knife:sha-${short_sha}"

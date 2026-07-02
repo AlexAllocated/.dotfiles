@@ -22,11 +22,9 @@ Usage: dotctl <command> [profile] [options]
 
 Commands:
   apply [profile] [--update]   Apply a NixOS, nix-darwin, or Home Manager profile.
-  update                       Update flake inputs.
+  update                       Update all repo-managed pins.
   check                        Run flake checks.
   doctor                       Print host integration diagnostics.
-  secrets [options]            Refresh the repository .env from 1Password.
-  agents                       Install/update global Bun coding agents.
 
 Profiles:
   nixos-wsl       NixOS running inside WSL.
@@ -101,6 +99,49 @@ apply_profile() {
 	esac
 }
 
+run_check() {
+	require_command nix
+	nix flake check "$REPO_ROOT"
+}
+
+refresh_flake_lock() {
+	require_command nix
+	printf 'Refreshing flake inputs...\n'
+	nix flake update --flake "$REPO_ROOT"
+}
+
+refresh_neovim_lock() {
+	local nvim_config="$REPO_ROOT/nvim"
+	[[ -f "$nvim_config/lazy-lock.json" ]] || return 0
+
+	if ! command_exists nvim; then
+		printf 'Neovim is not available; skipping nvim/lazy-lock.json refresh.\n' >&2
+		return 0
+	fi
+
+	local tmp_xdg_config
+	tmp_xdg_config="$(mktemp -d)"
+	(
+		trap 'rm -rf "$tmp_xdg_config"' EXIT
+		ln -s "$nvim_config" "$tmp_xdg_config/nvim"
+
+		printf 'Refreshing Neovim plugin pins...\n'
+		XDG_CONFIG_HOME="$tmp_xdg_config" nvim --headless "+Lazy! update" +qa
+	)
+}
+
+run_update() {
+	refresh_flake_lock
+	refresh_neovim_lock
+}
+
+print_repo_status() {
+	if command_exists git && git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		printf 'Repository changes after update/apply:\n'
+		git -C "$REPO_ROOT" status --short
+	fi
+}
+
 require_command() {
 	if ! command_exists "$1"; then
 		printf 'Required command not found: %s\n' "$1" >&2
@@ -136,25 +177,6 @@ run_doctor() {
 	fi
 }
 
-install_agents() {
-	require_command bun
-	bun install --global @openai/codex@latest @just-every/code@latest
-}
-
-refresh_secrets() {
-	local env_script="$REPO_ROOT/bootstrap-env-from-1password"
-	if [[ ! -x "$env_script" ]]; then
-		env_script="$HOME/.local/bin/bootstrap-env-from-1password"
-	fi
-
-	if [[ ! -x "$env_script" ]]; then
-		printf 'Unable to find bootstrap-env-from-1password.\n' >&2
-		exit 1
-	fi
-
-	"$env_script" "$@"
-}
-
 main() {
 	local command="${1:-}"
 	[[ -n "$command" ]] || {
@@ -180,27 +202,23 @@ main() {
 			done
 			profile="${profile:-$(detect_profile)}"
 			if ((update)); then
-				require_command nix
-				nix flake update --flake "$REPO_ROOT"
+				run_update
+				run_check
 			fi
 			apply_profile "$profile"
+			if ((update)); then
+				print_repo_status
+			fi
 			;;
 		update)
-			require_command nix
-			nix flake update --flake "$REPO_ROOT"
+			run_update
+			print_repo_status
 			;;
 		check)
-			require_command nix
-			nix flake check "$REPO_ROOT"
+			run_check
 			;;
 		doctor)
 			run_doctor
-			;;
-		secrets)
-			refresh_secrets "$@"
-			;;
-		agents)
-			install_agents
 			;;
 		-h | --help | help)
 			usage

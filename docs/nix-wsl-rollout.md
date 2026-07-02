@@ -45,5 +45,4 @@ directly when needed:
 ```sh
 op vault list
 gh auth login --web -h github.com
-dotctl secrets
 ```

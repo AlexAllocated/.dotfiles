@@ -15,6 +15,7 @@ The final commit before the Nix rewrite is tagged `pre-nix`.
 - `modules/nixos/` holds NixOS-WSL host configuration.
 - `modules/home/` holds shared Home Manager user configuration.
 - `modules/darwin/` holds macOS host configuration through nix-darwin.
+- `modules/docker/` holds Linux container image definitions built by Nix.
 - `nvim/`, `wezterm/`, and `komorebi/` hold mutable app configuration linked
   into place by Home Manager or the Windows link script.
 - `dot-bootstrap` installs the side-by-side NixOS WSL distro.
@@ -49,10 +50,23 @@ dotctl check
 dotctl apply nixos-wsl
 dotctl apply linux
 dotctl apply --update
-dotctl agents
-dotctl secrets
 nix run .#dotctl -- doctor
 ```
+
+`dotctl apply --update` is the Nix-era `updoot`. It refreshes repo-managed
+pins, runs the flake checks, applies the detected profile, and leaves changed
+lockfiles in the checkout for review:
+
+```sh
+nix flake update --flake "$HOME/.dotfiles"
+nvim --headless "+Lazy! update" +qa
+nix flake check "$HOME/.dotfiles"
+sudo nixos-rebuild boot --flake "$HOME/.dotfiles#nixos-wsl"
+```
+
+On Linux Home Manager and macOS hosts, the final apply command becomes
+`home-manager switch --flake "$HOME/.dotfiles#linux"` or
+`darwin-rebuild switch --flake "$HOME/.dotfiles#macos"`.
 
 Profile names:
 
@@ -68,8 +82,40 @@ inputs.dotfiles.homeModules.nvim
 inputs.dotfiles.homeModules.codex
 ```
 
-Shell startup does not authenticate external services. Run `op`, `gh auth login`,
-or `dotctl secrets` explicitly when credentials need attention.
+Shell startup does not authenticate external services. Run tools such as `op`
+or `gh auth login` explicitly when credentials need attention.
+
+## Containers
+
+The flake builds two Linux images:
+
+```sh
+nix build .#docker-linux
+nix build .#docker-pocket-knife
+```
+
+Load a local build with:
+
+```sh
+docker load < result
+```
+
+The pocket-knife image is for quick repair work on a machine without your usual
+tools:
+
+```sh
+docker run --rm -it \
+  -v "$PWD:/work" \
+  ghcr.io/alexallocated/dotfiles-pocket-knife:latest
+```
+
+Published image names:
+
+- `ghcr.io/alexallocated/dotfiles-linux:latest`
+- `ghcr.io/alexallocated/dotfiles-pocket-knife:latest`
+
+The Dockerfiles under `docker/` are thin extension entrypoints. The canonical
+image definitions live in Nix.
 
 ## Windows Links
 
