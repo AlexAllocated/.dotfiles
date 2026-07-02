@@ -60,6 +60,17 @@ confirm_sudo() {
 	fi
 }
 
+apt_get() {
+	sudo env \
+		DEBIAN_FRONTEND=noninteractive \
+		APT_LISTCHANGES_FRONTEND=none \
+		NEEDRESTART_MODE=a \
+		apt-get -y \
+		-o Dpkg::Options::=--force-confdef \
+		-o Dpkg::Options::=--force-confold \
+		"$@"
+}
+
 ensure_network() {
 	local target="https://github.com"
 	if command_exists curl; then
@@ -313,6 +324,30 @@ brew_taps() {
 	brew tap jesseduffield/lazygit >/dev/null
 	brew tap oven-sh/bun >/dev/null
 	brew tap wez/wezterm-linuxbrew >/dev/null
+	if [[ "$platform" == "macos" ]]; then
+		brew tap stripe/stripe-cli >/dev/null
+	fi
+}
+
+brew_trust_taps() {
+	if ! brew trust --help >/dev/null 2>&1; then
+		return 0
+	fi
+
+	local taps=(
+		jesseduffield/lazygit
+		oven-sh/bun
+		wez/wezterm-linuxbrew
+	)
+
+	if [[ "$platform" == "macos" ]] || brew tap | grep -Fxq "stripe/stripe-cli"; then
+		taps+=(stripe/stripe-cli)
+	fi
+	if brew tap | grep -Fxq "wezterm/wezterm-linuxbrew"; then
+		taps+=(wezterm/wezterm-linuxbrew)
+	fi
+
+	brew trust --tap "${taps[@]}" >/dev/null
 }
 
 brew_cleanup_all() {
@@ -320,7 +355,7 @@ brew_cleanup_all() {
 }
 
 brew_upgrade_casks() {
-	brew upgrade --cask --verbose 2>/dev/null || true
+	brew upgrade --cask --yes --verbose 2>/dev/null || true
 }
 
 install_stripe_cli_ubuntu() {
@@ -337,8 +372,8 @@ install_stripe_cli_ubuntu() {
 
 	echo "$repo_entry" | sudo tee "$repo_file" >/dev/null
 
-	sudo apt-get update -y
-	sudo apt-get install -y stripe
+	apt_get update
+	apt_get install stripe
 }
 
 install_1password_cli_ubuntu() {
@@ -361,17 +396,39 @@ install_1password_cli_ubuntu() {
 	sudo mkdir -p /etc/debsig/trust.d
 	curl -fsSL https://downloads.1password.com/linux/debian/debsig/1password.gpg | gpg --dearmor | sudo tee /etc/debsig/trust.d/1password-archive-keyring.gpg >/dev/null
 
-	sudo apt-get update -y
-	sudo apt-get install -y 1password-cli
+	apt_get update
+	apt_get install 1password-cli
+}
+
+install_google_cloud_cli_ubuntu() {
+	local keyring="/usr/share/keyrings/cloud.google.gpg"
+	local repo_file="/etc/apt/sources.list.d/google-cloud-sdk.list"
+	local repo_entry="deb [signed-by=${keyring}] https://packages.cloud.google.com/apt cloud-sdk main"
+
+	log "Refreshing Google Cloud CLI apt signing key"
+	curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor | sudo tee "$keyring" >/dev/null
+
+	if [[ ! -d "/etc/apt/sources.list.d" ]]; then
+		sudo mkdir -p /etc/apt/sources.list.d
+	fi
+
+	echo "$repo_entry" | sudo tee "$repo_file" >/dev/null
+
+	apt_get update
+	apt_get install google-cloud-cli
 }
 
 mise_use_global() {
-	mise use -g "$1"
+	mise use --global --yes "$1"
 }
 
 mise_install_all() {
-	mise install
-	mise upgrade
+	mise install --yes
+	mise upgrade --yes
+}
+
+mise_configure_runtime_settings() {
+	mise settings --yes set python.compile false
 }
 
 mise_doctor_check() {
@@ -548,9 +605,10 @@ if [[ "$platform" == "macos" ]]; then
 		done
 	fi
 else
-	run_step "Refresh apt repositories" sudo apt-get update -y
-	run_step "Upgrade apt packages" sudo apt-get upgrade -y
-	run_step "Install Ubuntu prerequisites" sudo apt-get install -y --no-install-recommends \
+	run_step "Refresh apt repositories" apt_get update
+	run_step "Upgrade apt packages" apt_get upgrade
+	run_step "Install Ubuntu prerequisites" apt_get install --no-install-recommends \
+		apt-transport-https \
 		build-essential \
 		cmake \
 		ca-certificates \
@@ -564,12 +622,14 @@ else
 		unzip
 	run_step "Install Stripe CLI (apt)" install_stripe_cli_ubuntu
 	run_step "Install 1Password CLI (apt)" install_1password_cli_ubuntu
-	run_step "Apt autoremove" sudo apt-get autoremove -y
-	run_step "Apt clean" sudo apt-get clean
+	run_step "Install Google Cloud CLI (apt)" install_google_cloud_cli_ubuntu
+	run_step "Apt autoremove" apt_get autoremove
+	run_step "Apt clean" apt_get clean
 fi
 
 log "Bootstrapping Homebrew"
 export HOMEBREW_NO_ENV_HINTS=1
+export HOMEBREW_NO_ASK=1
 if ! command_exists brew; then
 	export NONINTERACTIVE=1
 	/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -590,8 +650,9 @@ if ! command_exists brew; then
 fi
 
 run_step "Ensure brew taps" brew_taps
+run_step "Trust brew taps" brew_trust_taps
 run_step "brew update" brew update --verbose
-run_step "brew upgrade (formula)" brew upgrade --formula --verbose
+run_step "brew upgrade (formula)" brew upgrade --formula --yes --verbose
 run_step "brew upgrade (cask)" brew_upgrade_casks
 run_step "brew cleanup" brew_cleanup_all
 
@@ -651,11 +712,12 @@ if [[ "$platform" == "ubuntu" ]]; then
 	)
 fi
 
-run_step "Install brew packages" brew install "${brew_formulae[@]}"
+run_step "Install brew packages" brew install --yes "${brew_formulae[@]}"
 
 if [[ "$platform" == "macos" ]]; then
-	run_step "Install WezTerm (cask)" brew install --cask wezterm
-	run_step "Install 1Password CLI (cask)" brew install --cask 1password-cli
+	run_step "Install WezTerm (cask)" brew install --cask --yes wezterm
+	run_step "Install 1Password CLI (cask)" brew install --cask --yes 1password-cli
+	run_step "Install Google Cloud CLI (cask)" brew install --cask --yes google-cloud-sdk
 fi
 
 log "Cloning fzf-git"
@@ -673,6 +735,8 @@ log "Configuring mise runtimes"
 if ! command_exists mise; then
 	fail "mise is not available after Homebrew installation"
 fi
+
+run_step "Configure mise runtime settings" mise_configure_runtime_settings
 
 mise_globals=(
 	node@latest

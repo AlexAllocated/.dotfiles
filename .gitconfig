@@ -1,6 +1,6 @@
 [user]
-  email = Chev@ChevCast.tv
-  name = Chev
+	email = Alex@HiveTech.ai
+	name = Alex
 
 [core]
   editor = nvim
@@ -37,3 +37,9 @@
 ; Leaving this here for futrue reference. Currently using direnv to load .envrc which specifies git creds as env vars.
 ; [includeIf "gitdir:~/work/**/.git"]
 ;     path = ~/.dotfiles/.work.gitconfig
+[credential "https://github.com"]
+	helper =
+	helper = !/home/linuxbrew/.linuxbrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/home/linuxbrew/.linuxbrew/bin/gh auth git-credential
