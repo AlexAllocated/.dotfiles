@@ -134,10 +134,6 @@ in
       source = ../../scripts/dotctl;
       executable = true;
     };
-    home.file.".local/bin/op" = lib.mkIf isWsl {
-      source = ../../scripts/op-wsl-bridge;
-      executable = true;
-    };
 
     xdg.configFile."mise/config.toml".text = ''
             [settings]
@@ -330,9 +326,9 @@ in
                 }
                 setup_1password_ssh_agent
 
-                # Shell startup should not authenticate external services. Use
-                # explicit commands such as `op`, `gh auth login`, or
-                # `dotctl secrets` when credentials need refreshing.
+                # Shell startup should not authenticate external services. Use explicit
+                # commands such as `op`, `gh auth login`, or `dotctl secrets` when
+                # credentials need refreshing.
               '';
     };
 

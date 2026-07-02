@@ -50,6 +50,12 @@
     wget
   ];
 
+  wsl.extraBin = with pkgs; [
+    { src = "${coreutils}/bin/install"; }
+    { src = "${coreutils}/bin/mv"; }
+    { src = "${coreutils}/bin/rm"; }
+  ];
+
   systemd.services.wsl-interop-binfmt = {
     description = "Register WSL Windows executable interop";
     after = [ "systemd-binfmt.service" ];
@@ -57,7 +63,6 @@
     unitConfig.ConditionPathExists = "/proc/sys/fs/binfmt_misc/register";
     serviceConfig = {
       Type = "oneshot";
-      RemainAfterExit = true;
       ExecStart = "${pkgs.writeShellScript "register-wsl-interop-binfmt" ''
         set -eu
 
@@ -67,6 +72,17 @@
 
         echo ':WSLInterop:M::MZ::/init:P' > /proc/sys/fs/binfmt_misc/register
       ''}";
+    };
+  };
+
+  systemd.timers.wsl-interop-binfmt = {
+    description = "Keep WSL Windows executable interop registered";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2s";
+      OnUnitActiveSec = "30s";
+      AccuracySec = "5s";
+      Unit = "wsl-interop-binfmt.service";
     };
   };
 
@@ -83,6 +99,7 @@
       enable = true;
       users = [ user ];
     };
+    docker-desktop.enable = true;
     wslConf = {
       automount = {
         enabled = true;
