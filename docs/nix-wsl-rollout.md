@@ -1,11 +1,10 @@
 # NixOS-WSL Rollout
 
-NixOS is the primary WSL target. Keep an existing Ubuntu WSL distro installed
-only as a fallback while validating a new NixOS setup.
+NixOS is the primary WSL target.
 
 ## Install side-by-side
 
-From the existing Ubuntu control-plane distro:
+From an existing WSL control-plane distro:
 
 ```sh
 ./dot-bootstrap nixos-wsl
@@ -37,8 +36,6 @@ is not enabled:
 .\scripts\windows\apply-wsl-links.ps1 -DistroName NixOS
 wsl.exe --set-default NixOS
 ```
-
-Keep the Ubuntu distro until NixOS has handled normal work successfully.
 
 ## 1Password model
 

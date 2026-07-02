@@ -30,8 +30,6 @@ Commands:
 
 Profiles:
   nixos-wsl       NixOS running inside WSL.
-  wsl-ubuntu      Home Manager only, Ubuntu WSL.
-  ubuntu          Home Manager only, native Ubuntu.
   generic-linux   Home Manager only, any Linux with Nix.
   macos           nix-darwin aarch64 profile.
   macos-intel     nix-darwin x86_64 profile.
@@ -54,10 +52,6 @@ detect_profile() {
 		else
 			printf 'macos-intel\n'
 		fi
-	elif [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-		printf 'wsl-ubuntu\n'
-	elif [[ -f /etc/os-release ]] && grep -Eiq '(^ID=ubuntu|^ID_LIKE=.*ubuntu|^ID_LIKE=.*debian)' /etc/os-release; then
-		printf 'ubuntu\n'
 	else
 		printf 'generic-linux\n'
 	fi
@@ -71,7 +65,7 @@ flake_ref_for_profile() {
 		nixos-wsl)
 			printf '%s#nixos-wsl\n' "$REPO_ROOT"
 			;;
-		wsl-ubuntu | ubuntu | generic-linux)
+		generic-linux)
 			printf '%s#%s@%s\n' "$REPO_ROOT" "$flake_user" "$profile"
 			;;
 		macos)

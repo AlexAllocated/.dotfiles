@@ -17,8 +17,7 @@ The final commit before the Nix rewrite is tagged `pre-nix`.
 - `dot-bootstrap` installs the side-by-side NixOS WSL distro.
 - `scripts/dotctl` is the day-to-day maintenance command.
 
-The NixOS-WSL profile uses `alex` as the default Linux user. Legacy standalone
-Home Manager profiles are still available for both `alex` and `chev`.
+The NixOS-WSL profile uses `alex` as the default Linux user.
 
 ## Bootstrap
 
@@ -53,8 +52,6 @@ dotctl secrets
 Profile names:
 
 - `nixos-wsl`
-- `wsl-ubuntu`
-- `ubuntu`
 - `generic-linux`
 - `macos`
 - `macos-intel`

@@ -6,7 +6,7 @@
 - `modules/home/`, `modules/nixos/`, and `modules/darwin/` hold reusable Nix modules. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
 - `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, agent installs, and secret refreshes.
-- The NixOS-WSL profile uses `alex` as the default Linux user. Keep old `chev` references only for explicit legacy Ubuntu/macOS compatibility.
+- The NixOS-WSL profile uses `alex` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Assets are under `images/`; helper binaries land in `bin/`. Root-level files are limited to active repo config and Home Manager sources.
 
@@ -38,7 +38,7 @@
 
 ## Commit & Pull Request Guidelines
 
-- Keep commit summaries short and in present tense (e.g., `plugin updates`). Add Conventional Commit prefixes when clarifying scope (`fix: Update for Ubuntu WSL distro`).
+- Keep commit summaries short and in present tense (e.g., `plugin updates`). Add Conventional Commit prefixes when clarifying scope (`fix: Update WSL links`).
 - Group related changes; avoid mixing Neovim, terminal, and OS-specific tweaks in a single commit.
 - Pull requests need a short description, validation notes (commands run), and screenshots when UI themes or prompt visuals change.
 - Link GitHub issues when applicable and call out platform-specific impacts (Linux, macOS, WSL).

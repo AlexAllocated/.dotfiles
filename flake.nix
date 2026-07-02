@@ -30,15 +30,7 @@
       ...
     }:
     let
-      nixosWslUser = "alex";
-      linuxHomeUsers = [
-        "alex"
-        "chev"
-      ];
-      darwinUsers = [
-        "alex"
-        "chev"
-      ];
+      user = "alex";
       fullName = "Alex";
       userEmail = "Alex@HiveTech.ai";
 
@@ -99,20 +91,6 @@
       mkLinuxHomeConfigurations =
         user:
         {
-          "${user}@wsl-ubuntu" = mkHome {
-            inherit user;
-            system = "x86_64-linux";
-            profile = "wsl-ubuntu";
-            homeDirectory = "/home/${user}";
-          };
-
-          "${user}@ubuntu" = mkHome {
-            inherit user;
-            system = "x86_64-linux";
-            profile = "ubuntu";
-            homeDirectory = "/home/${user}";
-          };
-
           "${user}@generic-linux" = mkHome {
             inherit user;
             system = "x86_64-linux";
@@ -131,7 +109,7 @@
     {
       nixosConfigurations.nixos-wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = (mkSpecialArgs nixosWslUser) // {
+        specialArgs = (mkSpecialArgs user) // {
           profile = "nixos-wsl";
         };
         modules = [
@@ -142,26 +120,22 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = (mkSpecialArgs nixosWslUser) // {
+            home-manager.extraSpecialArgs = (mkSpecialArgs user) // {
               profile = "nixos-wsl";
             };
-            home-manager.users.${nixosWslUser} = {
+            home-manager.users.${user} = {
               imports = [ ./modules/home/default.nix ];
-              home.username = nixosWslUser;
-              home.homeDirectory = "/home/${nixosWslUser}";
+              home.username = user;
+              home.homeDirectory = "/home/${user}";
               dotfiles.profile = "nixos-wsl";
             };
           }
         ];
       };
 
-      homeConfigurations = nixpkgs.lib.foldl' (
-        configs: user: configs // mkLinuxHomeConfigurations user
-      ) { } linuxHomeUsers;
+      homeConfigurations = mkLinuxHomeConfigurations user;
 
-      darwinConfigurations = nixpkgs.lib.foldl' (
-        configs: user: configs // mkDarwinConfigurations user
-      ) { } darwinUsers;
+      darwinConfigurations = mkDarwinConfigurations user;
 
       formatter.x86_64-linux = (mkPkgs "x86_64-linux").nixfmt;
       formatter.aarch64-darwin = (mkPkgs "aarch64-darwin").nixfmt;

@@ -12,10 +12,6 @@
 let
   cfg = config.dotfiles;
   repo = "${config.home.homeDirectory}/.dotfiles";
-  isWsl = builtins.elem cfg.profile [
-    "nixos-wsl"
-    "wsl-ubuntu"
-  ];
   optionalPackage = name: lib.optional (builtins.hasAttr name pkgs) (builtins.getAttr name pkgs);
   optionalPackages = lib.concatMap optionalPackage [
     "_1password-cli"

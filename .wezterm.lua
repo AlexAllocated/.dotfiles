@@ -31,7 +31,6 @@ config.font = wezterm.font_with_fallback({
 	-- { family = "ProggyClean Nerd Font", weight = "Regular" },
 	-- { family = "ShureTechMono Nerd Font", weight = "Regular" },
 	-- { family = "Terminess Nerd Font", weight = "Bold" },
-	-- { family = "UbuntuMono Nerd Font", weight = "Regular" },
 })
 
 config.adjust_window_size_when_changing_font_size = false
@@ -63,70 +62,25 @@ config.window_padding = { left = 0, right = 0, top = 10, bottom = 0 }
 -- Determine system path.
 local wallpaper_path = "~/.dotfiles/images/wezterm-wallpapers/"
 if wezterm.target_triple:match("windows") then
-	local preferred = { "NixOS", "Ubuntu" }
-	local wsl_profiles = {
-		NixOS = {
-			username = "alex",
-			home = "/home/alex",
-			windows_home = "\\home\\alex",
-		},
-		Ubuntu = {
-			username = "chev",
-			home = "/home/chev",
-			windows_home = "\\home\\chev",
-		},
-	}
 	local available = {}
 	for _, domain in ipairs(wezterm.default_wsl_domains()) do
 		available[domain.distribution] = domain
 	end
 
 	config.wsl_domains = {}
-	local default_domain_name
-	local default_domain_home = "/home/alex"
-	for _, distro in ipairs(preferred) do
-		local domain = available[distro]
-		if domain then
-			local profile = wsl_profiles[distro]
-			domain.username = profile.username
-			domain.default_cwd = profile.home
-			table.insert(config.wsl_domains, domain)
-			if not default_domain_name and distro == "NixOS" then
-				default_domain_name = domain.name
-				default_domain_home = profile.home
-			end
-		end
+	local nixos = available.NixOS
+	if nixos then
+		nixos.username = "alex"
+		nixos.default_cwd = "/home/alex"
+		table.insert(config.wsl_domains, nixos)
+		config.default_domain = nixos.name
 	end
-
-	if config.wsl_domains[1] and not default_domain_name then
-		default_domain_name = config.wsl_domains[1].name
-		default_domain_home = config.wsl_domains[1].default_cwd
-	end
-
-	if default_domain_name then
-		config.default_domain = default_domain_name
-	end
-	config.default_cwd = default_domain_home
-
-	local wallpaper_distro = preferred[1]
-	if not available[wallpaper_distro] then
-		for _, distro in ipairs(preferred) do
-			if available[distro] then
-				wallpaper_distro = distro
-				break
-			end
-		end
-	end
-	local wallpaper_profile = wsl_profiles[wallpaper_distro] or wsl_profiles.NixOS
-	wallpaper_path = string.format(
-		"\\\\wsl.localhost\\%s%s\\.dotfiles\\images\\wezterm-wallpapers\\",
-		wallpaper_distro or "NixOS",
-		wallpaper_profile.windows_home
-	)
+	config.default_cwd = "/home/alex"
+	wallpaper_path = "\\\\wsl.localhost\\NixOS\\home\\alex\\.dotfiles\\images\\wezterm-wallpapers\\"
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
 elseif wezterm.target_triple:match("darwin") then
-	wallpaper_path = "/Users/chev/.dotfiles/images/wezterm-wallpapers/"
+	wallpaper_path = "/Users/alex/.dotfiles/images/wezterm-wallpapers/"
 end
 
 local function get_random_wallpaper()
