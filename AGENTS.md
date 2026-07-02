@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 
 - `flake.nix` is the primary configuration entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles macOS.
-- `modules/home/`, `modules/nixos/`, and `modules/darwin/` hold reusable Nix modules. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
+- `modules/home/`, `modules/nixos/`, and `modules/darwin/` hold reusable Nix modules. `homeModules.*` is the public Home Manager module API. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
 - `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, agent installs, and secret refreshes.
 - The NixOS-WSL profile uses `alex` as the default Linux user.
@@ -14,6 +14,7 @@
 
 - `dotctl check` runs the flake checks when Nix is available.
 - `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation from inside the `NixOS` distro; restart the distro afterward.
+- `dotctl apply linux` applies the generic Linux Home Manager profile.
 - `dotctl apply --update` updates flake inputs and reapplies the detected profile; `updoot` aliases to this in the Home Manager shell.
 - `./dot-bootstrap nixos-wsl` installs the side-by-side `NixOS` WSL distro.
 - `dotctl agents` installs or updates global Bun coding agents.
@@ -32,6 +33,7 @@
 
 - For Nix changes, run `nix flake check` or `dotctl check` once Nix is available.
 - For the WSL target, run `sudo nixos-rebuild build --flake .#nixos-wsl` or `sudo nixos-rebuild boot --flake .#nixos-wsl`.
+- For the standalone Linux target, run `home-manager build --flake .#linux`.
 - For Neovim config updates, run `nvim --headless "+Lazy! sync" +qa` to catch plugin errors.
 - WezTerm changes should be loaded with `wezterm start --config-file $PWD/.wezterm.lua` to verify profiles.
 - After modifying Windows link behavior, run `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS` and inspect the target links from Windows.

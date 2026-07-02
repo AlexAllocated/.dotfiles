@@ -33,6 +33,11 @@
       user = "alex";
       fullName = "Alex";
       userEmail = "Alex@HiveTech.ai";
+      systems = [
+        "x86_64-linux"
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
 
       mkPkgs =
         system:
@@ -41,17 +46,46 @@
           config.allowUnfree = true;
         };
 
-      mkSpecialArgs =
-        user:
+      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f (mkPkgs system));
+
+      homeModules = {
+        core = ./modules/home/core.nix;
+        packages = ./modules/home/packages.nix;
+        shell = ./modules/home/shell.nix;
+        git = ./modules/home/git.nix;
+        nvim = ./modules/home/nvim.nix;
+        codex = ./modules/home/codex.nix;
+        cloud = ./modules/home/cloud.nix;
+        terminal = ./modules/home/terminal.nix;
+        windows = ./modules/home/windows.nix;
+        default = ./modules/home/default.nix;
+      };
+
+      mkDotctlApp =
+        pkgs:
+        let
+          dotctl = pkgs.writeShellApplication {
+            name = "dotctl";
+            text = ''
+              exec ${self}/scripts/dotctl "$@"
+            '';
+          };
+        in
         {
-          inherit
-            inputs
-            self
-            user
-            fullName
-            userEmail
-            ;
+          type = "app";
+          program = "${dotctl}/bin/dotctl";
+          meta.description = "Run dotctl from the dotfiles flake.";
         };
+
+      mkSpecialArgs = user: {
+        inherit
+          inputs
+          self
+          user
+          fullName
+          userEmail
+          ;
+      };
 
       mkHome =
         {
@@ -70,17 +104,24 @@
             {
               home.username = user;
               home.homeDirectory = homeDirectory;
-              dotfiles.profile = profile;
+              dotfiles = {
+                inherit
+                  fullName
+                  profile
+                  userEmail
+                  ;
+                userName = user;
+              };
             }
           ];
         };
 
       mkDarwin =
-        system: user:
+        system: profile: user:
         nix-darwin.lib.darwinSystem {
           inherit system;
           specialArgs = (mkSpecialArgs user) // {
-            profile = "macos";
+            inherit profile;
           };
           modules = [
             home-manager.darwinModules.home-manager
@@ -88,23 +129,12 @@
           ];
         };
 
-      mkLinuxHomeConfigurations =
-        user:
-        {
-          "${user}@generic-linux" = mkHome {
-            inherit user;
-            system = "x86_64-linux";
-            profile = "generic-linux";
-            homeDirectory = "/home/${user}";
-          };
-        };
-
-      mkDarwinConfigurations =
-        user:
-        {
-          "${user}-macos" = mkDarwin "aarch64-darwin" user;
-          "${user}-macos-intel" = mkDarwin "x86_64-darwin" user;
-        };
+      linuxHomeConfiguration = mkHome {
+        inherit user;
+        system = "x86_64-linux";
+        profile = "linux";
+        homeDirectory = "/home/${user}";
+      };
     in
     {
       nixosConfigurations.nixos-wsl = nixpkgs.lib.nixosSystem {
@@ -127,18 +157,30 @@
               imports = [ ./modules/home/default.nix ];
               home.username = user;
               home.homeDirectory = "/home/${user}";
-              dotfiles.profile = "nixos-wsl";
+              dotfiles = {
+                inherit fullName userEmail;
+                profile = "nixos-wsl";
+                userName = user;
+              };
             };
           }
         ];
       };
 
-      homeConfigurations = mkLinuxHomeConfigurations user;
+      homeConfigurations.linux = linuxHomeConfiguration;
 
-      darwinConfigurations = mkDarwinConfigurations user;
+      darwinConfigurations = {
+        macos = mkDarwin "aarch64-darwin" "macos" user;
+        macos-intel = mkDarwin "x86_64-darwin" "macos-intel" user;
+      };
 
-      formatter.x86_64-linux = (mkPkgs "x86_64-linux").nixfmt;
-      formatter.aarch64-darwin = (mkPkgs "aarch64-darwin").nixfmt;
-      formatter.x86_64-darwin = (mkPkgs "x86_64-darwin").nixfmt;
+      inherit homeModules;
+
+      apps = forAllSystems (pkgs: {
+        dotctl = mkDotctlApp pkgs;
+        default = mkDotctlApp pkgs;
+      });
+
+      formatter = forAllSystems (pkgs: pkgs.nixfmt);
     };
 }

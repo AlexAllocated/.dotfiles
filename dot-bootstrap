@@ -9,8 +9,8 @@ Usage: ./dot-bootstrap <target>
 
 Targets:
   nixos-wsl       Install NixOS-WSL side-by-side from Windows PowerShell.
-  generic-linux   Install Nix with the Determinate installer, then apply Home Manager manually.
-  macos           Same as generic-linux, then use nix-darwin manually.
+  linux           Install Nix with the Determinate installer, then apply Home Manager manually.
+  macos           Same as linux, then use nix-darwin manually.
 EOF
 }
 
@@ -29,7 +29,7 @@ case "$target" in
 		ps_path="$(wslpath -w "$SCRIPT_DIR/bootstrap/nixos-wsl.ps1")"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_path"
 		;;
-	generic-linux | macos)
+	linux | macos)
 		if command -v nix >/dev/null 2>&1; then
 			echo "Nix is already installed."
 		else

@@ -9,6 +9,9 @@ The final commit before the Nix rewrite is tagged `pre-nix`.
 ## Architecture
 
 - `flake.nix` is the entrypoint for all supported profiles.
+- `homeModules.*` exposes thin, reusable Home Manager modules for shell, Git,
+  Neovim, Codex, cloud CLIs, terminal config, Windows helpers, and shared
+  packages.
 - `modules/nixos/` holds NixOS-WSL host configuration.
 - `modules/home/` holds shared Home Manager user configuration.
 - `modules/darwin/` holds macOS host configuration through nix-darwin.
@@ -44,17 +47,26 @@ See `docs/nix-wsl-rollout.md` for the full WSL rollout and cutover notes.
 ```sh
 dotctl check
 dotctl apply nixos-wsl
+dotctl apply linux
 dotctl apply --update
 dotctl agents
 dotctl secrets
+nix run .#dotctl -- doctor
 ```
 
 Profile names:
 
 - `nixos-wsl`
-- `generic-linux`
+- `linux`
 - `macos`
 - `macos-intel`
+
+Reusable modules can be imported individually from this flake, for example:
+
+```nix
+inputs.dotfiles.homeModules.nvim
+inputs.dotfiles.homeModules.codex
+```
 
 Shell startup does not authenticate external services. Run `op`, `gh auth login`,
 or `dotctl secrets` explicitly when credentials need attention.

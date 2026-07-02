@@ -30,12 +30,10 @@ Commands:
 
 Profiles:
   nixos-wsl       NixOS running inside WSL.
-  generic-linux   Home Manager only, any Linux with Nix.
+  linux           Home Manager only, any Linux with Nix.
   macos           nix-darwin aarch64 profile.
   macos-intel     nix-darwin x86_64 profile.
 
-Environment:
-  DOTFILES_USER   Override the flake username for Home Manager or nix-darwin.
 EOF
 }
 
@@ -53,26 +51,25 @@ detect_profile() {
 			printf 'macos-intel\n'
 		fi
 	else
-		printf 'generic-linux\n'
+		printf 'linux\n'
 	fi
 }
 
 flake_ref_for_profile() {
 	local profile="$1"
-	local flake_user="${DOTFILES_USER:-$(id -un)}"
 
 	case "$profile" in
 		nixos-wsl)
 			printf '%s#nixos-wsl\n' "$REPO_ROOT"
 			;;
-		generic-linux)
-			printf '%s#%s@%s\n' "$REPO_ROOT" "$flake_user" "$profile"
+		linux)
+			printf '%s#linux\n' "$REPO_ROOT"
 			;;
 		macos)
-			printf '%s#%s-macos\n' "$REPO_ROOT" "$flake_user"
+			printf '%s#macos\n' "$REPO_ROOT"
 			;;
 		macos-intel)
-			printf '%s#%s-macos-intel\n' "$REPO_ROOT" "$flake_user"
+			printf '%s#macos-intel\n' "$REPO_ROOT"
 			;;
 		*)
 			printf 'Unknown profile: %s\n' "$profile" >&2

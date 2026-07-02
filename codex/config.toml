@@ -1,0 +1,49 @@
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+status_line = ["model-with-reasoning", "current-dir", "fast-mode", "git-branch", "context-remaining"]
+plan_mode_reasoning_effort = "xhigh"
+service_tier = "fast"
+
+[tui]
+notifications = true
+web_search = true
+theme = "gruvbox-dark"
+status_line = ["model-with-reasoning", "current-dir", "context-remaining", "git-branch", "five-hour-limit", "weekly-limit", "task-progress"]
+
+[notice]
+hide_gpt5_1_migration_prompt = true
+"hide_gpt-5.1-codex-max_migration_prompt" = true
+fast_default_opt_out = true
+hide_rate_limit_model_nudge = true
+
+[notice.model_migrations]
+"gpt-5.1-codex-max" = "gpt-5.2-codex"
+"gpt-5.3-codex" = "gpt-5.4"
+
+[features]
+memories = true
+
+[plugins."cloudflare@openai-curated"]
+enabled = true
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[plugins."gmail@openai-curated"]
+enabled = true
+
+[plugins."remotion@openai-curated"]
+enabled = true
+
+[plugins."sendgrid@openai-curated"]
+enabled = true
+
+[plugins."stripe@openai-curated"]
+enabled = true
+
+[memories]
+use_memories = true
+generate_memories = true

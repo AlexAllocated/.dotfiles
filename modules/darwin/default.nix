@@ -5,6 +5,7 @@
   self,
   fullName,
   userEmail,
+  profile ? "macos",
   ...
 }:
 {
@@ -57,12 +58,19 @@
       fullName
       userEmail
       ;
-    profile = "macos";
+    inherit profile;
   };
   home-manager.users.${user} = {
     imports = [ ../home/default.nix ];
     home.username = user;
     home.homeDirectory = "/Users/${user}";
-    dotfiles.profile = "macos";
+    dotfiles = {
+      inherit
+        fullName
+        profile
+        userEmail
+        ;
+      userName = user;
+    };
   };
 }
