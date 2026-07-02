@@ -63,7 +63,7 @@ config.window_padding = { left = 0, right = 0, top = 10, bottom = 0 }
 -- Determine system path.
 local wallpaper_path = "~/.dotfiles/images/wezterm-wallpapers/"
 if wezterm.target_triple:match("windows") then
-	local preferred = { "Ubuntu", "archlinux" }
+	local preferred = { "NixOS", "Ubuntu" }
 	local available = {}
 	for _, domain in ipairs(wezterm.default_wsl_domains()) do
 		available[domain.distribution] = domain
@@ -77,7 +77,7 @@ if wezterm.target_triple:match("windows") then
 			domain.username = "chev"
 			domain.default_cwd = "/home/chev"
 			table.insert(config.wsl_domains, domain)
-			if not default_domain_name and distro == "Ubuntu" then
+			if not default_domain_name and distro == "NixOS" then
 				default_domain_name = domain.name
 			end
 		end
@@ -103,7 +103,7 @@ if wezterm.target_triple:match("windows") then
 	end
 	wallpaper_path = string.format(
 		"\\\\wsl.localhost\\%s\\home\\chev\\.dotfiles\\images\\wezterm-wallpapers\\",
-		wallpaper_distro or "Ubuntu"
+		wallpaper_distro or "NixOS"
 	)
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]

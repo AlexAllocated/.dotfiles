@@ -133,14 +133,15 @@ EOF
 # If WSL, then create Windows symbolic links in Windows user directory.
 if [ "$RUN_WINDOWS" -eq 1 ] && command -v powershell.exe &>/dev/null; then
 	WINDOWS_SYMLINK_WARNING=0
+	WINDOWS_WSL_DOTFILES_DISTRO="${WINDOWS_WSL_DOTFILES_DISTRO:-${WSL_DISTRO_NAME:-NixOS}}"
 
-	WEZTERM_CONFIG_PATH=$(echo "//wsl.localhost/Ubuntu${DOTFILES_DIR}/.wezterm.lua" | sed 's/\//\\/g')
+	WEZTERM_CONFIG_PATH=$(echo "//wsl.localhost/${WINDOWS_WSL_DOTFILES_DISTRO}${DOTFILES_DIR}/.wezterm.lua" | sed 's/\//\\/g')
 	create_windows_symlink "wezterm config file" "Join-Path \$env:USERPROFILE '.wezterm.lua'" "$WEZTERM_CONFIG_PATH"
 
-	WEZTERM_DIR_PATH=$(echo "//wsl.localhost/Ubuntu${DOTFILES_DIR}/wezterm" | sed 's/\//\\/g')
+	WEZTERM_DIR_PATH=$(echo "//wsl.localhost/${WINDOWS_WSL_DOTFILES_DISTRO}${DOTFILES_DIR}/wezterm" | sed 's/\//\\/g')
 	create_windows_symlink "wezterm directory" "Join-Path \$env:USERPROFILE '.wezterm'" "$WEZTERM_DIR_PATH"
 
-	NVIM_CONFIG_PATH=$(echo "//wsl.localhost/Ubuntu${DOTFILES_DIR}/nvim" | sed 's/\//\\/g')
+	NVIM_CONFIG_PATH=$(echo "//wsl.localhost/${WINDOWS_WSL_DOTFILES_DISTRO}${DOTFILES_DIR}/nvim" | sed 's/\//\\/g')
 	create_windows_symlink "nvim config directory" "Join-Path \$env:USERPROFILE 'AppData\\Local\\nvim'" "$NVIM_CONFIG_PATH"
 
 	if [ "${WINDOWS_SYMLINK_WARNING:-0}" -eq 1 ]; then
