@@ -64,6 +64,18 @@ config.window_padding = { left = 0, right = 0, top = 10, bottom = 0 }
 local wallpaper_path = "~/.dotfiles/images/wezterm-wallpapers/"
 if wezterm.target_triple:match("windows") then
 	local preferred = { "NixOS", "Ubuntu" }
+	local wsl_profiles = {
+		NixOS = {
+			username = "alex",
+			home = "/home/alex",
+			windows_home = "\\home\\alex",
+		},
+		Ubuntu = {
+			username = "chev",
+			home = "/home/chev",
+			windows_home = "\\home\\chev",
+		},
+	}
 	local available = {}
 	for _, domain in ipairs(wezterm.default_wsl_domains()) do
 		available[domain.distribution] = domain
@@ -71,26 +83,30 @@ if wezterm.target_triple:match("windows") then
 
 	config.wsl_domains = {}
 	local default_domain_name
+	local default_domain_home = "/home/alex"
 	for _, distro in ipairs(preferred) do
 		local domain = available[distro]
 		if domain then
-			domain.username = "chev"
-			domain.default_cwd = "/home/chev"
+			local profile = wsl_profiles[distro]
+			domain.username = profile.username
+			domain.default_cwd = profile.home
 			table.insert(config.wsl_domains, domain)
 			if not default_domain_name and distro == "NixOS" then
 				default_domain_name = domain.name
+				default_domain_home = profile.home
 			end
 		end
 	end
 
 	if config.wsl_domains[1] and not default_domain_name then
 		default_domain_name = config.wsl_domains[1].name
+		default_domain_home = config.wsl_domains[1].default_cwd
 	end
 
 	if default_domain_name then
 		config.default_domain = default_domain_name
 	end
-	config.default_cwd = "/home/chev"
+	config.default_cwd = default_domain_home
 
 	local wallpaper_distro = preferred[1]
 	if not available[wallpaper_distro] then
@@ -101,9 +117,11 @@ if wezterm.target_triple:match("windows") then
 			end
 		end
 	end
+	local wallpaper_profile = wsl_profiles[wallpaper_distro] or wsl_profiles.NixOS
 	wallpaper_path = string.format(
-		"\\\\wsl.localhost\\%s\\home\\chev\\.dotfiles\\images\\wezterm-wallpapers\\",
-		wallpaper_distro or "NixOS"
+		"\\\\wsl.localhost\\%s%s\\.dotfiles\\images\\wezterm-wallpapers\\",
+		wallpaper_distro or "NixOS",
+		wallpaper_profile.windows_home
 	)
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]

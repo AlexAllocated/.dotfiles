@@ -6,6 +6,7 @@
 - `modules/home/`, `modules/nixos/`, and `modules/darwin/` hold reusable Nix modules. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
 - `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, agent installs, and secret refreshes.
+- The NixOS-WSL profile uses `alex` as the default Linux user. Keep old `chev` references only for explicit legacy Ubuntu/macOS compatibility.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Assets are under `images/`; helper binaries land in `bin/`. Root-level files are limited to active repo config and Home Manager sources.
 

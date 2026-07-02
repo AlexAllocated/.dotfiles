@@ -90,6 +90,7 @@ in
         helm
         jq
         k9s
+        kubectl
         lazygit
         lua
         lynx

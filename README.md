@@ -1,4 +1,4 @@
-# Chev's .dotfiles
+# Alex's .dotfiles
 
 Personal environment automation for Linux, WSL, and macOS. The current repo is
 Nix-first: NixOS-WSL is the primary host, Home Manager owns shared user config,
@@ -16,6 +16,9 @@ The final commit before the Nix rewrite is tagged `pre-nix`.
   into place by Home Manager or the Windows link script.
 - `dot-bootstrap` installs the side-by-side NixOS WSL distro.
 - `scripts/dotctl` is the day-to-day maintenance command.
+
+The NixOS-WSL profile uses `alex` as the default Linux user. Legacy standalone
+Home Manager profiles are still available for both `alex` and `chev`.
 
 ## Bootstrap
 

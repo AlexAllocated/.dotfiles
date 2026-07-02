@@ -1,5 +1,5 @@
 {
-  description = "Chev's Nix-powered dotfiles";
+  description = "Alex's Nix-powered dotfiles";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -30,7 +30,15 @@
       ...
     }:
     let
-      user = "chev";
+      nixosWslUser = "alex";
+      linuxHomeUsers = [
+        "alex"
+        "chev"
+      ];
+      darwinUsers = [
+        "alex"
+        "chev"
+      ];
       fullName = "Alex";
       userEmail = "Alex@HiveTech.ai";
 
@@ -41,25 +49,28 @@
           config.allowUnfree = true;
         };
 
-      baseSpecialArgs = {
-        inherit
-          inputs
-          self
-          user
-          fullName
-          userEmail
-          ;
-      };
+      mkSpecialArgs =
+        user:
+        {
+          inherit
+            inputs
+            self
+            user
+            fullName
+            userEmail
+            ;
+        };
 
       mkHome =
         {
           system,
+          user,
           profile,
           homeDirectory,
         }:
         home-manager.lib.homeManagerConfiguration {
           pkgs = mkPkgs system;
-          extraSpecialArgs = baseSpecialArgs // {
+          extraSpecialArgs = (mkSpecialArgs user) // {
             inherit profile;
           };
           modules = [
@@ -73,10 +84,10 @@
         };
 
       mkDarwin =
-        system:
+        system: user:
         nix-darwin.lib.darwinSystem {
           inherit system;
-          specialArgs = baseSpecialArgs // {
+          specialArgs = (mkSpecialArgs user) // {
             profile = "macos";
           };
           modules = [
@@ -84,11 +95,43 @@
             ./modules/darwin/default.nix
           ];
         };
+
+      mkLinuxHomeConfigurations =
+        user:
+        {
+          "${user}@wsl-ubuntu" = mkHome {
+            inherit user;
+            system = "x86_64-linux";
+            profile = "wsl-ubuntu";
+            homeDirectory = "/home/${user}";
+          };
+
+          "${user}@ubuntu" = mkHome {
+            inherit user;
+            system = "x86_64-linux";
+            profile = "ubuntu";
+            homeDirectory = "/home/${user}";
+          };
+
+          "${user}@generic-linux" = mkHome {
+            inherit user;
+            system = "x86_64-linux";
+            profile = "generic-linux";
+            homeDirectory = "/home/${user}";
+          };
+        };
+
+      mkDarwinConfigurations =
+        user:
+        {
+          "${user}-macos" = mkDarwin "aarch64-darwin" user;
+          "${user}-macos-intel" = mkDarwin "x86_64-darwin" user;
+        };
     in
     {
       nixosConfigurations.nixos-wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = baseSpecialArgs // {
+        specialArgs = (mkSpecialArgs nixosWslUser) // {
           profile = "nixos-wsl";
         };
         modules = [
@@ -99,43 +142,26 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = baseSpecialArgs // {
+            home-manager.extraSpecialArgs = (mkSpecialArgs nixosWslUser) // {
               profile = "nixos-wsl";
             };
-            home-manager.users.${user} = {
+            home-manager.users.${nixosWslUser} = {
               imports = [ ./modules/home/default.nix ];
-              home.username = user;
-              home.homeDirectory = "/home/${user}";
+              home.username = nixosWslUser;
+              home.homeDirectory = "/home/${nixosWslUser}";
               dotfiles.profile = "nixos-wsl";
             };
           }
         ];
       };
 
-      homeConfigurations = {
-        "${user}@wsl-ubuntu" = mkHome {
-          system = "x86_64-linux";
-          profile = "wsl-ubuntu";
-          homeDirectory = "/home/${user}";
-        };
+      homeConfigurations = nixpkgs.lib.foldl' (
+        configs: user: configs // mkLinuxHomeConfigurations user
+      ) { } linuxHomeUsers;
 
-        "${user}@ubuntu" = mkHome {
-          system = "x86_64-linux";
-          profile = "ubuntu";
-          homeDirectory = "/home/${user}";
-        };
-
-        "${user}@generic-linux" = mkHome {
-          system = "x86_64-linux";
-          profile = "generic-linux";
-          homeDirectory = "/home/${user}";
-        };
-      };
-
-      darwinConfigurations = {
-        "${user}-macos" = mkDarwin "aarch64-darwin";
-        "${user}-macos-intel" = mkDarwin "x86_64-darwin";
-      };
+      darwinConfigurations = nixpkgs.lib.foldl' (
+        configs: user: configs // mkDarwinConfigurations user
+      ) { } darwinUsers;
 
       formatter.x86_64-linux = (mkPkgs "x86_64-linux").nixfmt;
       formatter.aarch64-darwin = (mkPkgs "aarch64-darwin").nixfmt;

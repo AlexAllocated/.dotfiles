@@ -1,6 +1,6 @@
 param(
    [string]$DistroName = "NixOS",
-   [string]$LinuxHome = "/home/chev"
+   [string]$LinuxHome = "/home/alex"
 )
 
 $ErrorActionPreference = "Stop"

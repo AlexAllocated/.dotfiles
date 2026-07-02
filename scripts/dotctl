@@ -35,6 +35,9 @@ Profiles:
   generic-linux   Home Manager only, any Linux with Nix.
   macos           nix-darwin aarch64 profile.
   macos-intel     nix-darwin x86_64 profile.
+
+Environment:
+  DOTFILES_USER   Override the flake username for Home Manager or nix-darwin.
 EOF
 }
 
@@ -62,18 +65,20 @@ detect_profile() {
 
 flake_ref_for_profile() {
 	local profile="$1"
+	local flake_user="${DOTFILES_USER:-$(id -un)}"
+
 	case "$profile" in
 		nixos-wsl)
 			printf '%s#nixos-wsl\n' "$REPO_ROOT"
 			;;
 		wsl-ubuntu | ubuntu | generic-linux)
-			printf '%s#chev@%s\n' "$REPO_ROOT" "$profile"
+			printf '%s#%s@%s\n' "$REPO_ROOT" "$flake_user" "$profile"
 			;;
 		macos)
-			printf '%s#chev-macos\n' "$REPO_ROOT"
+			printf '%s#%s-macos\n' "$REPO_ROOT" "$flake_user"
 			;;
 		macos-intel)
-			printf '%s#chev-macos-intel\n' "$REPO_ROOT"
+			printf '%s#%s-macos-intel\n' "$REPO_ROOT" "$flake_user"
 			;;
 		*)
 			printf 'Unknown profile: %s\n' "$profile" >&2

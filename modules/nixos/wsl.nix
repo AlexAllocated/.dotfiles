@@ -34,8 +34,10 @@
 
   users.users.${user} = {
     isNormalUser = true;
+    uid = 1001;
     description = fullName;
     home = "/home/${user}";
+    createHome = true;
     shell = pkgs.zsh;
     extraGroups = [
       "wheel"
@@ -45,6 +47,7 @@
   environment.systemPackages = with pkgs; [
     curl
     git
+    kubectl
     nano
     vim
     wget

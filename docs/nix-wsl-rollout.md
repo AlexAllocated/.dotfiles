@@ -26,6 +26,8 @@ wsl.exe -t NixOS
 dotctl doctor
 ```
 
+The NixOS-WSL profile declares `alex` as the default user and home directory.
+
 ## Cutover
 
 After validation, run this from an elevated Windows PowerShell if Developer Mode
