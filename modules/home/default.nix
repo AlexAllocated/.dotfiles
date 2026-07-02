@@ -134,6 +134,10 @@ in
       source = ../../scripts/dotctl;
       executable = true;
     };
+    home.file.".local/bin/op" = lib.mkIf isWsl {
+      source = ../../scripts/op-wsl-bridge;
+      executable = true;
+    };
 
     xdg.configFile."mise/config.toml".text = ''
             [settings]
@@ -326,34 +330,9 @@ in
                 }
                 setup_1password_ssh_agent
 
-                dotfiles_auth_bootstrap() {
-                  if [[ ! -t 0 || ! -t 1 ]]; then
-                    return
-                  fi
-
-                  local env_script="$HOME/.local/bin/bootstrap-env-from-1password"
-
-                  if command -v op >/dev/null 2>&1; then
-                    if ! op whoami >/dev/null 2>&1; then
-                      echo "1Password CLI is not signed in. Launching 'op signin'..."
-                      eval $(op signin) || echo "1Password CLI signin skipped or failed."
-                    fi
-
-                    if op whoami >/dev/null 2>&1 && [[ -x "$env_script" ]]; then
-                      "$env_script" --quiet
-                    fi
-                  fi
-
-                  if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
-                    echo "GitHub CLI is not authenticated. Launching 'gh auth login --web'..."
-                    gh auth login --web -h github.com || echo "GitHub CLI login skipped or failed."
-                  fi
-                }
-
-                if [[ $- == *i* && -z "$DOTFILES_AUTH_BOOTSTRAP_DONE" ]]; then
-                  export DOTFILES_AUTH_BOOTSTRAP_DONE=1
-                  dotfiles_auth_bootstrap
-                fi
+                # Shell startup should not authenticate external services. Use
+                # explicit commands such as `op`, `gh auth login`, or
+                # `dotctl secrets` when credentials need refreshing.
               '';
     };
 

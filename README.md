@@ -41,7 +41,14 @@ dotctl check
 dotctl apply nixos-wsl
 dotctl apply --update
 dotctl agents
+dotctl secrets
 ```
+
+On WSL, Windows owns the 1Password app session. Home Manager installs an `op`
+bridge at `~/.local/bin/op` that forwards CLI calls to the Windows 1Password CLI
+when it is available, then falls back to the native Linux CLI. Shell startup does
+not authenticate external services; run `op`, `gh auth login`, or
+`dotctl secrets` explicitly when credentials need attention.
 
 ## Try it out with Docker
 

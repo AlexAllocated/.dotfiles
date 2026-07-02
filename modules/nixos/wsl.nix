@@ -50,6 +50,26 @@
     wget
   ];
 
+  systemd.services.wsl-interop-binfmt = {
+    description = "Register WSL Windows executable interop";
+    after = [ "systemd-binfmt.service" ];
+    wantedBy = [ "multi-user.target" ];
+    unitConfig.ConditionPathExists = "/proc/sys/fs/binfmt_misc/register";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.writeShellScript "register-wsl-interop-binfmt" ''
+        set -eu
+
+        if [ -e /proc/sys/fs/binfmt_misc/WSLInterop ]; then
+          exit 0
+        fi
+
+        echo ':WSLInterop:M::MZ::/init:P' > /proc/sys/fs/binfmt_misc/register
+      ''}";
+    };
+  };
+
   wsl = {
     enable = true;
     defaultUser = user;

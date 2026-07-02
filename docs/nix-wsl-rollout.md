@@ -35,3 +35,19 @@ wsl.exe --set-default NixOS
 ```
 
 Keep the Ubuntu distro until NixOS has handled normal work successfully.
+
+## 1Password model
+
+For WSL, the Windows desktop app owns the 1Password session and UI prompts. Home
+Manager installs `~/.local/bin/op` as the WSL bridge to the Windows 1Password CLI
+and keeps the native Linux CLI as a fallback. This keeps secrets anchored to the
+host app while still allowing WSL tools to call `op`.
+
+Shell startup intentionally avoids interactive authentication. Use these commands
+directly when needed:
+
+```sh
+op vault list
+gh auth login --web -h github.com
+dotctl secrets
+```

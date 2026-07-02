@@ -25,6 +25,7 @@ Commands:
   update                       Update flake inputs.
   check                        Run flake checks.
   doctor                       Print host integration diagnostics.
+  secrets [options]            Refresh the repository .env from 1Password.
   agents                       Install/update global Bun coding agents.
 
 Profiles:
@@ -144,6 +145,20 @@ install_agents() {
 	bun install --global @openai/codex@latest @just-every/code@latest
 }
 
+refresh_secrets() {
+	local env_script="$REPO_ROOT/bootstrap-env-from-1password"
+	if [[ ! -x "$env_script" ]]; then
+		env_script="$HOME/.local/bin/bootstrap-env-from-1password"
+	fi
+
+	if [[ ! -x "$env_script" ]]; then
+		printf 'Unable to find bootstrap-env-from-1password.\n' >&2
+		exit 1
+	fi
+
+	"$env_script" "$@"
+}
+
 main() {
 	local command="${1:-}"
 	[[ -n "$command" ]] || {
@@ -184,6 +199,9 @@ main() {
 			;;
 		doctor)
 			run_doctor
+			;;
+		secrets)
+			refresh_secrets "$@"
 			;;
 		agents)
 			install_agents
