@@ -1,5 +1,4 @@
 {
-  lib,
   pkgs,
   user,
   fullName,
@@ -7,7 +6,6 @@
 }:
 {
   system.stateVersion = "26.05";
-  networking.hostName = "nixos-wsl";
   nixpkgs.config.allowUnfree = true;
 
   nix.settings = {
@@ -26,6 +24,10 @@
     dates = "weekly";
     options = "--delete-older-than 14d";
   };
+
+  # Let WSL inherit the Windows host name. NixOS-WSL currently has a WSL/user-session
+  # startup bug when this distro starts while another WSL distro is already running.
+  networking.hostName = "";
 
   programs.zsh.enable = true;
   security.sudo.wheelNeedsPassword = false;
@@ -76,7 +78,7 @@
       network = {
         generateHosts = true;
         generateResolvConf = true;
-        hostname = "nixos-wsl";
+        hostname = "";
       };
       user.default = user;
     };
