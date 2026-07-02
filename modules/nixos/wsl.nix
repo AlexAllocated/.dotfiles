@@ -34,7 +34,9 @@
 
   users.users.${user} = {
     isNormalUser = true;
-    uid = 1001;
+    # Preserve the original WSL user's UID so DrvFs mounts and migrated files
+    # continue to work after renaming the default account.
+    uid = 1000;
     description = fullName;
     home = "/home/${user}";
     createHome = true;

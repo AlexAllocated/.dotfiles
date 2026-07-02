@@ -5,10 +5,32 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+trap {
+   Write-Error $_
+   exit 1
+}
+
 function Normalize-WslTarget {
    param([string]$RelativePath)
    $relative = $RelativePath -replace "/", "\"
    return "\\wsl.localhost\$DistroName$($LinuxHome -replace '/', '\')\.dotfiles\$relative"
+}
+
+function Assert-SymlinkCreationAvailable {
+   $probeTarget = Join-Path $env:TEMP "dotfiles-link-probe-target"
+   $probeLink = Join-Path $env:TEMP "dotfiles-link-probe-link"
+
+   Remove-Item -LiteralPath $probeLink -Force -ErrorAction SilentlyContinue
+   New-Item -ItemType Directory -Force -Path $probeTarget | Out-Null
+
+   try {
+      New-Item -ItemType SymbolicLink -Path $probeLink -Target $probeTarget -ErrorAction Stop | Out-Null
+   } catch {
+      throw "Creating Windows symlinks requires elevation or Developer Mode. No links were changed. Original error: $($_.Exception.Message)"
+   } finally {
+      Remove-Item -LiteralPath $probeLink -Force -ErrorAction SilentlyContinue
+      Remove-Item -LiteralPath $probeTarget -Recurse -Force -ErrorAction SilentlyContinue
+   }
 }
 
 function Set-Symlink {
@@ -30,6 +52,8 @@ function Set-Symlink {
    Write-Host "Linking $Name"
    New-Item -ItemType SymbolicLink -Path $LinkPath -Target $TargetPath | Out-Null
 }
+
+Assert-SymlinkCreationAvailable
 
 Set-Symlink "WezTerm config" (Join-Path $env:USERPROFILE ".wezterm.lua") (Normalize-WslTarget ".wezterm.lua")
 Set-Symlink "WezTerm directory" (Join-Path $env:USERPROFILE ".wezterm") (Normalize-WslTarget "wezterm")
