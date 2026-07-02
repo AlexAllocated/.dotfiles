@@ -1,15 +1,33 @@
 # If we are in WSL then configure Windows path variables.
-if command -v powershell.exe > /dev/null ; then
-	export WINHOME=$(wslpath -u "$(powershell.exe '$env:Userprofile' | tr -d '\r')")
-	export APPDATA=$WINHOME/AppData/Roaming
-	export DESKTOP=$WINHOME/Desktop
-	export DOWNLOADS=$WINHOME/Downloads
+get_windows_userprofile() {
+	if command -v powershell.exe >/dev/null 2>&1; then
+		powershell.exe -NoLogo -NoProfile -Command '$env:UserProfile' 2>/dev/null && return
+	fi
+
+	if [[ -x /init && -x /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe ]]; then
+		/init /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -Command '$env:UserProfile' 2>/dev/null && return
+	fi
+
+	return 1
+}
+
+if command -v wslpath >/dev/null 2>&1; then
+	windows_userprofile="$(get_windows_userprofile | tr -d '\r')"
+	if [[ -n "$windows_userprofile" ]]; then
+		export WINHOME=$(wslpath -u "$windows_userprofile")
+		export APPDATA=$WINHOME/AppData/Roaming
+		export DESKTOP=$WINHOME/Desktop
+		export DOWNLOADS=$WINHOME/Downloads
+	fi
 	# If Google Drive is mounted then set some more path variables.
 	if [[ -d "/mnt/g" ]] ; then
 		export GDRIVE="/mnt/g/My Drive"
 		export GBACKUPS="/mnt/g/My Drive/Backups"
 	fi
 fi
+
+unset -f get_windows_userprofile
+unset windows_userprofile
 
 # Source Homebrew shell configuration.
 if command -v brew > /dev/null ; then
@@ -71,7 +89,10 @@ load_dotfiles_env_file "$HOME/.dotfiles/.env"
 
 unset -f load_dotfiles_env_file
 
-export SSL_CERT_DIR=/etc/ssl/certs
+if [[ -f /etc/ssl/certs/ca-certificates.crt ]]; then
+	export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+	export CURL_CA_BUNDLE=$SSL_CERT_FILE
+fi
 export EDITOR="nvim"
 export HOMEBREW_NO_ENV_HINTS=1
 export MS_COG_SVC_SPEECH_SKIP_BINDGEN=1

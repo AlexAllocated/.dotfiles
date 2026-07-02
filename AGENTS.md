@@ -2,26 +2,34 @@
 
 ## Project Structure & Module Organization
 
-- Dotfiles root uses scripts `create-symlinks.sh`, `install-arch.sh`, `devenv.sh`, `nvim.sh` to bootstrap Linux, WSL, and containerized workflows.
+- `flake.nix` is the primary configuration entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles macOS.
+- `modules/home/`, `modules/nixos/`, and `modules/darwin/` hold reusable Nix modules. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
+- Legacy scripts `install.sh` and `create-symlinks.sh` remain as the pre-Nix reference path; the `pre-nix` tag is the final old-structure checkpoint.
+- `dot-bootstrap` and `scripts/dotctl` are the new bootstrap and maintenance entrypoints. Docker helpers `devenv.sh` and `nvim.sh` remain for container validation.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary configs sit in `komorebi/`.
 - Assets are under `images/`; helper binaries land in `bin/`. Root-level config files (`.zshrc`, `.wezterm.lua`, `.gitconfig`) mirror their home-directory targets.
 
 ## Build, Test, and Development Commands
 
+- `dotctl check` runs the flake checks when Nix is available.
+- `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation from inside the `NixOS` distro; restart the distro afterward.
+- `dotctl apply --update` updates flake inputs and reapplies the detected profile; `updoot` aliases to this in the Home Manager shell.
+- `./dot-bootstrap nixos-wsl` installs the side-by-side `NixOS` WSL distro from the current Ubuntu control-plane distro.
 - `./create-symlinks.sh` backs up existing dotfiles to `~/.backup_dotfiles/` and updates symlinks—run after any structural change.
 - `./devenv.sh [path]` rebuilds the full `chevcast/devenv:latest` image and optionally mounts a workspace for interactive validation.
 - `./nvim.sh [path]` rebuilds the slim `chevcast/nvim:latest` image for editor-only smoke tests.
-- On fresh Arch Linux installs, run `./install-arch.sh` to provision packages, WezTerm terminfo, Volta, Rust, and Neovim nightly.
 
 ## Coding Style & Naming Conventions
 
 - Shell scripts stay POSIX-friendly but use Bash features; match tab-indented blocks as seen in existing scripts.
+- Nix modules use tabs like the surrounding repo and keep host-specific behavior in the matching `modules/*/` layer.
 - Lua files follow `stylua.toml` (tabs, width 3, 120-column wrap). Run `stylua .` inside `nvim/` before committing.
 - TypeScript/Markdown snippets follow `prettier.config.js` (tabs, width 3, trailing commas disabled). Use `npx prettier --check .`.
 - Rust snippets honor `rustfmt.toml` (hard tabs, grouped imports). Format with `rustfmt` when touching Rust files.
 
 ## Testing Guidelines
 
+- For Nix changes, run `nix flake check` or `dotctl check` once Nix is available. For the WSL target, also run `sudo nixos-rebuild build --flake .#nixos-wsl` or `sudo nixos-rebuild boot --flake .#nixos-wsl`.
 - For Neovim config updates, run `nvim --headless "+Lazy! sync" +qa` inside the `./nvim.sh` container to catch plugin errors.
 - WezTerm changes should be loaded with `wezterm start --config-file $PWD/.wezterm.lua` to verify profiles.
 - After modifying symlink lists, rerun `./create-symlinks.sh` and inspect `~/.backup_dotfiles/` for unintended moves.

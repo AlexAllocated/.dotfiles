@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+	cat <<'EOF'
+Usage: ./dot-bootstrap <target>
+
+Targets:
+  nixos-wsl       Install NixOS-WSL side-by-side from Windows PowerShell.
+  generic-linux   Install Nix with the Determinate installer, then apply Home Manager manually.
+  ubuntu          Same as generic-linux, named for Ubuntu hosts.
+  macos           Same as generic-linux, then use nix-darwin manually.
+EOF
+}
+
+target="${1:-}"
+[[ -n "$target" ]] || {
+	usage
+	exit 2
+}
+
+case "$target" in
+	nixos-wsl)
+		if ! command -v powershell.exe >/dev/null 2>&1; then
+			echo "powershell.exe is required from the current WSL control-plane distro." >&2
+			exit 1
+		fi
+		ps_path="$(wslpath -w "$SCRIPT_DIR/bootstrap/nixos-wsl.ps1")"
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_path"
+		;;
+	generic-linux | ubuntu | macos)
+		if command -v nix >/dev/null 2>&1; then
+			echo "Nix is already installed."
+		else
+			curl --proto '=https' --tlsv1.2 -fsSL https://install.determinate.systems/nix | sh -s -- install
+		fi
+		echo "Open a new shell, then run: dotctl apply $target"
+		;;
+	-h | --help | help)
+		usage
+		;;
+	*)
+		echo "Unknown bootstrap target: $target" >&2
+		usage >&2
+		exit 2
+		;;
+esac

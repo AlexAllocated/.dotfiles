@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SCRIPT_SOURCE" ]]; do
+	SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+	SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+	[[ "$SCRIPT_SOURCE" != /* ]] && SCRIPT_SOURCE="${SCRIPT_DIR}/${SCRIPT_SOURCE}"
+done
+SCRIPT_REPO_ROOT="$(cd -P "$(dirname "$SCRIPT_SOURCE")/.." && pwd)"
+if [[ -d "${DOTFILES_ROOT:-}" ]]; then
+	REPO_ROOT="$DOTFILES_ROOT"
+elif [[ -d "$HOME/.dotfiles" ]]; then
+	REPO_ROOT="$HOME/.dotfiles"
+else
+	REPO_ROOT="$SCRIPT_REPO_ROOT"
+fi
+
+usage() {
+	cat <<'EOF'
+Usage: dotctl <command> [profile] [options]
+
+Commands:
+  apply [profile] [--update]   Apply a NixOS, nix-darwin, or Home Manager profile.
+  update                       Update flake inputs.
+  check                        Run flake checks.
+  doctor                       Print host integration diagnostics.
+  agents                       Install/update global Bun coding agents.
+
+Profiles:
+  nixos-wsl       NixOS running inside WSL.
+  wsl-ubuntu      Home Manager only, Ubuntu WSL.
+  ubuntu          Home Manager only, native Ubuntu.
+  generic-linux   Home Manager only, any Linux with Nix.
+  macos           nix-darwin aarch64 profile.
+  macos-intel     nix-darwin x86_64 profile.
+EOF
+}
+
+command_exists() {
+	command -v "$1" >/dev/null 2>&1
+}
+
+detect_profile() {
+	if [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
+		printf 'nixos-wsl\n'
+	elif [[ "$(uname -s)" == "Darwin" ]]; then
+		if [[ "$(uname -m)" == "arm64" ]]; then
+			printf 'macos\n'
+		else
+			printf 'macos-intel\n'
+		fi
+	elif [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+		printf 'wsl-ubuntu\n'
+	elif [[ -f /etc/os-release ]] && grep -Eiq '(^ID=ubuntu|^ID_LIKE=.*ubuntu|^ID_LIKE=.*debian)' /etc/os-release; then
+		printf 'ubuntu\n'
+	else
+		printf 'generic-linux\n'
+	fi
+}
+
+flake_ref_for_profile() {
+	local profile="$1"
+	case "$profile" in
+		nixos-wsl)
+			printf '%s#nixos-wsl\n' "$REPO_ROOT"
+			;;
+		wsl-ubuntu | ubuntu | generic-linux)
+			printf '%s#chev@%s\n' "$REPO_ROOT" "$profile"
+			;;
+		macos)
+			printf '%s#chev-macos\n' "$REPO_ROOT"
+			;;
+		macos-intel)
+			printf '%s#chev-macos-intel\n' "$REPO_ROOT"
+			;;
+		*)
+			printf 'Unknown profile: %s\n' "$profile" >&2
+			exit 2
+			;;
+	esac
+}
+
+apply_profile() {
+	local profile="$1"
+	local flake_ref
+	flake_ref="$(flake_ref_for_profile "$profile")"
+
+	case "$profile" in
+		nixos-wsl)
+			require_command sudo
+			require_command nixos-rebuild
+			sudo nixos-rebuild boot --flake "$flake_ref"
+			printf 'NixOS-WSL generation installed. Restart the distro with: wsl.exe -t NixOS\n'
+			;;
+		macos | macos-intel)
+			require_command darwin-rebuild
+			darwin-rebuild switch --flake "$flake_ref"
+			;;
+		*)
+			require_command home-manager
+			home-manager switch --flake "$flake_ref"
+			;;
+	esac
+}
+
+require_command() {
+	if ! command_exists "$1"; then
+		printf 'Required command not found: %s\n' "$1" >&2
+		exit 1
+	fi
+}
+
+run_doctor() {
+	printf 'dotfiles repo: %s\n' "$REPO_ROOT"
+	printf 'detected profile: %s\n' "$(detect_profile)"
+	printf 'uname: %s\n' "$(uname -a)"
+	printf 'nix: '
+	if command_exists nix; then
+		nix --version
+	else
+		printf 'not found\n'
+	fi
+
+	for cmd in zsh git gh op ssh nvim bun node rustc cargo rust-analyzer go dotnet wezterm; do
+		if command_exists "$cmd"; then
+			printf '%-12s %s\n' "$cmd" "$(command -v "$cmd")"
+		else
+			printf '%-12s missing\n' "$cmd"
+		fi
+	done
+
+	if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+		printf 'WSL_DISTRO_NAME=%s\n' "$WSL_DISTRO_NAME"
+		if command_exists powershell.exe; then
+			powershell.exe -NoLogo -NoProfile -Command 'Get-PSDrive -PSProvider FileSystem | Select-Object Name,Free,Used,Root | ConvertTo-Json -Compress' | tr -d '\r'
+			printf '\n'
+		fi
+	fi
+}
+
+install_agents() {
+	require_command bun
+	bun install --global @openai/codex@latest @just-every/code@latest
+}
+
+main() {
+	local command="${1:-}"
+	[[ -n "$command" ]] || {
+		usage
+		exit 2
+	}
+	shift || true
+
+	case "$command" in
+		apply)
+			local profile=""
+			local update=0
+			while (($#)); do
+				case "$1" in
+					--update)
+						update=1
+						;;
+					*)
+						profile="$1"
+						;;
+				esac
+				shift
+			done
+			profile="${profile:-$(detect_profile)}"
+			if ((update)); then
+				require_command nix
+				nix flake update --flake "$REPO_ROOT"
+			fi
+			apply_profile "$profile"
+			;;
+		update)
+			require_command nix
+			nix flake update --flake "$REPO_ROOT"
+			;;
+		check)
+			require_command nix
+			nix flake check "$REPO_ROOT"
+			;;
+		doctor)
+			run_doctor
+			;;
+		agents)
+			install_agents
+			;;
+		-h | --help | help)
+			usage
+			;;
+		*)
+			printf 'Unknown command: %s\n' "$command" >&2
+			usage >&2
+			exit 2
+			;;
+	esac
+}
+
+main "$@"

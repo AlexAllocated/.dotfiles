@@ -5,6 +5,44 @@ from it. I'm doing my best to keep all of it as portable as possible, but I make
 no guarantees. If you find any issues please feel free to submit a PR or open a
 Github issue.
 
+## NixOS-WSL rewrite
+
+The final commit before the Nix rewrite is tagged `pre-nix`.
+
+The current target architecture is Nix-first:
+
+- `NixOS` on WSL is the primary development environment.
+- Home Manager owns user-level config for Linux/WSL/macOS.
+- nix-darwin owns macOS host integration.
+- Docker remains a disposable validation and demo layer.
+
+Install the side-by-side NixOS WSL distro from the existing Ubuntu control-plane
+distro:
+
+```sh
+./dot-bootstrap nixos-wsl
+```
+
+Then, inside the new NixOS distro:
+
+```sh
+git clone git@github.com:AlexAllocated/.dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
+sudo nixos-rebuild boot --flake .#nixos-wsl
+dotctl doctor
+```
+
+See `docs/nix-wsl-rollout.md` for the full rollout and cutover notes.
+
+Common maintenance commands:
+
+```sh
+dotctl check
+dotctl apply nixos-wsl
+dotctl apply --update
+dotctl agents
+```
+
 ## Try it out with Docker
 
 My full development environment is about 2.22gb in size. The image contains almost
