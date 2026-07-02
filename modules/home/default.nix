@@ -64,6 +64,14 @@ in
         CURL_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
         SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
       };
+    home.sessionPath = [
+      "$HOME/.cache/.bun/bin"
+      "$HOME/.bun/bin"
+      "$HOME/.cargo/bin"
+      "$HOME/bin"
+      "$HOME/.local/bin"
+      "$HOME/go/bin"
+    ];
 
     home.packages =
       (with pkgs; [
@@ -286,13 +294,6 @@ in
                 if command -v mise >/dev/null 2>&1; then
                   eval "$(mise activate zsh)"
                 fi
-
-                [[ -d "$HOME/.cache/.bun/bin" ]] && export PATH="$HOME/.cache/.bun/bin:$PATH"
-                [[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
-                [[ -d "$HOME/.cargo/bin" ]] && export PATH="$HOME/.cargo/bin:$PATH"
-                [[ -d "$HOME/bin" ]] && export PATH="$HOME/bin:$PATH"
-                [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
-                [[ -d "$HOME/go/bin" ]] && export PATH="$PATH:$HOME/go/bin"
 
                 setup_1password_ssh_agent() {
                   if [[ -n "$WSL_DISTRO_NAME" ]]; then
