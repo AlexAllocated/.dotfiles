@@ -139,6 +139,7 @@ let
     openssh
     procps
     ripgrep
+    rsync
     shadow
     sudo
     gnutar
