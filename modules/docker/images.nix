@@ -141,6 +141,7 @@ let
     ripgrep
     rsync
     shadow
+    socat
     sudo
     gnutar
     unzip

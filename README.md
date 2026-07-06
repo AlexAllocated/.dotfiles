@@ -109,8 +109,24 @@ desktop app and CLI if they are missing, but sign-in, Touch ID, CLI integration,
 and SSH-agent enablement still happen in 1Password itself. Set
 `DOTCTL_DOCKER_SSH_AUTH_SOCK=0` to disable the mount, or set it to a custom
 host socket path before applying the profile. This only forwards the SSH agent;
-full 1Password CLI desktop-app integration for commands such as `op item get`
-is a separate host-side concern.
+direct Linux-container 1Password desktop integration is not attempted.
+
+The profile also installs a small macOS user `launchd` service named
+`com.alexallocated.dotfiles.hostd`. It listens on
+`~/.local/share/dotfiles/hostd.sock`, and the managed container mounts that
+socket at `/run/host-services/dotfiles-hostd.sock`. Inside the container, use
+the allowlisted host command surface for host-only integrations:
+
+```sh
+dotctl host ping
+dotctl host op account list
+dotctl host op item get "Item Name" --fields label=username,password
+```
+
+`dotctl host op ...` runs the macOS host `op` binary so 1Password desktop app
+integration, Touch ID, and company policy stay on the host. The socket does not
+expose arbitrary host shell. Set `DOTFILES_HOSTD=0` before applying the profile
+to skip hostd setup.
 
 Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
 or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the

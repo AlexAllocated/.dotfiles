@@ -26,6 +26,7 @@ Commands:
   shell [profile]              Open an interactive shell for a container profile.
   import-host-state [profile]  Copy host auth/config state into a container profile.
   workshop-update              Rebuild a workshop image from the current checkout.
+  host <ping|op ...>           Run an allowlisted macOS host integration command.
   update                       Update all repo-managed pins.
   check                        Run flake checks.
   doctor                       Print host integration diagnostics.
@@ -201,16 +202,40 @@ ensure_wezterm() {
 	brew install --cask wezterm >&2
 }
 
-onepassword_cli_command() {
-	if command_exists op; then
-		command -v op
-	elif [[ -x /opt/homebrew/bin/op ]]; then
-		printf '/opt/homebrew/bin/op\n'
-	elif [[ -x /usr/local/bin/op ]]; then
-		printf '/usr/local/bin/op\n'
+host_tool_command() {
+	local cmd="$1"
+
+	if command_exists "$cmd"; then
+		command -v "$cmd"
+	elif [[ -x "/opt/homebrew/bin/$cmd" ]]; then
+		printf '/opt/homebrew/bin/%s\n' "$cmd"
+	elif [[ -x "/usr/local/bin/$cmd" ]]; then
+		printf '/usr/local/bin/%s\n' "$cmd"
 	else
 		return 1
 	fi
+}
+
+ensure_homebrew_formula() {
+	local cmd="$1"
+	local formula="$2"
+
+	if host_tool_command "$cmd" >/dev/null 2>&1; then
+		return 0
+	fi
+
+	ensure_homebrew
+	printf '%s is not installed; installing %s with Homebrew...\n' "$cmd" "$formula" >&2
+	brew install "$formula" >&2
+
+	if ! host_tool_command "$cmd" >/dev/null 2>&1; then
+		printf '%s was not found after installation. Open a new shell and retry.\n' "$cmd" >&2
+		return 1
+	fi
+}
+
+onepassword_cli_command() {
+	host_tool_command op
 }
 
 ensure_1password() {
@@ -234,6 +259,150 @@ ensure_1password() {
 		printf '1Password CLI was not found after installation. Open a new shell and retry.\n' >&2
 		return 1
 	fi
+}
+
+dotfiles_hostd_label() {
+	printf 'com.alexallocated.dotfiles.hostd\n'
+}
+
+dotfiles_hostd_state_dir() {
+	printf '%s/.local/share/dotfiles\n' "$HOME"
+}
+
+dotfiles_hostd_sock() {
+	printf '%s\n' "${DOTFILES_HOSTD_SOCKET:-$(dotfiles_hostd_state_dir)/hostd.sock}"
+}
+
+dotfiles_hostd_container_sock() {
+	printf '/run/host-services/dotfiles-hostd.sock\n'
+}
+
+dotfiles_hostd_enabled() {
+	case "${DOTFILES_HOSTD:-1}" in
+		0 | false | FALSE | no | NO)
+			return 1
+			;;
+		*)
+			return 0
+			;;
+	esac
+}
+
+macos_docker_hostd_sock() {
+	if dotfiles_hostd_enabled && [[ "$(uname -s)" == "Darwin" ]]; then
+		dotfiles_hostd_sock
+	fi
+}
+
+ensure_hostd_dependencies() {
+	ensure_homebrew_formula socat socat
+	ensure_homebrew_formula jq jq
+}
+
+xml_escape() {
+	sed \
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g' \
+		-e 's/"/\&quot;/g' \
+		-e "s/'/\&apos;/g"
+}
+
+write_dotfiles_hostd_service() {
+	local state_dir socket label plist log_out log_err socat_bin dotctl_bin server_script handler_script
+	local escaped_label escaped_server escaped_log_out escaped_log_err
+
+	state_dir="$(dotfiles_hostd_state_dir)"
+	socket="$(dotfiles_hostd_sock)"
+	label="$(dotfiles_hostd_label)"
+	plist="$HOME/Library/LaunchAgents/$label.plist"
+	log_out="$state_dir/hostd.out.log"
+	log_err="$state_dir/hostd.err.log"
+	socat_bin="$(host_tool_command socat)"
+	dotctl_bin="$REPO_ROOT/scripts/dotctl"
+	server_script="$state_dir/hostd-server"
+	handler_script="$state_dir/hostd-handler"
+
+	mkdir -p "$state_dir" "$HOME/Library/LaunchAgents"
+
+	cat >"$handler_script" <<EOF
+#!/usr/bin/env bash
+exec "$dotctl_bin" hostd-handle
+EOF
+	chmod 700 "$handler_script"
+
+	cat >"$server_script" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+socket="$socket"
+rm -f "\$socket"
+mkdir -p "\$(dirname "\$socket")"
+umask 077
+exec "$socat_bin" "UNIX-LISTEN:\$socket,fork,unlink-early,mode=0600" "EXEC:$handler_script,nofork"
+EOF
+	chmod 700 "$server_script"
+
+	escaped_label="$(printf '%s' "$label" | xml_escape)"
+	escaped_server="$(printf '%s' "$server_script" | xml_escape)"
+	escaped_log_out="$(printf '%s' "$log_out" | xml_escape)"
+	escaped_log_err="$(printf '%s' "$log_err" | xml_escape)"
+
+	cat >"$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>$escaped_label</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>$escaped_server</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>$escaped_log_out</string>
+	<key>StandardErrorPath</key>
+	<string>$escaped_log_err</string>
+</dict>
+</plist>
+EOF
+	chmod 600 "$plist"
+}
+
+ensure_dotfiles_hostd() {
+	local label plist socket service_target waited
+
+	if [[ "$(uname -s)" != "Darwin" ]] || ! dotfiles_hostd_enabled; then
+		return 0
+	fi
+
+	ensure_hostd_dependencies
+	write_dotfiles_hostd_service
+
+	label="$(dotfiles_hostd_label)"
+	plist="$HOME/Library/LaunchAgents/$label.plist"
+	socket="$(dotfiles_hostd_sock)"
+	service_target="gui/$(id -u)"
+
+	launchctl bootout "$service_target" "$plist" >/dev/null 2>&1 || true
+	launchctl bootstrap "$service_target" "$plist" >/dev/null 2>&1 || launchctl load "$plist" >/dev/null 2>&1
+	launchctl kickstart -k "$service_target/$label" >/dev/null 2>&1 || true
+
+	waited=0
+	while ((waited < 50)); do
+		if [[ -S "$socket" ]]; then
+			return 0
+		fi
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+
+	printf 'dotfiles hostd did not create %s. Check %s/hostd.err.log on the host.\n' "$socket" "$(dotfiles_hostd_state_dir)" >&2
+	return 1
 }
 
 docker_command() {
@@ -495,6 +664,167 @@ import_macos_host_state() {
 	rm -rf "$stage_dir"
 }
 
+hostd_error_response() {
+	local message="$1"
+	local exit_code="${2:-1}"
+	local jq_bin
+
+	jq_bin="$(host_tool_command jq 2>/dev/null || true)"
+	if [[ -n "$jq_bin" ]]; then
+		"$jq_bin" -cn \
+			--arg message "$message" \
+			--argjson exit_code "$exit_code" \
+			'{ok:false,exit_code:$exit_code,stdout:"",stderr:($message + "\n")}'
+	else
+		printf '{"ok":false,"exit_code":%s,"stdout":"","stderr":"hostd error before jq was available\\n"}\n' "$exit_code"
+	fi
+}
+
+hostd_command_response() {
+	local exit_code="$1"
+	local stdout_file="$2"
+	local stderr_file="$3"
+	local jq_bin
+
+	jq_bin="$(host_tool_command jq)"
+	"$jq_bin" -cn \
+		--argjson exit_code "$exit_code" \
+		--rawfile stdout "$stdout_file" \
+		--rawfile stderr "$stderr_file" \
+		'{ok:($exit_code == 0),exit_code:$exit_code,stdout:$stdout,stderr:$stderr}'
+}
+
+run_hostd_handle() {
+	local request jq_bin action stdout_file stderr_file exit_code op_bin
+	local args=()
+	local arg
+
+	if ! IFS= read -r request; then
+		hostd_error_response 'empty hostd request' 2
+		return 0
+	fi
+
+	jq_bin="$(host_tool_command jq 2>/dev/null || true)"
+	if [[ -z "$jq_bin" ]]; then
+		hostd_error_response 'jq is not available on the host' 127
+		return 0
+	fi
+
+	if ! action="$(printf '%s' "$request" | "$jq_bin" -er '.action // empty' 2>/dev/null)"; then
+		hostd_error_response 'invalid hostd request: missing action' 2
+		return 0
+	fi
+
+	if ! printf '%s' "$request" | "$jq_bin" -e '(.args // []) | type == "array" and all(.[]; type == "string")' >/dev/null 2>&1; then
+		hostd_error_response 'invalid hostd request: args must be an array of strings' 2
+		return 0
+	fi
+
+	while IFS= read -r arg; do
+		args+=("$arg")
+	done < <(printf '%s' "$request" | "$jq_bin" -r '.args[]?')
+
+	case "$action" in
+		ping)
+			stdout_file="$(mktemp)"
+			stderr_file="$(mktemp)"
+			printf 'pong\n' >"$stdout_file"
+			: >"$stderr_file"
+			hostd_command_response 0 "$stdout_file" "$stderr_file"
+			rm -f "$stdout_file" "$stderr_file"
+			;;
+		op)
+			if ! op_bin="$(onepassword_cli_command 2>/dev/null)"; then
+				hostd_error_response '1Password CLI is not available on the host' 127
+				return 0
+			fi
+			stdout_file="$(mktemp)"
+			stderr_file="$(mktemp)"
+			if "$op_bin" "${args[@]}" >"$stdout_file" 2>"$stderr_file"; then
+				exit_code=0
+			else
+				exit_code=$?
+			fi
+			hostd_command_response "$exit_code" "$stdout_file" "$stderr_file"
+			rm -f "$stdout_file" "$stderr_file"
+			;;
+		*)
+			hostd_error_response "unsupported hostd action: $action" 2
+			;;
+	esac
+}
+
+hostd_client_socket() {
+	if [[ -n "${DOTFILES_HOSTD_SOCK:-}" ]]; then
+		printf '%s\n' "$DOTFILES_HOSTD_SOCK"
+	elif [[ -S "$(dotfiles_hostd_container_sock)" || -e "$(dotfiles_hostd_container_sock)" ]]; then
+		dotfiles_hostd_container_sock
+	else
+		dotfiles_hostd_sock
+	fi
+}
+
+run_host_client() {
+	local subcommand="${1:-}"
+	local action request response socket socat_bin jq_bin exit_code
+
+	[[ -n "$subcommand" ]] || {
+		printf 'Usage: dotctl host <ping|op ...>\n' >&2
+		return 2
+	}
+	shift || true
+
+	case "$subcommand" in
+		ping)
+			action="ping"
+			if (($#)); then
+				printf 'Usage: dotctl host ping\n' >&2
+				return 2
+			fi
+			;;
+		op)
+			action="op"
+			;;
+		*)
+			printf 'Unsupported host command: %s\n' "$subcommand" >&2
+			printf 'Usage: dotctl host <ping|op ...>\n' >&2
+			return 2
+			;;
+	esac
+
+	if ! jq_bin="$(host_tool_command jq 2>/dev/null)"; then
+		printf 'jq is required for dotctl host. Rebuild the workshop image or install jq on the host.\n' >&2
+		return 127
+	fi
+	if ! socat_bin="$(host_tool_command socat 2>/dev/null)"; then
+		printf 'socat is required for dotctl host. Rebuild the workshop image or install socat on the host.\n' >&2
+		return 127
+	fi
+
+	socket="$(hostd_client_socket)"
+	if [[ ! -S "$socket" ]]; then
+		printf 'dotfiles host socket is not available at %s.\n' "$socket" >&2
+		printf 'From the macOS host, run: ~/.dotfiles/scripts/dotctl apply --recreate macos-docker\n' >&2
+		return 1
+	fi
+
+	request="$("$jq_bin" -cn --arg action "$action" '$ARGS.positional as $args | {action:$action,args:$args}' --args -- "$@")"
+	if ! response="$(printf '%s\n' "$request" | "$socat_bin" - "UNIX-CONNECT:$socket")"; then
+		printf 'dotfiles host request failed while connecting to %s.\n' "$socket" >&2
+		return 1
+	fi
+
+	if ! printf '%s' "$response" | "$jq_bin" -e 'type == "object" and has("exit_code")' >/dev/null 2>&1; then
+		printf 'dotfiles hostd returned an invalid response:\n%s\n' "$response" >&2
+		return 1
+	fi
+
+	printf '%s' "$response" | "$jq_bin" -rj '.stdout // ""'
+	printf '%s' "$response" | "$jq_bin" -rj '.stderr // ""' >&2
+	exit_code="$(printf '%s' "$response" | "$jq_bin" -r '.exit_code')"
+	return "$exit_code"
+}
+
 macos_docker_image() {
 	printf '%s\n' "${DOTCTL_DOCKER_IMAGE:-dotfiles-workshop:local}"
 }
@@ -687,14 +1017,16 @@ run_macos_docker() {
 	local recreate="${1:-0}"
 	local rebuild="${2:-$recreate}"
 	local announce="${3:-1}"
-	local docker_bin image platform container work_root home_volume docker_socket ssh_auth_sock
+	local docker_bin image platform container work_root home_volume docker_socket ssh_auth_sock hostd_sock
 	local platform_args=()
 	local docker_socket_args=()
 	local ssh_auth_sock_args=()
+	local hostd_sock_args=()
 
 	apply_macos_host_links
 	ensure_wezterm
 	ensure_1password
+	ensure_dotfiles_hostd
 
 	docker_bin="$(ensure_docker)"
 	image="$(macos_docker_image)"
@@ -705,6 +1037,7 @@ run_macos_docker() {
 	home_volume="${container}-home"
 	docker_socket="$(macos_docker_socket)"
 	ssh_auth_sock="$(macos_docker_ssh_auth_sock)"
+	hostd_sock="$(macos_docker_hostd_sock)"
 	if [[ -n "$platform" ]]; then
 		platform_args=(--platform "$platform")
 	fi
@@ -713,6 +1046,9 @@ run_macos_docker() {
 	fi
 	if [[ -n "$ssh_auth_sock" ]]; then
 		ssh_auth_sock_args=(-v "$ssh_auth_sock:/run/host-services/ssh-auth.sock" -e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock)
+	fi
+	if [[ -n "$hostd_sock" ]]; then
+		hostd_sock_args=(-v "$hostd_sock:$(dotfiles_hostd_container_sock)" -e "DOTFILES_HOSTD_SOCK=$(dotfiles_hostd_container_sock)")
 	fi
 
 	ensure_macos_docker_image "$docker_bin" "$image" "$platform" "$rebuild"
@@ -748,6 +1084,12 @@ run_macos_docker() {
 			elif [[ -n "$ssh_auth_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock'; then
 				printf 'Existing container does not export the host SSH agent socket; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx "$(dotfiles_hostd_container_sock)"; then
+				printf 'Existing container does not mount the dotfiles host socket; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx "DOTFILES_HOSTD_SOCK=$(dotfiles_hostd_container_sock)"; then
+				printf 'Existing container does not export the dotfiles host socket path; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
 			else
 				provision_macos_docker_container "$docker_bin" "$container"
 				import_macos_host_state "$docker_bin" "$container"
@@ -773,6 +1115,7 @@ run_macos_docker() {
 		-v "$work_root:/home/alex/code" \
 		"${docker_socket_args[@]}" \
 		"${ssh_auth_sock_args[@]}" \
+		"${hostd_sock_args[@]}" \
 		"$image" \
 		sleep infinity >/dev/null
 
@@ -941,6 +1284,17 @@ run_doctor() {
 		else
 			printf '%-12s missing\n' "1password"
 		fi
+		if [[ -S "$(dotfiles_hostd_sock)" ]]; then
+			printf '%-12s %s\n' "hostd" "$(dotfiles_hostd_sock)"
+		else
+			printf '%-12s missing\n' "hostd"
+		fi
+	elif [[ -n "${DOTFILES_HOSTD_SOCK:-}" || -e "$(dotfiles_hostd_container_sock)" ]]; then
+		if [[ -S "$(hostd_client_socket)" ]]; then
+			printf '%-12s %s\n' "hostd" "$(hostd_client_socket)"
+		else
+			printf '%-12s missing\n' "hostd"
+		fi
 	fi
 
 	if [[ "$(detect_profile)" == "macos-docker" ]] && docker_bin="$(docker_command 2>/dev/null)"; then
@@ -951,6 +1305,7 @@ run_doctor() {
 		elif "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
 			printf 'container    %s\n' "$("$docker_bin" inspect -f '{{.Name}} {{.State.Status}} {{.Config.Image}}' "$container" | sed 's#^/##')"
 			printf 'ssh-agent    %s\n' "$("$docker_bin" exec "$container" /bin/bash -lc 'if [[ -S /run/host-services/ssh-auth.sock ]]; then printf mounted; elif [[ -e /run/host-services/ssh-auth.sock ]]; then printf present-not-socket; else printf missing; fi' 2>/dev/null || printf unavailable)"
+			printf 'hostd-mount  %s\n' "$("$docker_bin" exec "$container" /bin/bash -lc 'sock="${DOTFILES_HOSTD_SOCK:-/run/host-services/dotfiles-hostd.sock}"; if [[ -S "$sock" ]]; then printf mounted; elif [[ -e "$sock" ]]; then printf present-not-socket; else printf missing; fi' 2>/dev/null || printf unavailable)"
 		else
 			printf 'container    %s not created\n' "$container"
 		fi
@@ -1040,6 +1395,12 @@ main() {
 			;;
 		workshop-update)
 			run_workshop_update
+			;;
+		host)
+			run_host_client "$@"
+			;;
+		hostd-handle)
+			run_hostd_handle
 			;;
 		update)
 			run_update
