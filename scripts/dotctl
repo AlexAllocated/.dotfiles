@@ -201,6 +201,41 @@ ensure_wezterm() {
 	brew install --cask wezterm >&2
 }
 
+onepassword_cli_command() {
+	if command_exists op; then
+		command -v op
+	elif [[ -x /opt/homebrew/bin/op ]]; then
+		printf '/opt/homebrew/bin/op\n'
+	elif [[ -x /usr/local/bin/op ]]; then
+		printf '/usr/local/bin/op\n'
+	else
+		return 1
+	fi
+}
+
+ensure_1password() {
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		return 0
+	fi
+
+	if [[ ! -d /Applications/1Password.app ]]; then
+		ensure_homebrew
+		printf '1Password is not installed; installing 1Password with Homebrew...\n' >&2
+		brew install --cask 1password >&2
+	fi
+
+	if ! onepassword_cli_command >/dev/null 2>&1; then
+		ensure_homebrew
+		printf '1Password CLI is not installed; installing 1Password CLI with Homebrew...\n' >&2
+		brew install --cask 1password-cli >&2
+	fi
+
+	if ! onepassword_cli_command >/dev/null 2>&1; then
+		printf '1Password CLI was not found after installation. Open a new shell and retry.\n' >&2
+		return 1
+	fi
+}
+
 docker_command() {
 	if command_exists docker; then
 		command -v docker
@@ -631,6 +666,7 @@ run_macos_docker() {
 
 	apply_macos_host_links
 	ensure_wezterm
+	ensure_1password
 
 	docker_bin="$(ensure_docker)"
 	image="$(macos_docker_image)"
@@ -861,13 +897,23 @@ run_doctor() {
 		printf 'not found\n'
 	fi
 
+	local cmd_path
 	for cmd in zsh git gh op ssh nvim bun node rustc cargo rust-analyzer go dotnet wezterm docker; do
-		if command_exists "$cmd"; then
+		if [[ "$cmd" == "op" ]] && cmd_path="$(onepassword_cli_command 2>/dev/null)"; then
+			printf '%-12s %s\n' "$cmd" "$cmd_path"
+		elif command_exists "$cmd"; then
 			printf '%-12s %s\n' "$cmd" "$(command -v "$cmd")"
 		else
 			printf '%-12s missing\n' "$cmd"
 		fi
 	done
+	if [[ "$(uname -s)" == "Darwin" ]]; then
+		if [[ -d /Applications/1Password.app ]]; then
+			printf '%-12s %s\n' "1password" "/Applications/1Password.app"
+		else
+			printf '%-12s missing\n' "1password"
+		fi
+	fi
 
 	if [[ "$(detect_profile)" == "macos-docker" ]] && docker_bin="$(docker_command 2>/dev/null)"; then
 		local container

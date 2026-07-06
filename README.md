@@ -57,14 +57,15 @@ This repo has three macOS tracks:
 #### Company-managed Mac
 
 Use the Docker-backed profile here. It does not install Nix on macOS or manage
-system settings. The host stays intentionally minimal: Homebrew, WezTerm,
-Docker Desktop, a `dotctl` link, and WezTerm config. Shell startup, prompt,
-Neovim, Codex, language tools, and the rest of the portable environment live in
-the Linux container. If missing, the profile installs Homebrew, WezTerm, and
-Docker Desktop, then uses a `nixos/nix` builder container to build the managed
-workshop image from this checkout.
+system settings. The host stays intentionally minimal: Homebrew, 1Password,
+WezTerm, Docker Desktop, a `dotctl` link, and WezTerm config. Shell startup,
+prompt, Neovim, Codex, language tools, and the rest of the portable environment
+live in the Linux container. If missing, the profile installs Homebrew,
+1Password, 1Password CLI, WezTerm, and Docker Desktop, then uses a `nixos/nix`
+builder container to build the managed workshop image from this checkout.
 
-Bootstrap or refresh the host links, Docker Desktop, and the managed container:
+Bootstrap or refresh the host links, host dependencies, Docker Desktop, and the
+managed container:
 
 ```sh
 cd ~/.dotfiles
@@ -103,11 +104,13 @@ When Docker Desktop exposes its host SSH agent bridge, `macos-docker` mounts it
 into the container at `/run/host-services/ssh-auth.sock` and links
 `~/.1password/agent.sock` plus the standard macOS 1Password agent path to that
 socket. This lets Git and SSH inside the container use the host 1Password SSH
-agent and still prompt through the macOS desktop app. Set
-`DOTCTL_DOCKER_SSH_AUTH_SOCK=0` to disable the mount, or set it to a custom host
-socket path before applying the profile. This only forwards the SSH agent; full
-1Password CLI desktop-app integration for commands such as `op item get` is a
-separate host-side concern.
+agent and still prompt through the macOS desktop app. The profile installs the
+desktop app and CLI if they are missing, but sign-in, Touch ID, CLI integration,
+and SSH-agent enablement still happen in 1Password itself. Set
+`DOTCTL_DOCKER_SSH_AUTH_SOCK=0` to disable the mount, or set it to a custom
+host socket path before applying the profile. This only forwards the SSH agent;
+full 1Password CLI desktop-app integration for commands such as `op item get`
+is a separate host-side concern.
 
 Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
 or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the
