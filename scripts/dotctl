@@ -547,6 +547,7 @@ ensure_macos_docker_image() {
 run_macos_docker() {
 	local recreate="${1:-0}"
 	local rebuild="${2:-$recreate}"
+	local announce="${3:-1}"
 	local docker_bin image platform container work_root home_volume docker_socket
 	local platform_args=()
 	local docker_socket_args=()
@@ -600,7 +601,9 @@ run_macos_docker() {
 				provision_macos_docker_container "$docker_bin" "$container"
 				import_macos_host_state "$docker_bin" "$container"
 				write_macos_host_profile macos-docker
-				printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
+				if [[ "$announce" == "1" ]]; then
+					printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
+				fi
 				return 0
 			fi
 		fi
@@ -623,7 +626,9 @@ run_macos_docker() {
 	provision_macos_docker_container "$docker_bin" "$container"
 	import_macos_host_state "$docker_bin" "$container"
 	write_macos_host_profile macos-docker
-	printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
+	if [[ "$announce" == "1" ]]; then
+		printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
+	fi
 }
 
 run_workshop_update() {
@@ -668,7 +673,7 @@ run_workshop_update() {
 
 shell_macos_docker() {
 	local docker_bin container
-	run_macos_docker 0
+	run_macos_docker 0 0 0
 	docker_bin="$(docker_command)"
 	container="$(macos_docker_container)"
 	exec "$docker_bin" exec -it "$container" /bin/zsh -l
@@ -857,7 +862,7 @@ main() {
 			case "$profile" in
 				macos-docker)
 					local docker_bin container
-					run_macos_docker 0
+					run_macos_docker 0 0 0
 					docker_bin="$(docker_command)"
 					container="$(macos_docker_container)"
 					DOTCTL_DOCKER_IMPORT_HOST_STATE=force import_macos_host_state "$docker_bin" "$container"
