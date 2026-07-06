@@ -288,6 +288,12 @@ provision_macos_docker_container() {
 		link_path "$HOME/.codex/rules/default.rules" "$HOME/.dotfiles/codex/rules/default.rules"
 		link_path "$HOME/.local/bin/dotctl" "$HOME/.dotfiles/scripts/dotctl"
 
+		if [[ -S /run/host-services/ssh-auth.sock ]]; then
+			mkdir -p "$HOME/.1password" "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t"
+			ln -sfn /run/host-services/ssh-auth.sock "$HOME/.1password/agent.sock"
+			ln -sfn /run/host-services/ssh-auth.sock "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+		fi
+
 		if [[ ! -r /share/zsh-powerlevel10k/powerlevel10k.zsh-theme && ! -r "$HOME/.local/share/powerlevel10k/powerlevel10k.zsh-theme" ]] && command -v git >/dev/null 2>&1; then
 			mkdir -p "$HOME/.local/share"
 			git clone --depth 1 https://github.com/romkatv/powerlevel10k.git "$HOME/.local/share/powerlevel10k" >/dev/null 2>&1 || true
@@ -498,6 +504,22 @@ macos_docker_socket() {
 	fi
 }
 
+macos_docker_ssh_auth_sock() {
+	case "${DOTCTL_DOCKER_SSH_AUTH_SOCK:-}" in
+		0 | false | FALSE | no | NO)
+			return 0
+			;;
+		?*)
+			printf '%s\n' "$DOTCTL_DOCKER_SSH_AUTH_SOCK"
+			return 0
+			;;
+	esac
+
+	if [[ "$(uname -s)" == "Darwin" ]]; then
+		printf '/run/host-services/ssh-auth.sock\n'
+	fi
+}
+
 validate_macos_docker_work_root() {
 	local work_root="$1"
 	local home_real work_real
@@ -602,9 +624,10 @@ run_macos_docker() {
 	local recreate="${1:-0}"
 	local rebuild="${2:-$recreate}"
 	local announce="${3:-1}"
-	local docker_bin image platform container work_root home_volume docker_socket
+	local docker_bin image platform container work_root home_volume docker_socket ssh_auth_sock
 	local platform_args=()
 	local docker_socket_args=()
+	local ssh_auth_sock_args=()
 
 	apply_macos_host_links
 	ensure_wezterm
@@ -617,11 +640,15 @@ run_macos_docker() {
 	validate_macos_docker_work_root "$work_root"
 	home_volume="${container}-home"
 	docker_socket="$(macos_docker_socket)"
+	ssh_auth_sock="$(macos_docker_ssh_auth_sock)"
 	if [[ -n "$platform" ]]; then
 		platform_args=(--platform "$platform")
 	fi
 	if [[ -n "$docker_socket" ]]; then
 		docker_socket_args=(-v "$docker_socket:/var/run/docker.sock" -e DOCKER_HOST=unix:///var/run/docker.sock --group-add 0)
+	fi
+	if [[ -n "$ssh_auth_sock" ]]; then
+		ssh_auth_sock_args=(-v "$ssh_auth_sock:/run/host-services/ssh-auth.sock" -e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock)
 	fi
 
 	ensure_macos_docker_image "$docker_bin" "$image" "$platform" "$rebuild"
@@ -651,6 +678,12 @@ run_macos_docker() {
 			elif [[ -n "$docker_socket" ]] && ! "$docker_bin" inspect -f '{{range .HostConfig.GroupAdd}}{{println .}}{{end}}' "$container" | grep -qx '0'; then
 				printf 'Existing container cannot access the Docker socket as alex; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$ssh_auth_sock" ]] && ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/run/host-services/ssh-auth.sock'; then
+				printf 'Existing container does not mount the host SSH agent; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$ssh_auth_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock'; then
+				printf 'Existing container does not export the host SSH agent socket; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
 			else
 				provision_macos_docker_container "$docker_bin" "$container"
 				import_macos_host_state "$docker_bin" "$container"
@@ -675,6 +708,7 @@ run_macos_docker() {
 		-v "$REPO_ROOT:/home/alex/.dotfiles" \
 		-v "$work_root:/home/alex/code" \
 		"${docker_socket_args[@]}" \
+		"${ssh_auth_sock_args[@]}" \
 		"$image" \
 		sleep infinity >/dev/null
 
@@ -842,6 +876,7 @@ run_doctor() {
 			printf 'container    unavailable; Docker is not ready or the socket is inaccessible\n'
 		elif "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
 			printf 'container    %s\n' "$("$docker_bin" inspect -f '{{.Name}} {{.State.Status}} {{.Config.Image}}' "$container" | sed 's#^/##')"
+			printf 'ssh-agent    %s\n' "$("$docker_bin" exec "$container" /bin/bash -lc 'if [[ -S /run/host-services/ssh-auth.sock ]]; then printf mounted; elif [[ -e /run/host-services/ssh-auth.sock ]]; then printf present-not-socket; else printf missing; fi' 2>/dev/null || printf unavailable)"
 		else
 			printf 'container    %s not created\n' "$container"
 		fi

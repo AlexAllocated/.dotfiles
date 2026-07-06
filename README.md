@@ -99,6 +99,16 @@ and `TSUpdateSync` whenever the repo Neovim config changes, so first interactive
 `nvim` launch should not spend time installing plugins, Mason metadata, or
 Treesitter parsers. Set `DOTCTL_DOCKER_PRIME_NVIM=0` to skip that step.
 
+When Docker Desktop exposes its host SSH agent bridge, `macos-docker` mounts it
+into the container at `/run/host-services/ssh-auth.sock` and links
+`~/.1password/agent.sock` plus the standard macOS 1Password agent path to that
+socket. This lets Git and SSH inside the container use the host 1Password SSH
+agent and still prompt through the macOS desktop app. Set
+`DOTCTL_DOCKER_SSH_AUTH_SOCK=0` to disable the mount, or set it to a custom host
+socket path before applying the profile. This only forwards the SSH agent; full
+1Password CLI desktop-app integration for commands such as `op item get` is a
+separate host-side concern.
+
 Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
 or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the
 current checkout when Docker is reachable, and then tells you to restart the
