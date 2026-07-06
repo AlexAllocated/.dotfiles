@@ -13,6 +13,7 @@ let
   gid = 1000;
   codexPackage = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
   caBundle = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+  localeArchive = "${pkgs.glibcLocales}/lib/locale/locale-archive";
 
   optionalPackage =
     packageSet: name:
@@ -58,6 +59,9 @@ let
     export USER=${user}
     export HOME=/home/${user}
     export SHELL=/bin/zsh
+    export LANG=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+    export LOCALE_ARCHIVE=${localeArchive}
     export EDITOR=nvim
     export VISUAL=nvim
     export SSL_CERT_FILE=${caBundle}
@@ -265,6 +269,9 @@ let
           "USER=${user}"
           "HOME=/home/${user}"
           "SHELL=/bin/zsh"
+          "LANG=en_US.UTF-8"
+          "LC_ALL=en_US.UTF-8"
+          "LOCALE_ARCHIVE=${localeArchive}"
           "DOTFILES_ROOT=/home/${user}/.dotfiles"
           "DOTFILES_WORKSHOP=1"
           "EDITOR=nvim"
