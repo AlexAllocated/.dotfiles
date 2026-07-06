@@ -81,7 +81,12 @@ if wezterm.target_triple:match("windows") then
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
 elseif wezterm.target_triple:match("darwin") then
 	local home = os.getenv("HOME") or "/Users/alexford"
+	local dotctl = home .. "/.dotfiles/scripts/dotctl"
 	wallpaper_path = home .. "/.dotfiles/images/wezterm-wallpapers/"
+
+	local function macos_docker_shell()
+		return { "/bin/bash", dotctl, "shell", "macos-docker" }
+	end
 
 	local managed_profile = nil
 	local profile_file = io.open(home .. "/.local/share/dotfiles/profile", "r")
@@ -93,12 +98,13 @@ elseif wezterm.target_triple:match("darwin") then
 	config.launch_menu = config.launch_menu or {}
 	table.insert(config.launch_menu, {
 		label = "Dotfiles Docker",
-		args = { "zsh", "-lc", "dotctl shell macos-docker" },
+		args = macos_docker_shell(),
 	})
 
 	if managed_profile == "macos-docker" and os.getenv("DOTFILES_WEZTERM_HOST_SHELL") ~= "1" then
-		config.default_prog = { "zsh", "-lc", "dotctl shell macos-docker" }
+		config.default_prog = macos_docker_shell()
 		config.default_cwd = home
+		config.exit_behavior = "Hold"
 	end
 end
 

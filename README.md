@@ -75,15 +75,17 @@ cd ~/.dotfiles
 Enter the container:
 
 ```sh
-dotctl shell macos-docker
+~/.dotfiles/scripts/dotctl shell macos-docker
 ```
 
 `macos-docker` links only host `~/.wezterm.lua`, `~/.config/wezterm`, and
 `~/.local/bin/dotctl` to this checkout. It removes repo-owned host shell and
 developer config links from earlier installs so macOS Terminal opens a normal
 host shell. WezTerm gets a `Dotfiles Docker` launch entry and, after the profile
-marker is written, opens the Docker shell by default. Set
-`DOTFILES_WEZTERM_HOST_SHELL=1` before launching WezTerm to force a host shell.
+marker is written, opens the Docker shell by default by calling
+`~/.dotfiles/scripts/dotctl` directly through `/bin/bash`, so it does not depend
+on host shell startup or `PATH`. Set `DOTFILES_WEZTERM_HOST_SHELL=1` before
+launching WezTerm to force a host shell.
 
 The managed container uses `dotfiles-workshop:local` by default. It mounts this
 checkout at `~/.dotfiles` and the host `~/code` directory at container
