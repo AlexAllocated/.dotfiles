@@ -297,6 +297,60 @@ provision_macos_docker_container() {
 			mkdir -p "$HOME/.local/share"
 			git clone --depth 1 https://github.com/jeffreytse/zsh-vi-mode.git "$HOME/.local/share/zsh-vi-mode" >/dev/null 2>&1 || true
 		fi
+		'
+}
+
+prime_macos_docker_neovim() {
+	local docker_bin="$1"
+	local container="$2"
+	local announce="${3:-1}"
+
+	if [[ "${DOTCTL_DOCKER_PRIME_NVIM:-1}" == "0" ]]; then
+		return 0
+	fi
+
+	if [[ "$announce" == "1" ]]; then
+		printf 'Priming Neovim plugins, Mason registry, and Treesitter parsers in %s...\n' "$container"
+	fi
+
+	"$docker_bin" exec "$container" /bin/bash -lc '
+		set -euo pipefail
+
+		if ! command -v nvim >/dev/null 2>&1; then
+			exit 0
+		fi
+
+		mkdir -p "$HOME/.cache/dotfiles" "$HOME/.local/share/dotfiles"
+		stamp_file="$HOME/.local/share/dotfiles/nvim-bootstrap.sha256"
+		log_file="$HOME/.cache/dotfiles/nvim-bootstrap.log"
+		lock_file="$HOME/.local/share/dotfiles/lazy-lock.json"
+		config_root="$HOME/.dotfiles/nvim"
+
+		if [[ ! -d "$config_root" ]]; then
+			exit 0
+		fi
+
+		stamp="$(
+			find "$config_root" -type f -print0 |
+				sort -z |
+				xargs -0 sha256sum |
+				sha256sum |
+				awk "{print \$1}"
+		)"
+
+		if [[ -f "$stamp_file" ]] && [[ "$(cat "$stamp_file")" == "$stamp" ]]; then
+			exit 0
+		fi
+
+		cp "$config_root/lazy-lock.json" "$lock_file"
+		if DOTFILES_NVIM_AUTOMATION=1 DOTFILES_NVIM_LOCKFILE="$lock_file" nvim --headless "+set nomore" "+Lazy! restore" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa >"$log_file" 2>&1; then
+			printf "%s\n" "$stamp" >"$stamp_file"
+			exit 0
+		fi
+
+		printf "Neovim bootstrap failed. Last log lines from %s:\n" "$log_file" >&2
+		tail -n 80 "$log_file" >&2 || true
+		exit 1
 	'
 }
 
@@ -600,6 +654,7 @@ run_macos_docker() {
 			else
 				provision_macos_docker_container "$docker_bin" "$container"
 				import_macos_host_state "$docker_bin" "$container"
+				prime_macos_docker_neovim "$docker_bin" "$container" "$announce"
 				write_macos_host_profile macos-docker
 				if [[ "$announce" == "1" ]]; then
 					printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
@@ -625,6 +680,7 @@ run_macos_docker() {
 
 	provision_macos_docker_container "$docker_bin" "$container"
 	import_macos_host_state "$docker_bin" "$container"
+	prime_macos_docker_neovim "$docker_bin" "$container" "$announce"
 	write_macos_host_profile macos-docker
 	if [[ "$announce" == "1" ]]; then
 		printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
@@ -721,12 +777,12 @@ refresh_flake_lock() {
 	nix flake update --flake "$REPO_ROOT"
 }
 
-refresh_neovim_lock() {
+refresh_neovim_runtime() {
 	local nvim_config="$REPO_ROOT/nvim"
 	[[ -f "$nvim_config/lazy-lock.json" ]] || return 0
 
 	if ! command_exists nvim; then
-		printf 'Neovim is not available; skipping nvim/lazy-lock.json refresh.\n' >&2
+		printf 'Neovim is not available; skipping Neovim runtime refresh.\n' >&2
 		return 0
 	fi
 
@@ -736,14 +792,14 @@ refresh_neovim_lock() {
 		trap 'rm -rf "$tmp_xdg_config"' EXIT
 		ln -s "$nvim_config" "$tmp_xdg_config/nvim"
 
-		printf 'Refreshing Neovim plugin pins...\n'
-		XDG_CONFIG_HOME="$tmp_xdg_config" nvim --headless "+Lazy! update" +qa
+		printf 'Refreshing Neovim plugin pins, Mason registry, and Treesitter parsers...\n'
+		DOTFILES_NVIM_AUTOMATION=1 XDG_CONFIG_HOME="$tmp_xdg_config" nvim --headless "+set nomore" "+Lazy! update" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa
 	)
 }
 
 run_update() {
 	refresh_flake_lock
-	refresh_neovim_lock
+	refresh_neovim_runtime
 }
 
 print_repo_status() {

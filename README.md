@@ -94,6 +94,10 @@ macos-docker` to rebuild the local image from the current checkout and recreate
 the container while preserving the Docker home volume. Override the image tag
 with `DOTCTL_DOCKER_IMAGE`; override the mounted work tree with
 `DOTCTL_DOCKER_WORK`, which must stay under the host home directory.
+Container provisioning primes Neovim with pinned `Lazy restore`, `MasonUpdate`,
+and `TSUpdateSync` whenever the repo Neovim config changes, so first interactive
+`nvim` launch should not spend time installing plugins, Mason metadata, or
+Treesitter parsers. Set `DOTCTL_DOCKER_PRIME_NVIM=0` to skip that step.
 
 Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
 or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the
@@ -158,12 +162,12 @@ nix run .#dotctl -- doctor
 ```
 
 `dotctl apply --update` is the Nix-era `updoot`. It refreshes repo-managed
-pins, runs the flake checks, applies the detected profile, and leaves changed
-lockfiles in the checkout for review:
+pins, refreshes Neovim's local plugin runtime, runs the flake checks, applies
+the detected profile, and leaves changed lockfiles in the checkout for review:
 
 ```sh
 nix flake update --flake "$HOME/.dotfiles"
-nvim --headless "+Lazy! update" +qa
+DOTFILES_NVIM_AUTOMATION=1 nvim --headless "+set nomore" "+Lazy! update" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa
 nix flake check "$HOME/.dotfiles"
 sudo nixos-rebuild boot --flake "$HOME/.dotfiles#nixos-wsl"
 ```

@@ -15,6 +15,7 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
+	lockfile = vim.env.DOTFILES_NVIM_LOCKFILE ~= "" and vim.env.DOTFILES_NVIM_LOCKFILE or nil,
 	ui = {
 		border = "rounded",
 	},
