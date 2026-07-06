@@ -590,6 +590,34 @@ stage_repo_for_docker_build() {
 		"$REPO_ROOT/" "$stage_source/"
 }
 
+tar_supports_create_option() {
+	local option="$1"
+	local probe_dir
+
+	probe_dir="$(mktemp -d)"
+	touch "$probe_dir/probe"
+	if tar "$option" -C "$probe_dir" -cf /dev/null . >/dev/null 2>&1; then
+		rm -rf "$probe_dir"
+		return 0
+	fi
+	rm -rf "$probe_dir"
+	return 1
+}
+
+tar_repo_stream() {
+	local source="$1"
+	local tar_args=()
+
+	if tar_supports_create_option --disable-copyfile; then
+		tar_args+=(--disable-copyfile)
+	fi
+	if tar_supports_create_option --no-xattrs; then
+		tar_args+=(--no-xattrs)
+	fi
+
+	COPYFILE_DISABLE=1 tar "${tar_args[@]}" -C "$source" -cf - .
+}
+
 build_macos_docker_image() {
 	local docker_bin="$1"
 	local image="$2"
@@ -610,7 +638,7 @@ build_macos_docker_image() {
 	stage_repo_for_docker_build "$stage_source"
 
 	printf 'Building %s from %s with %s...\n' "$image" "$REPO_ROOT" "$builder_image"
-	if ! COPYFILE_DISABLE=1 tar --disable-copyfile --no-xattrs -C "$stage_source" -cf - . |
+	if ! tar_repo_stream "$stage_source" |
 		"$docker_bin" run --rm -i \
 			"${platform_args[@]}" \
 			--security-opt seccomp=unconfined \
