@@ -80,7 +80,26 @@ if wezterm.target_triple:match("windows") then
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
 elseif wezterm.target_triple:match("darwin") then
-	wallpaper_path = "/Users/alex/.dotfiles/images/wezterm-wallpapers/"
+	local home = os.getenv("HOME") or "/Users/alexford"
+	wallpaper_path = home .. "/.dotfiles/images/wezterm-wallpapers/"
+
+	local managed_profile = nil
+	local profile_file = io.open(home .. "/.local/share/dotfiles/profile", "r")
+	if profile_file then
+		managed_profile = profile_file:read("*l")
+		profile_file:close()
+	end
+
+	config.launch_menu = config.launch_menu or {}
+	table.insert(config.launch_menu, {
+		label = "Dotfiles Docker",
+		args = { "zsh", "-lc", "dotctl shell macos-docker" },
+	})
+
+	if managed_profile == "macos-docker" and os.getenv("DOTFILES_WEZTERM_HOST_SHELL") ~= "1" then
+		config.default_prog = { "zsh", "-lc", "dotctl shell macos-docker" }
+		config.default_cwd = home
+	end
 end
 
 local function get_random_wallpaper()

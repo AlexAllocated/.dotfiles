@@ -32,7 +32,8 @@
       ...
     }:
     let
-      user = "alex";
+      linuxUser = "alex";
+      darwinUser = "alexford";
       fullName = "Alex";
       userEmail = "Alex@HiveTech.ai";
       systems = [
@@ -143,16 +144,28 @@
         };
 
       linuxHomeConfiguration = mkHome {
-        inherit user;
+        user = linuxUser;
         system = "x86_64-linux";
         profile = "linux";
-        homeDirectory = "/home/${user}";
+        homeDirectory = "/home/${linuxUser}";
+      };
+      macosHomeConfiguration = mkHome {
+        user = darwinUser;
+        system = "aarch64-darwin";
+        profile = "macos";
+        homeDirectory = "/Users/${darwinUser}";
+      };
+      macosIntelHomeConfiguration = mkHome {
+        user = darwinUser;
+        system = "x86_64-darwin";
+        profile = "macos-intel";
+        homeDirectory = "/Users/${darwinUser}";
       };
     in
     {
       nixosConfigurations.nixos-wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = (mkSpecialArgs "x86_64-linux" user) // {
+        specialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
           profile = "nixos-wsl";
         };
         modules = [
@@ -163,28 +176,32 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = (mkSpecialArgs "x86_64-linux" user) // {
+            home-manager.extraSpecialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
               profile = "nixos-wsl";
             };
-            home-manager.users.${user} = {
+            home-manager.users.${linuxUser} = {
               imports = [ ./modules/home/default.nix ];
-              home.username = user;
-              home.homeDirectory = "/home/${user}";
+              home.username = linuxUser;
+              home.homeDirectory = "/home/${linuxUser}";
               dotfiles = {
                 inherit fullName userEmail;
                 profile = "nixos-wsl";
-                userName = user;
+                userName = linuxUser;
               };
             };
           }
         ];
       };
 
-      homeConfigurations.linux = linuxHomeConfiguration;
+      homeConfigurations = {
+        linux = linuxHomeConfiguration;
+        macos = macosHomeConfiguration;
+        macos-intel = macosIntelHomeConfiguration;
+      };
 
       darwinConfigurations = {
-        macos = mkDarwin "aarch64-darwin" "macos" user;
-        macos-intel = mkDarwin "x86_64-darwin" "macos-intel" user;
+        darwin-macos = mkDarwin "aarch64-darwin" "darwin-macos" darwinUser;
+        darwin-macos-intel = mkDarwin "x86_64-darwin" "darwin-macos-intel" darwinUser;
       };
 
       inherit homeModules;
@@ -195,10 +212,10 @@
           inherit
             pkgs
             toolPkgs
-            user
             fullName
             userEmail
             ;
+          user = linuxUser;
           source = self.outPath;
         }
       );

@@ -34,7 +34,9 @@
 
   homebrew = {
     enable = true;
-    onActivation.cleanup = "zap";
+    # Keep first macOS adoption non-destructive. Tighten this after every
+    # Homebrew package that should remain installed is declared here.
+    onActivation.cleanup = "none";
     taps = [
       "stripe/stripe-cli"
     ];

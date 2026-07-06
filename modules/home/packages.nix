@@ -30,7 +30,6 @@ in
       ninja
       openssh
       pkg-config
-      procps
       python3
       cargo
       rustc
@@ -43,6 +42,12 @@ in
       wget
     ])
     ++ optionalPackages
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux (
+      with pkgs;
+      [
+        procps
+      ]
+    )
     ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux (
       with pkgs;
       [

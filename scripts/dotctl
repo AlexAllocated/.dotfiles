@@ -21,7 +21,11 @@ usage() {
 Usage: dotctl <command> [profile] [options]
 
 Commands:
-  apply [profile] [--update]   Apply a NixOS, nix-darwin, or Home Manager profile.
+  apply [profile] [--update] [--recreate]
+                                Apply a NixOS, nix-darwin, or Home Manager profile.
+  shell [profile]              Open an interactive shell for a container profile.
+  import-host-state [profile]  Copy host auth/config state into a container profile.
+  workshop-update              Rebuild a workshop image from the current checkout.
   update                       Update all repo-managed pins.
   check                        Run flake checks.
   doctor                       Print host integration diagnostics.
@@ -29,8 +33,12 @@ Commands:
 Profiles:
   nixos-wsl       NixOS running inside WSL.
   linux           Home Manager only, any Linux with Nix.
-  macos           nix-darwin aarch64 profile.
-  macos-intel     nix-darwin x86_64 profile.
+  macos-docker    Managed macOS host using the dotfiles Linux Docker container.
+  macos           Home Manager only, Apple Silicon macOS.
+  macos-intel     Home Manager only, Intel macOS.
+  darwin-macos    nix-darwin Apple Silicon system profile.
+  darwin-macos-intel
+                  nix-darwin Intel system profile.
 
 EOF
 }
@@ -43,6 +51,10 @@ detect_profile() {
 	if [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'nixos-wsl\n'
 	elif [[ "$(uname -s)" == "Darwin" ]]; then
+		if ! command_exists nix; then
+			printf 'macos-docker\n'
+			return
+		fi
 		if [[ "$(uname -m)" == "arm64" ]]; then
 			printf 'macos\n'
 		else
@@ -63,11 +75,20 @@ flake_ref_for_profile() {
 		linux)
 			printf '%s#linux\n' "$REPO_ROOT"
 			;;
+		macos-docker)
+			printf '%s#macos-docker\n' "$REPO_ROOT"
+			;;
 		macos)
 			printf '%s#macos\n' "$REPO_ROOT"
 			;;
 		macos-intel)
 			printf '%s#macos-intel\n' "$REPO_ROOT"
+			;;
+		darwin-macos)
+			printf '%s#darwin-macos\n' "$REPO_ROOT"
+			;;
+		darwin-macos-intel)
+			printf '%s#darwin-macos-intel\n' "$REPO_ROOT"
 			;;
 		*)
 			printf 'Unknown profile: %s\n' "$profile" >&2
@@ -76,25 +97,610 @@ flake_ref_for_profile() {
 	esac
 }
 
+backup_path() {
+	local path="$1"
+	local backup_dir="$HOME/.backup_dotfiles"
+	local stamp
+	stamp="$(date +%Y%m%d%H%M%S)"
+
+	mkdir -p "$backup_dir"
+	mv "$path" "$backup_dir/$(basename "$path").$stamp"
+	printf 'Backed up %s to %s\n' "$path" "$backup_dir/$(basename "$path").$stamp"
+}
+
+link_path() {
+	local target="$1"
+	local source="$2"
+
+	if [[ -L "$target" ]]; then
+		local current
+		current="$(readlink "$target")"
+		if [[ "$current" == "$source" ]]; then
+			return 0
+		fi
+		backup_path "$target"
+	elif [[ -e "$target" ]]; then
+		backup_path "$target"
+	fi
+
+	mkdir -p "$(dirname "$target")"
+	ln -s "$source" "$target"
+	printf 'Linked %s -> %s\n' "$target" "$source"
+}
+
+remove_repo_link() {
+	local target="$1"
+	local source="$2"
+
+	if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+		rm "$target"
+		printf 'Removed host link %s -> %s\n' "$target" "$source"
+	fi
+}
+
+apply_macos_host_links() {
+	remove_repo_link "$HOME/.zprofile" "$REPO_ROOT/.zprofile"
+	remove_repo_link "$HOME/.zshrc" "$REPO_ROOT/.zshrc"
+	remove_repo_link "$HOME/.p10k.zsh" "$REPO_ROOT/.p10k.zsh"
+	remove_repo_link "$HOME/.tool-versions" "$REPO_ROOT/.tool-versions"
+	remove_repo_link "$HOME/rustfmt.toml" "$REPO_ROOT/rustfmt.toml"
+	remove_repo_link "$HOME/.config/nvim" "$REPO_ROOT/nvim"
+	link_path "$HOME/.wezterm.lua" "$REPO_ROOT/.wezterm.lua"
+	link_path "$HOME/.config/wezterm" "$REPO_ROOT/wezterm"
+	link_path "$HOME/.local/bin/dotctl" "$REPO_ROOT/scripts/dotctl"
+}
+
+write_macos_host_profile() {
+	local profile="$1"
+	mkdir -p "$HOME/.local/share/dotfiles"
+	printf '%s\n' "$profile" >"$HOME/.local/share/dotfiles/profile"
+}
+
+ensure_homebrew() {
+	if command_exists brew; then
+		return 0
+	fi
+
+	if [[ -x /opt/homebrew/bin/brew ]]; then
+		eval "$(/opt/homebrew/bin/brew shellenv)"
+		return 0
+	fi
+
+	if [[ -x /usr/local/bin/brew ]]; then
+		eval "$(/usr/local/bin/brew shellenv)"
+		return 0
+	fi
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		printf 'Homebrew is not installed and automatic install is only supported on macOS.\n' >&2
+		return 1
+	fi
+
+	printf 'Homebrew is not installed; installing Homebrew...\n' >&2
+	NONINTERACTIVE=1 /bin/bash -c "$(curl --fail -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" >&2
+
+	if [[ -x /opt/homebrew/bin/brew ]]; then
+		eval "$(/opt/homebrew/bin/brew shellenv)"
+	elif [[ -x /usr/local/bin/brew ]]; then
+		eval "$(/usr/local/bin/brew shellenv)"
+	fi
+
+	if ! command_exists brew; then
+		printf 'Homebrew installation finished, but brew is still not on PATH. Open a new shell and retry.\n' >&2
+		return 1
+	fi
+}
+
+ensure_wezterm() {
+	if command_exists wezterm || [[ -d /Applications/WezTerm.app ]]; then
+		return 0
+	fi
+
+	ensure_homebrew
+	printf 'WezTerm is not installed; installing WezTerm with Homebrew...\n' >&2
+	brew install --cask wezterm >&2
+}
+
+docker_command() {
+	if command_exists docker; then
+		command -v docker
+	elif [[ -x /Applications/Docker.app/Contents/Resources/bin/docker ]]; then
+		printf '/Applications/Docker.app/Contents/Resources/bin/docker\n'
+	else
+		return 1
+	fi
+}
+
+ensure_docker() {
+	local docker_bin=""
+	if docker_bin="$(docker_command 2>/dev/null)"; then
+		:
+	elif [[ "$(uname -s)" == "Darwin" && -d /Applications/Docker.app ]]; then
+		docker_bin="/Applications/Docker.app/Contents/Resources/bin/docker"
+	else
+		ensure_homebrew
+		printf 'Docker is not installed; installing Docker Desktop with Homebrew...\n' >&2
+		brew install --cask docker >&2
+		docker_bin="$(docker_command 2>/dev/null || true)"
+	fi
+
+	if [[ -z "$docker_bin" || ! -x "$docker_bin" ]]; then
+		printf 'Docker CLI was not found after installation. Start Docker Desktop and retry.\n' >&2
+		return 1
+	fi
+
+	if "$docker_bin" info >/dev/null 2>&1; then
+		printf '%s\n' "$docker_bin"
+		return 0
+	fi
+
+	if [[ "$(uname -s)" == "Darwin" ]]; then
+		printf 'Starting Docker Desktop...\n' >&2
+		open -ga Docker || true
+	fi
+
+	local waited=0
+	while ((waited < 180)); do
+		if "$docker_bin" info >/dev/null 2>&1; then
+			printf '%s\n' "$docker_bin"
+			return 0
+		fi
+		sleep 3
+		waited=$((waited + 3))
+	done
+
+	printf 'Docker did not become ready. Finish Docker Desktop first-run setup, then retry.\n' >&2
+	return 1
+}
+
+provision_macos_docker_container() {
+	local docker_bin="$1"
+	local container="$2"
+
+	"$docker_bin" exec "$container" /bin/bash -lc '
+		set -euo pipefail
+
+		link_path() {
+			local target="$1"
+			local source="$2"
+
+			if [[ -L "$target" ]]; then
+				ln -sfn "$source" "$target"
+			elif [[ -e "$target" ]]; then
+				mv "$target" "$target.container-backup.$(date +%Y%m%d%H%M%S)"
+				ln -s "$source" "$target"
+			else
+				ln -s "$source" "$target"
+			fi
+		}
+
+		mkdir -p "$HOME/.codex/rules" "$HOME/.config" "$HOME/.local/bin"
+		mkdir -p "$HOME/code"
+		link_path "$HOME/.zprofile" "$HOME/.dotfiles/.zprofile"
+		link_path "$HOME/.zshrc" "$HOME/.dotfiles/.zshrc"
+		link_path "$HOME/.p10k.zsh" "$HOME/.dotfiles/.p10k.zsh"
+		link_path "$HOME/.tool-versions" "$HOME/.dotfiles/.tool-versions"
+		link_path "$HOME/.wezterm.lua" "$HOME/.dotfiles/.wezterm.lua"
+		link_path "$HOME/rustfmt.toml" "$HOME/.dotfiles/rustfmt.toml"
+		link_path "$HOME/.config/nvim" "$HOME/.dotfiles/nvim"
+		link_path "$HOME/.config/wezterm" "$HOME/.dotfiles/wezterm"
+		link_path "$HOME/.codex/config.toml" "$HOME/.dotfiles/codex/config.toml"
+		link_path "$HOME/.codex/rules/default.rules" "$HOME/.dotfiles/codex/rules/default.rules"
+		link_path "$HOME/.local/bin/dotctl" "$HOME/.dotfiles/scripts/dotctl"
+
+		if [[ ! -r /share/zsh-powerlevel10k/powerlevel10k.zsh-theme && ! -r "$HOME/.local/share/powerlevel10k/powerlevel10k.zsh-theme" ]] && command -v git >/dev/null 2>&1; then
+			mkdir -p "$HOME/.local/share"
+			git clone --depth 1 https://github.com/romkatv/powerlevel10k.git "$HOME/.local/share/powerlevel10k" >/dev/null 2>&1 || true
+		fi
+
+		if [[ ! -r /share/zsh-vi-mode/zsh-vi-mode.plugin.zsh && ! -r "$HOME/.local/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh" ]] && command -v git >/dev/null 2>&1; then
+			mkdir -p "$HOME/.local/share"
+			git clone --depth 1 https://github.com/jeffreytse/zsh-vi-mode.git "$HOME/.local/share/zsh-vi-mode" >/dev/null 2>&1 || true
+		fi
+	'
+}
+
+stage_path_if_exists() {
+	local source="$1"
+	local dest="$2"
+
+	[[ -e "$source" || -L "$source" ]] || return 0
+	mkdir -p "$(dirname "$dest")"
+	if [[ -d "$source" && ! -L "$source" ]]; then
+		mkdir -p "$dest"
+		rsync -a \
+			--no-devices \
+			--no-specials \
+			--exclude 'agent' \
+			--exclude '*.sock' \
+			--exclude 'op-daemon.sock' \
+			"$source/" "$dest/"
+	else
+		rsync -a "$source" "$dest"
+	fi
+}
+
+stage_macos_host_state() {
+	local stage_home="$1"
+
+	if [[ -d "$HOME/.codex" ]]; then
+		mkdir -p "$stage_home/.codex"
+		rsync -a \
+			--exclude 'cache' \
+			--exclude '.tmp' \
+			--exclude 'tmp' \
+			--exclude 'log' \
+			--exclude 'shell_snapshots' \
+			--exclude 'config.toml' \
+			--exclude 'rules/default.rules' \
+			"$HOME/.codex/" "$stage_home/.codex/"
+	fi
+
+	stage_path_if_exists "$HOME/.ssh" "$stage_home/.ssh"
+	stage_path_if_exists "$HOME/.aws" "$stage_home/.aws"
+	stage_path_if_exists "$HOME/.azure" "$stage_home/.azure"
+	stage_path_if_exists "$HOME/.kube" "$stage_home/.kube"
+	stage_path_if_exists "$HOME/.gnupg" "$stage_home/.gnupg"
+	stage_path_if_exists "$HOME/.git-credentials" "$stage_home/.git-credentials"
+	stage_path_if_exists "$HOME/.netrc" "$stage_home/.netrc"
+	stage_path_if_exists "$HOME/.npmrc" "$stage_home/.npmrc"
+
+	if [[ -f "$HOME/.cargo/credentials.toml" ]]; then
+		stage_path_if_exists "$HOME/.cargo/credentials.toml" "$stage_home/.cargo/credentials.toml"
+	fi
+
+	if [[ -f "$HOME/.docker/config.json" ]]; then
+		stage_path_if_exists "$HOME/.docker/config.json" "$stage_home/.docker/config.json"
+	fi
+
+	for config_dir in gh op github-copilot cagent; do
+		stage_path_if_exists "$HOME/.config/$config_dir" "$stage_home/.config/$config_dir"
+	done
+}
+
+import_macos_host_state() {
+	local docker_bin="$1"
+	local container="$2"
+	local force="${DOTCTL_DOCKER_IMPORT_HOST_STATE:-0}"
+	local marker="/home/alex/.local/share/dotfiles/host-state-imported"
+	local stage_dir stage_home imported_count
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		return 0
+	fi
+
+	if [[ "$force" != "1" && "$force" != "force" ]] &&
+		"$docker_bin" exec "$container" /bin/bash -lc 'test -f "$HOME/.local/share/dotfiles/host-state-imported"' >/dev/null 2>&1; then
+		return 0
+	fi
+
+	stage_dir="$(mktemp -d)"
+	stage_home="$stage_dir/home/alex"
+	mkdir -p "$stage_home"
+	stage_macos_host_state "$stage_home"
+
+	imported_count="$(find "$stage_home" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
+	if [[ "$imported_count" == "0" ]]; then
+		rm -rf "$stage_dir"
+		return 0
+	fi
+
+	printf 'Importing host auth/config state into %s...\n' "$container"
+	"$docker_bin" cp "$stage_home/." "$container:/home/alex/"
+	"$docker_bin" exec --user root "$container" /bin/bash -lc '
+		set -euo pipefail
+		chown -R 1000:1000 /home/alex/.codex /home/alex/.config /home/alex/.ssh /home/alex/.aws /home/alex/.azure /home/alex/.kube /home/alex/.gnupg /home/alex/.cargo /home/alex/.docker /home/alex/.git-credentials /home/alex/.netrc /home/alex/.npmrc 2>/dev/null || true
+		[[ -d /home/alex/.ssh ]] && chmod 700 /home/alex/.ssh
+		[[ -d /home/alex/.ssh ]] && find /home/alex/.ssh -type f -exec chmod 600 {} +
+		[[ -d /home/alex/.gnupg ]] && chmod 700 /home/alex/.gnupg
+		mkdir -p /home/alex/.local/share/dotfiles
+		chown -R 1000:1000 /home/alex/.local
+	'
+	"$docker_bin" exec "$container" /bin/bash -lc "printf '%s\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > '$marker'"
+	rm -rf "$stage_dir"
+}
+
+macos_docker_image() {
+	printf '%s\n' "${DOTCTL_DOCKER_IMAGE:-dotfiles-workshop:local}"
+}
+
+macos_docker_builder_image() {
+	printf '%s\n' "${DOTCTL_DOCKER_BUILDER_IMAGE:-nixos/nix:latest}"
+}
+
+macos_docker_builder_store() {
+	printf '%s\n' "${DOTCTL_DOCKER_BUILDER_STORE:-dotfiles-nix-builder-store}"
+}
+
+macos_docker_nix_target() {
+	printf '%s\n' "${DOTCTL_DOCKER_NIX_TARGET:-.#docker-linux}"
+}
+
+macos_docker_platform() {
+	printf '%s\n' "${DOTCTL_DOCKER_PLATFORM:-linux/amd64}"
+}
+
+macos_docker_container() {
+	printf '%s\n' "${DOTCTL_DOCKER_CONTAINER:-dotfiles-workshop}"
+}
+
+macos_docker_work_root() {
+	if [[ -n "${DOTCTL_DOCKER_WORK:-}" ]]; then
+		printf '%s\n' "$DOTCTL_DOCKER_WORK"
+	else
+		printf '%s\n' "$HOME/code"
+	fi
+}
+
+macos_docker_socket() {
+	local docker_host="${DOCKER_HOST:-}"
+
+	if [[ "$docker_host" == unix://* && -S "${docker_host#unix://}" ]]; then
+		printf '%s\n' "${docker_host#unix://}"
+	elif [[ -S "$HOME/.docker/run/docker.sock" ]]; then
+		printf '%s\n' "$HOME/.docker/run/docker.sock"
+	elif [[ -S /var/run/docker.sock ]]; then
+		printf '/var/run/docker.sock\n'
+	fi
+}
+
+validate_macos_docker_work_root() {
+	local work_root="$1"
+	local home_real work_real
+
+	if [[ -z "$work_root" || "$work_root" == "/" || "$work_root" == "$HOME" ]]; then
+		printf 'Refusing unsafe Docker work root: %s\n' "$work_root" >&2
+		return 1
+	fi
+
+	mkdir -p "$work_root"
+	home_real="$(cd "$HOME" && pwd -P)"
+	work_real="$(cd "$work_root" && pwd -P)"
+
+	case "$work_real" in
+		"$home_real"/*) ;;
+		*)
+			printf 'Refusing Docker work root outside HOME: %s\n' "$work_real" >&2
+			return 1
+			;;
+	esac
+}
+
+stage_repo_for_docker_build() {
+	local stage_source="$1"
+
+	mkdir -p "$stage_source"
+	rsync -a --delete \
+		--exclude '.git' \
+		--exclude '.direnv' \
+		--exclude '.dotctl-build' \
+		--exclude 'result' \
+		--exclude 'result-*' \
+		"$REPO_ROOT/" "$stage_source/"
+}
+
+build_macos_docker_image() {
+	local docker_bin="$1"
+	local image="$2"
+	local platform="$3"
+	local builder_image builder_store target stage_dir stage_source image_tar
+	local platform_args=()
+
+	builder_image="$(macos_docker_builder_image)"
+	builder_store="$(macos_docker_builder_store)"
+	target="$(macos_docker_nix_target)"
+	stage_dir="$(mktemp -d)"
+	stage_source="$stage_dir/source"
+	image_tar="$stage_dir/image.tar"
+	if [[ -n "$platform" ]]; then
+		platform_args=(--platform "$platform")
+	fi
+
+	stage_repo_for_docker_build "$stage_source"
+
+	printf 'Building %s from %s with %s...\n' "$image" "$REPO_ROOT" "$builder_image"
+	if ! COPYFILE_DISABLE=1 tar --disable-copyfile --no-xattrs -C "$stage_source" -cf - . |
+		"$docker_bin" run --rm -i \
+			"${platform_args[@]}" \
+			--security-opt seccomp=unconfined \
+			-v "$builder_store:/nix" \
+			-e DOTCTL_NIX_TARGET="$target" \
+			--entrypoint /bin/sh \
+			"$builder_image" \
+			-lc '
+				set -eu
+				mkdir -p /work
+				tar -C /work -xf -
+				cd /work
+				out="$(nix --extra-experimental-features "nix-command flakes" build --option sandbox false --option filter-syscalls false --no-link --print-out-paths "$DOTCTL_NIX_TARGET" 2>/dev/stderr)"
+				cat "$out"
+			' >"$image_tar"; then
+		rm -rf "$stage_dir"
+		return 1
+	fi
+
+	"$docker_bin" load -i "$image_tar" >/dev/null
+	if [[ "$image" != "ghcr.io/alexallocated/dotfiles-linux:latest" ]]; then
+		"$docker_bin" tag ghcr.io/alexallocated/dotfiles-linux:latest "$image"
+	fi
+	rm -rf "$stage_dir"
+}
+
+ensure_macos_docker_image() {
+	local docker_bin="$1"
+	local image="$2"
+	local platform="$3"
+	local rebuild="${4:-0}"
+
+	if [[ "$rebuild" == "1" || "${DOTCTL_DOCKER_REBUILD:-0}" == "1" ]]; then
+		build_macos_docker_image "$docker_bin" "$image" "$platform"
+		return 0
+	fi
+
+	if "$docker_bin" image inspect "$image" >/dev/null 2>&1; then
+		return 0
+	fi
+
+	build_macos_docker_image "$docker_bin" "$image" "$platform"
+}
+
+run_macos_docker() {
+	local recreate="${1:-0}"
+	local rebuild="${2:-$recreate}"
+	local docker_bin image platform container work_root home_volume docker_socket
+	local platform_args=()
+	local docker_socket_args=()
+
+	apply_macos_host_links
+	ensure_wezterm
+
+	docker_bin="$(ensure_docker)"
+	image="$(macos_docker_image)"
+	platform="$(macos_docker_platform)"
+	container="$(macos_docker_container)"
+	work_root="$(macos_docker_work_root)"
+	validate_macos_docker_work_root "$work_root"
+	home_volume="${container}-home"
+	docker_socket="$(macos_docker_socket)"
+	if [[ -n "$platform" ]]; then
+		platform_args=(--platform "$platform")
+	fi
+	if [[ -n "$docker_socket" ]]; then
+		docker_socket_args=(-v "$docker_socket:/var/run/docker.sock" -e DOCKER_HOST=unix:///var/run/docker.sock --group-add 0)
+	fi
+
+	ensure_macos_docker_image "$docker_bin" "$image" "$platform" "$rebuild"
+	"$docker_bin" volume create "$home_volume" >/dev/null
+	"$docker_bin" run --rm "${platform_args[@]}" --user root --workdir / \
+		-v "$home_volume:/home" \
+		"$image" \
+		/bin/bash -lc '[[ -L /home/alex ]] && rm /home/alex; mkdir -p /home/alex && chown -R 1000:1000 /home/alex'
+
+	if "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
+		if [[ "$recreate" == "1" ]]; then
+			"$docker_bin" rm -f "$container" >/dev/null
+		else
+			"$docker_bin" start "$container" >/dev/null
+			if ! "$docker_bin" exec "$container" /bin/bash -lc 'test -w "$HOME"' >/dev/null 2>&1; then
+				printf 'Existing container has an unwritable home; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ "$("$docker_bin" inspect -f '{{.Config.Image}}' "$container")" != "$image" ]]; then
+				printf 'Existing container was created from a different image; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/home/alex/code'; then
+				printf 'Existing container does not mount ~/code; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$docker_socket" ]] && ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/var/run/docker.sock'; then
+				printf 'Existing container does not mount the Docker socket; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$docker_socket" ]] && ! "$docker_bin" inspect -f '{{range .HostConfig.GroupAdd}}{{println .}}{{end}}' "$container" | grep -qx '0'; then
+				printf 'Existing container cannot access the Docker socket as alex; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			else
+				provision_macos_docker_container "$docker_bin" "$container"
+				import_macos_host_state "$docker_bin" "$container"
+				write_macos_host_profile macos-docker
+				printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
+				return 0
+			fi
+		fi
+	fi
+
+	"$docker_bin" run -d \
+		"${platform_args[@]}" \
+		--name "$container" \
+		--hostname "$container" \
+		--workdir /home/alex/code \
+		-e DOTFILES_ROOT=/home/alex/.dotfiles \
+		-e TERM="${TERM:-xterm-256color}" \
+		-v "$home_volume:/home" \
+		-v "$REPO_ROOT:/home/alex/.dotfiles" \
+		-v "$work_root:/home/alex/code" \
+		"${docker_socket_args[@]}" \
+		"$image" \
+		sleep infinity >/dev/null
+
+	provision_macos_docker_container "$docker_bin" "$container"
+	import_macos_host_state "$docker_bin" "$container"
+	write_macos_host_profile macos-docker
+	printf 'Container %s is ready. Enter it with: dotctl shell macos-docker\n' "$container"
+}
+
+run_workshop_update() {
+	local docker_bin image platform
+	local git_status
+	local docker_wrapper=""
+
+	if ! command_exists git || ! git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		printf 'No Git checkout found at %s; skipping dotfiles pull.\n' "$REPO_ROOT" >&2
+	else
+		git_status="$(git -C "$REPO_ROOT" status --porcelain)"
+	fi
+
+	if [[ -n "${git_status:-}" ]]; then
+		printf 'Dotfiles checkout has local changes; leaving Git state unchanged.\n' >&2
+	elif [[ -d "$REPO_ROOT/.git" ]]; then
+		git -C "$REPO_ROOT" pull --ff-only
+	fi
+
+	if ! docker_bin="$(docker_command 2>/dev/null)"; then
+		printf 'Docker is not available in this shell; rebuild from the host with: dotctl apply --update macos-docker\n' >&2
+		return 1
+	elif ! "$docker_bin" info >/dev/null 2>&1; then
+		if command_exists sudo && sudo "$docker_bin" info >/dev/null 2>&1; then
+			docker_wrapper="$(mktemp)"
+			printf '#!/usr/bin/env bash\nexec sudo %q "$@"\n' "$docker_bin" >"$docker_wrapper"
+			chmod +x "$docker_wrapper"
+			docker_bin="$docker_wrapper"
+		else
+			printf 'Docker is not reachable in this shell; rebuild from the host with: dotctl apply --update macos-docker\n' >&2
+			return 1
+		fi
+	fi
+
+	image="$(macos_docker_image)"
+	platform="$(macos_docker_platform)"
+	build_macos_docker_image "$docker_bin" "$image" "$platform"
+	[[ -z "$docker_wrapper" ]] || rm -f "$docker_wrapper"
+	printf 'Built %s from %s.\n' "$image" "$REPO_ROOT"
+	printf 'Restart this workshop from the host with: dotctl apply --recreate macos-docker\n'
+}
+
+shell_macos_docker() {
+	local docker_bin container
+	run_macos_docker 0
+	docker_bin="$(docker_command)"
+	container="$(macos_docker_container)"
+	exec "$docker_bin" exec -it "$container" /bin/zsh -l
+}
+
 apply_profile() {
 	local profile="$1"
 	local flake_ref
-	flake_ref="$(flake_ref_for_profile "$profile")"
 
 	case "$profile" in
+		macos-docker)
+			run_macos_docker 0
+			;;
 		nixos-wsl)
+			flake_ref="$(flake_ref_for_profile "$profile")"
 			require_command sudo
 			require_command nixos-rebuild
 			sudo nixos-rebuild boot --flake "$flake_ref"
 			printf 'NixOS-WSL generation installed. Restart the distro with: wsl.exe -t NixOS\n'
 			;;
-		macos | macos-intel)
+		darwin-macos | darwin-macos-intel)
+			flake_ref="$(flake_ref_for_profile "$profile")"
+			require_command sudo
 			require_command darwin-rebuild
-			darwin-rebuild switch --flake "$flake_ref"
+			local darwin_rebuild
+			darwin_rebuild="$(command -v darwin-rebuild)"
+			sudo "$darwin_rebuild" switch --flake "$flake_ref"
 			;;
 		*)
+			flake_ref="$(flake_ref_for_profile "$profile")"
 			require_command home-manager
-			home-manager switch --flake "$flake_ref"
+			home-manager switch -b hm-backup --flake "$flake_ref"
 			;;
 	esac
 }
@@ -160,13 +766,25 @@ run_doctor() {
 		printf 'not found\n'
 	fi
 
-	for cmd in zsh git gh op ssh nvim bun node rustc cargo rust-analyzer go dotnet wezterm; do
+	for cmd in zsh git gh op ssh nvim bun node rustc cargo rust-analyzer go dotnet wezterm docker; do
 		if command_exists "$cmd"; then
 			printf '%-12s %s\n' "$cmd" "$(command -v "$cmd")"
 		else
 			printf '%-12s missing\n' "$cmd"
 		fi
 	done
+
+	if [[ "$(detect_profile)" == "macos-docker" ]] && docker_bin="$(docker_command 2>/dev/null)"; then
+		local container
+		container="$(macos_docker_container)"
+		if ! "$docker_bin" info >/dev/null 2>&1; then
+			printf 'container    unavailable; Docker is not ready or the socket is inaccessible\n'
+		elif "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
+			printf 'container    %s\n' "$("$docker_bin" inspect -f '{{.Name}} {{.State.Status}} {{.Config.Image}}' "$container" | sed 's#^/##')"
+		else
+			printf 'container    %s not created\n' "$container"
+		fi
+	fi
 
 	if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'WSL_DISTRO_NAME=%s\n' "$WSL_DISTRO_NAME"
@@ -189,10 +807,14 @@ main() {
 		apply)
 			local profile=""
 			local update=0
+			local recreate=0
 			while (($#)); do
 				case "$1" in
 					--update)
 						update=1
+						;;
+					--recreate)
+						recreate=1
 						;;
 					*)
 						profile="$1"
@@ -202,13 +824,52 @@ main() {
 			done
 			profile="${profile:-$(detect_profile)}"
 			if ((update)); then
-				run_update
-				run_check
+				if [[ "$profile" == "macos-docker" ]]; then
+					run_macos_docker 1 1
+				else
+					run_update
+					run_check
+				fi
+			elif ((recreate)) && [[ "$profile" == "macos-docker" ]]; then
+				run_macos_docker 1 0
 			fi
-			apply_profile "$profile"
+			if [[ "$profile" != "macos-docker" || ( "$update" != "1" && "$recreate" != "1" ) ]]; then
+				apply_profile "$profile"
+			fi
 			if ((update)); then
 				print_repo_status
 			fi
+			;;
+		shell)
+			local profile="${1:-$(detect_profile)}"
+			case "$profile" in
+				macos-docker)
+					shell_macos_docker
+					;;
+				*)
+					printf 'No interactive shell handler for profile: %s\n' "$profile" >&2
+					exit 2
+					;;
+			esac
+			;;
+		import-host-state)
+			local profile="${1:-$(detect_profile)}"
+			case "$profile" in
+				macos-docker)
+					local docker_bin container
+					run_macos_docker 0
+					docker_bin="$(docker_command)"
+					container="$(macos_docker_container)"
+					DOTCTL_DOCKER_IMPORT_HOST_STATE=force import_macos_host_state "$docker_bin" "$container"
+					;;
+				*)
+					printf 'No host-state import handler for profile: %s\n' "$profile" >&2
+					exit 2
+					;;
+			esac
+			;;
+		workshop-update)
+			run_workshop_update
 			;;
 		update)
 			run_update

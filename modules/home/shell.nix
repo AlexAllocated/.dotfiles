@@ -33,6 +33,7 @@ in
       ];
 
     home.file.".p10k.zsh".source = sourceRoot + "/.p10k.zsh";
+    home.file.".zprofile".source = sourceRoot + "/.zprofile";
     home.file.".tool-versions".source = sourceRoot + "/.tool-versions";
     home.file."rustfmt.toml".source = sourceRoot + "/rustfmt.toml";
     home.file.".local/bin/dotctl" = {
@@ -89,6 +90,7 @@ in
         updoot = "dotctl apply --update";
       };
       initContent = ''
+        [[ -r "$HOME/.zprofile" ]] && source "$HOME/.zprofile"
         [[ -r "${sourceRoot}/wezterm-shell-integration.sh" ]] && source "${sourceRoot}/wezterm-shell-integration.sh"
 
         : "$NEOVIM_SRC_DIR"

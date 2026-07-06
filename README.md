@@ -2,7 +2,7 @@
 
 Personal environment automation for Linux, WSL, and macOS. The current repo is
 Nix-first: NixOS-WSL is the primary host, Home Manager owns shared user config,
-and nix-darwin owns macOS host integration.
+and nix-darwin is available only for opt-in macOS host integration.
 
 The final commit before the Nix rewrite is tagged `pre-nix`.
 
@@ -43,6 +43,108 @@ dotctl doctor
 
 See `docs/nix-wsl-rollout.md` for the full WSL rollout and cutover notes.
 
+### macOS
+
+This repo has three macOS tracks:
+
+- `macos-docker`: company-managed Macs, with plain host shell startup, host
+  WezTerm, and a locally built workshop container.
+- `macos` / `macos-intel`: Home Manager-only profiles for Macs where Nix is
+  allowed but nix-darwin is not.
+- `darwin-macos` / `darwin-macos-intel`: nix-darwin system profiles for a Mac
+  where this repo is allowed to manage host-level settings.
+
+#### Company-managed Mac
+
+Use the Docker-backed profile here. It does not install Nix on macOS or manage
+system settings. The host stays intentionally minimal: Homebrew, WezTerm,
+Docker Desktop, a `dotctl` link, and WezTerm config. Shell startup, prompt,
+Neovim, Codex, language tools, and the rest of the portable environment live in
+the Linux container. If missing, the profile installs Homebrew, WezTerm, and
+Docker Desktop, then uses a `nixos/nix` builder container to build the managed
+workshop image from this checkout.
+
+Bootstrap or refresh the host links, Docker Desktop, and the managed container:
+
+```sh
+cd ~/.dotfiles
+./scripts/dotctl apply macos-docker
+./scripts/dotctl doctor
+```
+
+Enter the container:
+
+```sh
+dotctl shell macos-docker
+```
+
+`macos-docker` links only host `~/.wezterm.lua`, `~/.config/wezterm`, and
+`~/.local/bin/dotctl` to this checkout. It removes repo-owned host shell and
+developer config links from earlier installs so macOS Terminal opens a normal
+host shell. WezTerm gets a `Dotfiles Docker` launch entry and, after the profile
+marker is written, opens the Docker shell by default. Set
+`DOTFILES_WEZTERM_HOST_SHELL=1` before launching WezTerm to force a host shell.
+
+The managed container uses `dotfiles-workshop:local` by default. It mounts this
+checkout at `~/.dotfiles` and the host `~/code` directory at container
+`~/code`, then starts shells in `~/code`. Run `dotctl apply --update
+macos-docker` to rebuild the local image from the current checkout and recreate
+the container while preserving the Docker home volume. Override the image tag
+with `DOTCTL_DOCKER_IMAGE`; override the mounted work tree with
+`DOTCTL_DOCKER_WORK`, which must stay under the host home directory.
+
+Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
+or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the
+current checkout when Docker is reachable, and then tells you to restart the
+managed container from the host with `dotctl apply --recreate macos-docker`.
+The first local build is large; the Nix builder store is cached in the Docker
+volume `dotfiles-nix-builder-store`.
+
+On first setup, the profile imports allowlisted host auth/config state into the
+container home, including Codex auth/session state, SSH files, GitHub CLI
+config, and common cloud CLI credential stores. Repo-managed files such as
+shell startup, WezTerm, Neovim, and `codex/config.toml` remain linked from the
+checkout. To re-run the import later:
+
+```sh
+dotctl import-host-state macos-docker
+```
+
+#### Mac With Nix
+
+Use the Home Manager-only profile on Macs where Nix is allowed but host-level
+nix-darwin management is not:
+
+```sh
+curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh
+. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+cd ~/.dotfiles
+nix --extra-experimental-features "nix-command flakes" run github:nix-community/home-manager/release-26.05 -- switch -b hm-backup --flake "$PWD#macos"
+```
+
+#### Personal Mac
+
+Use the nix-darwin profile on a Mac you own and are comfortable letting this
+repo manage at the host level:
+
+```sh
+curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh
+. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+cd ~/.dotfiles
+sudo /nix/var/nix/profiles/default/bin/nix --extra-experimental-features "nix-command flakes" run github:nix-darwin/nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake "$PWD#darwin-macos"
+./scripts/dotctl doctor
+```
+
+After the first nix-darwin switch, day-to-day applies use:
+
+```sh
+dotctl apply darwin-macos
+```
+
+Homebrew cleanup is disabled in the nix-darwin profile so existing Homebrew
+installs are not removed while packages are being migrated into Nix or declared
+in `modules/darwin/default.nix`.
+
 ## Maintenance
 
 ```sh
@@ -66,14 +168,18 @@ sudo nixos-rebuild boot --flake "$HOME/.dotfiles#nixos-wsl"
 
 On Linux Home Manager and macOS hosts, the final apply command becomes
 `home-manager switch --flake "$HOME/.dotfiles#linux"` or
-`darwin-rebuild switch --flake "$HOME/.dotfiles#macos"`.
+`home-manager switch --flake "$HOME/.dotfiles#macos"`. On a personal Mac using
+nix-darwin, use `darwin-rebuild switch --flake "$HOME/.dotfiles#darwin-macos"`.
 
 Profile names:
 
 - `nixos-wsl`
 - `linux`
+- `macos-docker`
 - `macos`
 - `macos-intel`
+- `darwin-macos`
+- `darwin-macos-intel`
 
 Reusable modules can be imported individually from this flake, for example:
 
@@ -87,7 +193,10 @@ or `gh auth login` explicitly when credentials need attention.
 
 ## Containers
 
-The flake builds two Linux images:
+The flake builds two Linux images. `docker-linux` is the portable workshop
+image: it includes the dotfiles source at `~/.dotfiles`, starts in `~/code`,
+and links the default shell/editor/Codex config from that built-in source.
+`docker-pocket-knife` is the smaller repair shell.
 
 ```sh
 nix build .#docker-linux
@@ -113,6 +222,12 @@ Published image names:
 
 - `ghcr.io/alexallocated/dotfiles-linux:latest`
 - `ghcr.io/alexallocated/dotfiles-pocket-knife:latest`
+
+Try the published workshop directly:
+
+```sh
+docker run --rm -it ghcr.io/alexallocated/dotfiles-linux:latest
+```
 
 The Dockerfiles under `docker/` are thin extension entrypoints. The canonical
 image definitions live in Nix.

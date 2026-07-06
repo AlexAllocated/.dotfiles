@@ -81,45 +81,32 @@ let
     	helper = !gh auth git-credential
   '';
 
-  zshrc = pkgs.writeText "zshrc" ''
-    export EDITOR=nvim
-    export VISUAL=nvim
-    export SSL_CERT_FILE=${caBundle}
-    export CURL_CA_BUNDLE=${caBundle}
-    export PATH="$HOME/.local/bin:/bin:/usr/bin:$PATH"
-
-    alias cat='bat --paging=never'
-    alias ff='fastfetch'
-    alias lg='lazygit'
-    alias ll='eza --color=always --all --long --git --icons=always --no-time --no-permissions'
-    alias nv='nvim'
-    alias vi='nvim'
-    alias vim='nvim'
-    alias updoot='dotctl apply --update'
-
-    if command -v zoxide >/dev/null 2>&1; then
-    	eval "$(zoxide init zsh)"
-    fi
-  '';
-
   homeSkeleton = pkgs.runCommand "dotfiles-container-home" { } ''
     mkdir -p \
     	$out/home/${user}/.codex/rules \
     	$out/home/${user}/.config \
     	$out/home/${user}/.local/bin \
+	$out/home/${user}/.dotfiles \
+	$out/home/${user}/code \
     	$out/root \
     	$out/work
 
-    ln -s ${source}/nvim $out/home/${user}/.config/nvim
-    ln -s ${source}/codex/config.toml $out/home/${user}/.codex/config.toml
-    ln -s ${source}/codex/rules/default.rules $out/home/${user}/.codex/rules/default.rules
-    ln -s ${source}/scripts/dotctl $out/home/${user}/.local/bin/dotctl
-    ln -s ${source}/.p10k.zsh $out/home/${user}/.p10k.zsh
-    ln -s ${source}/.tool-versions $out/home/${user}/.tool-versions
-    ln -s ${source}/rustfmt.toml $out/home/${user}/rustfmt.toml
+    cp -R ${source}/. $out/home/${user}/.dotfiles/
+    chmod -R u+rwX $out/home/${user}/.dotfiles
+
+    ln -s /home/${user}/.dotfiles/.zprofile $out/home/${user}/.zprofile
+    ln -s /home/${user}/.dotfiles/.zshrc $out/home/${user}/.zshrc
+    ln -s /home/${user}/.dotfiles/nvim $out/home/${user}/.config/nvim
+    ln -s /home/${user}/.dotfiles/wezterm $out/home/${user}/.config/wezterm
+    ln -s /home/${user}/.dotfiles/.wezterm.lua $out/home/${user}/.wezterm.lua
+    ln -s /home/${user}/.dotfiles/codex/config.toml $out/home/${user}/.codex/config.toml
+    ln -s /home/${user}/.dotfiles/codex/rules/default.rules $out/home/${user}/.codex/rules/default.rules
+    ln -s /home/${user}/.dotfiles/scripts/dotctl $out/home/${user}/.local/bin/dotctl
+    ln -s /home/${user}/.dotfiles/.p10k.zsh $out/home/${user}/.p10k.zsh
+    ln -s /home/${user}/.dotfiles/.tool-versions $out/home/${user}/.tool-versions
+    ln -s /home/${user}/.dotfiles/rustfmt.toml $out/home/${user}/rustfmt.toml
 
     cp ${gitConfig} $out/home/${user}/.gitconfig
-    cp ${zshrc} $out/home/${user}/.zshrc
   '';
 
   basePackages = with pkgs; [
@@ -169,6 +156,10 @@ let
       tree
       tree-sitter
     ])
+    ++ lib.concatMap (optionalPackage pkgs) [
+      "zsh-powerlevel10k"
+      "zsh-vi-mode"
+    ]
     ++ [
       codexPackage
     ];
@@ -196,9 +187,11 @@ let
     ++ lib.concatMap (optionalPackage pkgs) [
       "_1password-cli"
       "azure-cli"
+      "docker-client"
       "dotnet-sdk"
       "google-cloud-sdk"
       "nil"
+      "nix"
       "nixfmt"
       "stripe-cli"
       "tlrc"
@@ -244,8 +237,18 @@ let
       fakeRootCommands = ''
         mkdir -p ./tmp ./usr/bin ./bin
         chmod 1777 ./tmp
+        if [ -L ./home/${user} ]; then
+          homeTarget="$(readlink ./home/${user})"
+          rm ./home/${user}
+          mkdir -p ./home/${user}
+          cp -a "$homeTarget/." ./home/${user}/
+        fi
         chmod 0440 ./etc/sudoers
         chown -R ${toString uid}:${toString gid} ./home/${user} ./work
+        chmod -R u+rwX ./home/${user}
+        rm -f ./bin/sudo
+        cp ${pkgs.sudo}/bin/sudo ./bin/sudo
+        chmod 4755 ./bin/sudo
         cp ${pkgs.sudo}/bin/sudo ./usr/bin/sudo
         chmod 4755 ./usr/bin/sudo
         ln -sf bash ./bin/sh
@@ -253,12 +256,17 @@ let
       '';
       config = {
         User = "${toString uid}:${toString gid}";
-        WorkingDir = "/work";
-        Cmd = [ "/bin/zsh" ];
+        WorkingDir = "/home/${user}/code";
+        Cmd = [
+          "/bin/zsh"
+          "-l"
+        ];
         Env = [
           "USER=${user}"
           "HOME=/home/${user}"
           "SHELL=/bin/zsh"
+          "DOTFILES_ROOT=/home/${user}/.dotfiles"
+          "DOTFILES_WORKSHOP=1"
           "EDITOR=nvim"
           "VISUAL=nvim"
           "SSL_CERT_FILE=${caBundle}"

@@ -49,6 +49,11 @@
     programs.home-manager.enable = true;
     xdg.enable = true;
 
+    nix.settings.experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
+
     home.sessionVariables = {
       HOMEBREW_NO_ENV_HINTS = "1";
       MS_COG_SVC_SPEECH_SKIP_BINDGEN = "1";
