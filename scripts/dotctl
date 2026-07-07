@@ -486,6 +486,7 @@ provision_macos_docker_container() {
 		mkdir -p "$HOME/code"
 		link_path "$HOME/.zprofile" "$HOME/.dotfiles/.zprofile"
 		link_path "$HOME/.zshrc" "$HOME/.dotfiles/.zshrc"
+		link_path "$HOME/.gitconfig" "$HOME/.dotfiles/.gitconfig"
 		link_path "$HOME/.p10k.zsh" "$HOME/.dotfiles/.p10k.zsh"
 		link_path "$HOME/.tool-versions" "$HOME/.dotfiles/.tool-versions"
 		link_path "$HOME/.wezterm.lua" "$HOME/.dotfiles/.wezterm.lua"

@@ -69,22 +69,6 @@ let
     export PATH=/home/${user}/.local/bin:/bin:/usr/bin
   '';
 
-  gitConfig = pkgs.writeText "gitconfig" ''
-    [user]
-    	name = ${fullName}
-    	email = ${userEmail}
-    [core]
-    	editor = nvim
-    	pager = delta
-    [init]
-    	defaultBranch = main
-    [pull]
-    	rebase = false
-    [credential "https://github.com"]
-    	helper =
-    	helper = !gh auth git-credential
-  '';
-
   homeSkeleton = pkgs.runCommand "dotfiles-container-home" { } ''
     mkdir -p \
     	$out/home/${user}/.codex/rules \
@@ -100,6 +84,7 @@ let
 
     ln -s /home/${user}/.dotfiles/.zprofile $out/home/${user}/.zprofile
     ln -s /home/${user}/.dotfiles/.zshrc $out/home/${user}/.zshrc
+    ln -s /home/${user}/.dotfiles/.gitconfig $out/home/${user}/.gitconfig
     ln -s /home/${user}/.dotfiles/nvim $out/home/${user}/.config/nvim
     ln -s /home/${user}/.dotfiles/wezterm $out/home/${user}/.config/wezterm
     ln -s /home/${user}/.dotfiles/.wezterm.lua $out/home/${user}/.wezterm.lua
@@ -109,8 +94,6 @@ let
     ln -s /home/${user}/.dotfiles/.p10k.zsh $out/home/${user}/.p10k.zsh
     ln -s /home/${user}/.dotfiles/.tool-versions $out/home/${user}/.tool-versions
     ln -s /home/${user}/.dotfiles/rustfmt.toml $out/home/${user}/rustfmt.toml
-
-    cp ${gitConfig} $out/home/${user}/.gitconfig
   '';
 
   basePackages = with pkgs; [
