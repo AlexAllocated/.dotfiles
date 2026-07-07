@@ -79,6 +79,11 @@ Enter the container:
 ~/.dotfiles/scripts/dotctl shell macos-docker
 ```
 
+After first setup, `dotctl shell macos-docker` uses a fast path that starts the
+existing managed container and enters zsh without re-running host provisioning.
+Run `dotctl apply macos-docker` after pulling dotfiles changes or when host
+links, sockets, imports, or container mounts need to be repaired.
+
 `macos-docker` links only host `~/.wezterm.lua`, `~/.config/wezterm`, and
 `~/.local/bin/dotctl` to this checkout. It removes repo-owned host shell and
 developer config links from earlier installs so macOS Terminal opens a normal

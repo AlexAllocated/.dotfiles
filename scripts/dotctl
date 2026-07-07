@@ -1303,9 +1303,16 @@ run_workshop_update() {
 
 shell_macos_docker() {
 	local docker_bin container
+	container="$(macos_docker_container)"
+
+	if docker_bin="$(docker_command 2>/dev/null)" && "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
+		if "$docker_bin" start "$container" >/dev/null 2>&1; then
+			exec "$docker_bin" exec -it "$container" /bin/zsh -l
+		fi
+	fi
+
 	run_macos_docker 0 0 0
 	docker_bin="$(docker_command)"
-	container="$(macos_docker_container)"
 	exec "$docker_bin" exec -it "$container" /bin/zsh -l
 }
 
