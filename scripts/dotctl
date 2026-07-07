@@ -49,7 +49,11 @@ command_exists() {
 }
 
 detect_profile() {
-	if [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
+	if [[ "${DOTFILES_PROFILE:-}" == "macos-docker" || -n "${DOTFILES_WORKSHOP:-}" ]]; then
+		printf 'macos-docker\n'
+	elif [[ "${HOSTNAME:-}" == "dotfiles-workshop" ]]; then
+		printf 'macos-docker\n'
+	elif [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'nixos-wsl\n'
 	elif [[ "$(uname -s)" == "Darwin" ]]; then
 		if ! command_exists nix; then
@@ -1293,6 +1297,12 @@ run_macos_docker() {
 			elif [[ "$("$docker_bin" inspect -f '{{.Config.Image}}' "$container")" != "$image" ]]; then
 				printf 'Existing container was created from a different image; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
+			elif ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'DOTFILES_PROFILE=macos-docker'; then
+				printf 'Existing container does not identify as macos-docker; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'DOTFILES_WORKSHOP=1'; then
+				printf 'Existing container does not identify as a dotfiles workshop; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
 			elif ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/home/alex/code'; then
 				printf 'Existing container does not mount ~/code; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
@@ -1308,11 +1318,17 @@ run_macos_docker() {
 			elif [[ -n "$ssh_auth_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock'; then
 				printf 'Existing container does not export the host SSH agent socket; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$ssh_auth_sock" ]] && ! "$docker_bin" exec "$container" /bin/bash -lc 'test -S /run/host-services/ssh-auth.sock' >/dev/null 2>&1; then
+				printf 'Existing container cannot access the host SSH agent socket; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
 			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx "$(dotfiles_hostd_container_dir)"; then
 				printf 'Existing container does not mount the dotfiles host socket; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
 			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx "DOTFILES_HOSTD_SOCK=$hostd_container_sock"; then
 				printf 'Existing container does not export the dotfiles host socket path; recreating %s...\n' "$container" >&2
+				"$docker_bin" rm -f "$container" >/dev/null
+			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" exec "$container" /bin/bash -lc 'sock="${DOTFILES_HOSTD_SOCK:-/run/host-services/dotfiles-hostd/hostd.sock}"; test -S "$sock"' >/dev/null 2>&1; then
+				printf 'Existing container cannot access the dotfiles host socket; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
 			else
 				provision_macos_docker_container "$docker_bin" "$container"
@@ -1334,6 +1350,8 @@ run_macos_docker() {
 		--hostname "$container" \
 		--workdir /home/alex/code \
 		-e DOTFILES_ROOT=/home/alex/.dotfiles \
+		-e DOTFILES_PROFILE=macos-docker \
+		-e DOTFILES_WORKSHOP=1 \
 		-e TERM="${TERM:-xterm-256color}" \
 		-v "$home_volume:/home" \
 		-v "$REPO_ROOT:/home/alex/.dotfiles" \
@@ -1400,6 +1418,8 @@ macos_docker_container_ready_for_fast_shell() {
 
 	"$docker_bin" container inspect "$container" >/dev/null 2>&1 || return 1
 	"$docker_bin" start "$container" >/dev/null 2>&1 || return 1
+	"$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'DOTFILES_PROFILE=macos-docker' || return 1
+	"$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'DOTFILES_WORKSHOP=1' || return 1
 	"$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/run/host-services/ssh-auth.sock' || return 1
 	"$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock' || return 1
 	"$docker_bin" exec "$container" /bin/bash -lc 'test -S /run/host-services/ssh-auth.sock' >/dev/null 2>&1 || return 1
@@ -1500,8 +1520,11 @@ require_command() {
 }
 
 run_doctor() {
+	local detected_profile
+	detected_profile="$(detect_profile)"
+
 	printf 'dotfiles repo: %s\n' "$REPO_ROOT"
-	printf 'detected profile: %s\n' "$(detect_profile)"
+	printf 'detected profile: %s\n' "$detected_profile"
 	printf 'uname: %s\n' "$(uname -a)"
 	printf 'nix: '
 	if command_exists nix; then
@@ -1545,6 +1568,21 @@ run_doctor() {
 		else
 			printf '%-12s missing\n' "hostd"
 		fi
+	elif [[ "$detected_profile" == "macos-docker" ]]; then
+		if [[ -S /run/host-services/ssh-auth.sock ]]; then
+			printf '%-12s %s\n' "ssh-agent" "/run/host-services/ssh-auth.sock"
+		elif [[ -e /run/host-services/ssh-auth.sock ]]; then
+			printf '%-12s present-not-socket\n' "ssh-agent"
+		else
+			printf '%-12s missing\n' "ssh-agent"
+		fi
+		if [[ -S "$(hostd_client_socket)" ]]; then
+			printf '%-12s %s\n' "hostd" "$(hostd_client_socket)"
+		elif [[ -e "$(hostd_client_socket)" ]]; then
+			printf '%-12s present-not-socket (%s)\n' "hostd" "$(hostd_client_socket)"
+		else
+			printf '%-12s missing (%s)\n' "hostd" "$(hostd_client_socket)"
+		fi
 	elif [[ -n "${DOTFILES_HOSTD_SOCK:-}" || -e "$(dotfiles_hostd_container_sock)" ]]; then
 		if [[ -S "$(hostd_client_socket)" ]]; then
 			printf '%-12s %s\n' "hostd" "$(hostd_client_socket)"
@@ -1553,7 +1591,7 @@ run_doctor() {
 		fi
 	fi
 
-	if [[ "$(detect_profile)" == "macos-docker" ]] && docker_bin="$(docker_command 2>/dev/null)"; then
+	if [[ "$detected_profile" == "macos-docker" ]] && docker_bin="$(docker_command 2>/dev/null)"; then
 		local container
 		container="$(macos_docker_container)"
 		if ! "$docker_bin" info >/dev/null 2>&1; then
