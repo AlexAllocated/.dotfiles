@@ -226,6 +226,27 @@ inputs.dotfiles.homeModules.codex
 Shell startup does not authenticate external services. Run tools such as `op`
 or `gh auth login` explicitly when credentials need attention.
 
+## Git Identity
+
+Shared Git behavior lives in the tracked `.gitconfig`, including aliases,
+Delta settings, default branch behavior, and credential helpers. Machine- or
+account-specific author identity is intentionally local. On first apply,
+`dotctl` prompts for a Git author name and email, then writes:
+
+```sh
+~/.config/git/identity
+```
+
+For unattended setup, provide:
+
+```sh
+DOTFILES_GIT_NAME="Alex" DOTFILES_GIT_EMAIL="alex@example.com" dotctl apply
+```
+
+Optional machine-local Git overrides can live in `~/.config/git/local`; the
+tracked config includes it when present. On `macos-docker`, the host identity
+is copied into the managed container during provisioning.
+
 ## Containers
 
 The flake builds two Linux images. `docker-linux` is the portable workshop

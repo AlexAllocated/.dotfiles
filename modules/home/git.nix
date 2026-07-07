@@ -14,9 +14,12 @@ in
     programs.git = {
       enable = true;
       settings = {
+        include.path = [
+          "~/.config/git/identity"
+          "~/.config/git/local"
+        ];
         user = {
-          name = cfg.fullName;
-          email = cfg.userEmail;
+          useConfigOnly = true;
         };
         core = {
           editor = "nvim";

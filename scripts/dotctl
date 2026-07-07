@@ -157,6 +157,89 @@ write_macos_host_profile() {
 	printf '%s\n' "$profile" >"$HOME/.local/share/dotfiles/profile"
 }
 
+git_identity_path() {
+	printf '%s/.config/git/identity\n' "$HOME"
+}
+
+git_local_path() {
+	printf '%s/.config/git/local\n' "$HOME"
+}
+
+git_config_value() {
+	local key="$1"
+	local file="${2:-}"
+
+	if ! command_exists git; then
+		return 0
+	fi
+
+	if [[ -n "$file" ]]; then
+		git config --file "$file" --get "$key" 2>/dev/null || true
+	else
+		git config --global --get "$key" 2>/dev/null || true
+	fi
+}
+
+write_git_identity() {
+	local name="$1"
+	local email="$2"
+	local identity
+
+	identity="$(git_identity_path)"
+	mkdir -p "$(dirname "$identity")"
+	cat >"$identity" <<EOF
+[user]
+	name = $name
+	email = $email
+EOF
+	chmod 600 "$identity"
+	printf 'Wrote Git identity to %s\n' "$identity"
+}
+
+ensure_git_identity() {
+	local identity existing_name existing_email name email default_name default_email
+
+	identity="$(git_identity_path)"
+	existing_name="$(git_config_value user.name "$identity")"
+	existing_email="$(git_config_value user.email "$identity")"
+
+	if [[ -n "$existing_name" && -n "$existing_email" ]]; then
+		return 0
+	fi
+
+	default_name="${DOTFILES_GIT_NAME:-$(git_config_value user.name)}"
+	default_email="${DOTFILES_GIT_EMAIL:-$(git_config_value user.email)}"
+	[[ -n "$default_name" ]] || default_name="Alex"
+
+	if [[ -n "${DOTFILES_GIT_NAME:-}" && -n "${DOTFILES_GIT_EMAIL:-}" ]]; then
+		write_git_identity "$DOTFILES_GIT_NAME" "$DOTFILES_GIT_EMAIL"
+		return 0
+	fi
+
+	if [[ ! -t 0 || ! -t 1 ]]; then
+		printf 'Git identity is not configured at %s.\n' "$identity" >&2
+		printf 'Run interactively or set DOTFILES_GIT_NAME and DOTFILES_GIT_EMAIL before running dotctl apply.\n' >&2
+		return 1
+	fi
+
+	printf 'Git identity is not configured for this environment.\n'
+	printf 'Git author name [%s]: ' "$default_name"
+	IFS= read -r name
+	[[ -n "$name" ]] || name="$default_name"
+
+	while [[ -z "${email:-}" ]]; do
+		if [[ -n "$default_email" ]]; then
+			printf 'Git author email [%s]: ' "$default_email"
+		else
+			printf 'Git author email: '
+		fi
+		IFS= read -r email
+		[[ -n "$email" ]] || email="$default_email"
+	done
+
+	write_git_identity "$name" "$email"
+}
+
 ensure_homebrew() {
 	if command_exists brew; then
 		return 0
@@ -622,6 +705,9 @@ stage_macos_host_state() {
 		stage_path_if_exists "$HOME/.docker/config.json" "$stage_home/.docker/config.json"
 	fi
 
+	stage_path_if_exists "$(git_identity_path)" "$stage_home/.config/git/identity"
+	stage_path_if_exists "$(git_local_path)" "$stage_home/.config/git/local"
+
 	for config_dir in gh op github-copilot cagent; do
 		stage_path_if_exists "$HOME/.config/$config_dir" "$stage_home/.config/$config_dir"
 	done
@@ -666,6 +752,35 @@ import_macos_host_state() {
 		chown -R 1000:1000 /home/alex/.local
 	'
 	"$docker_bin" exec "$container" /bin/bash -lc "printf '%s\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > '$marker'"
+	rm -rf "$stage_dir"
+}
+
+sync_macos_git_identity_to_container() {
+	local docker_bin="$1"
+	local container="$2"
+	local stage_dir stage_home imported_count
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		return 0
+	fi
+
+	stage_dir="$(mktemp -d)"
+	stage_home="$stage_dir/home/alex"
+	mkdir -p "$stage_home"
+	stage_path_if_exists "$(git_identity_path)" "$stage_home/.config/git/identity"
+	stage_path_if_exists "$(git_local_path)" "$stage_home/.config/git/local"
+
+	imported_count="$(find "$stage_home" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
+	if [[ "$imported_count" == "0" ]]; then
+		rm -rf "$stage_dir"
+		return 0
+	fi
+
+	"$docker_bin" cp "$stage_home/." "$container:/home/alex/"
+	"$docker_bin" exec --user root "$container" /bin/bash -lc '
+		set -euo pipefail
+		chown -R 1000:1000 /home/alex/.config/git 2>/dev/null || true
+	'
 	rm -rf "$stage_dir"
 }
 
@@ -1028,6 +1143,7 @@ run_macos_docker() {
 	local ssh_auth_sock_args=()
 	local hostd_sock_args=()
 
+	ensure_git_identity
 	apply_macos_host_links
 	ensure_wezterm
 	ensure_1password
@@ -1098,6 +1214,7 @@ run_macos_docker() {
 			else
 				provision_macos_docker_container "$docker_bin" "$container"
 				import_macos_host_state "$docker_bin" "$container"
+				sync_macos_git_identity_to_container "$docker_bin" "$container"
 				prime_macos_docker_neovim "$docker_bin" "$container" "$announce"
 				write_macos_host_profile macos-docker
 				if [[ "$announce" == "1" ]]; then
@@ -1126,6 +1243,7 @@ run_macos_docker() {
 
 	provision_macos_docker_container "$docker_bin" "$container"
 	import_macos_host_state "$docker_bin" "$container"
+	sync_macos_git_identity_to_container "$docker_bin" "$container"
 	prime_macos_docker_neovim "$docker_bin" "$container" "$announce"
 	write_macos_host_profile macos-docker
 	if [[ "$announce" == "1" ]]; then
@@ -1283,6 +1401,15 @@ run_doctor() {
 			printf '%-12s missing\n' "$cmd"
 		fi
 	done
+	local git_identity git_identity_name git_identity_email
+	git_identity="$(git_identity_path)"
+	git_identity_name="$(git_config_value user.name "$git_identity")"
+	git_identity_email="$(git_config_value user.email "$git_identity")"
+	if [[ -n "$git_identity_name" && -n "$git_identity_email" ]]; then
+		printf '%-12s %s <%s>\n' "git-id" "$git_identity_name" "$git_identity_email"
+	else
+		printf '%-12s missing (%s)\n' "git-id" "$git_identity"
+	fi
 	if [[ "$(uname -s)" == "Darwin" ]]; then
 		if [[ -d /Applications/1Password.app ]]; then
 			printf '%-12s %s\n' "1password" "/Applications/1Password.app"
@@ -1353,6 +1480,9 @@ main() {
 				shift
 			done
 			profile="${profile:-$(detect_profile)}"
+			if [[ "$profile" != "macos-docker" ]]; then
+				ensure_git_identity
+			fi
 			if ((update)); then
 				if [[ "$profile" == "macos-docker" ]]; then
 					run_macos_docker 1 1

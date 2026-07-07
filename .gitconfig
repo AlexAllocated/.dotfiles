@@ -1,6 +1,9 @@
+[include]
+	path = ~/.config/git/identity
+	path = ~/.config/git/local
+
 [user]
-	name = Alex
-	email = Alex@HiveTech.ai
+	useConfigOnly = true
 
 [core]
 	editor = nvim
