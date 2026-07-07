@@ -224,7 +224,7 @@ let
       tag = "latest";
       contents = [ (rootFor name packages) ];
       fakeRootCommands = ''
-        mkdir -p ./tmp ./usr/bin ./bin ./run/host-services
+        mkdir -p ./tmp ./usr/bin ./bin ./run/host-services/dotfiles-hostd
         chmod 1777 ./tmp
         if [ -L ./home/${user} ]; then
           homeTarget="$(readlink ./home/${user})"

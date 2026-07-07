@@ -356,12 +356,20 @@ dotfiles_hostd_state_dir() {
 	printf '%s/.local/share/dotfiles\n' "$HOME"
 }
 
+dotfiles_hostd_runtime_dir() {
+	printf '%s/hostd\n' "$(dotfiles_hostd_state_dir)"
+}
+
 dotfiles_hostd_sock() {
-	printf '%s\n' "${DOTFILES_HOSTD_SOCKET:-$(dotfiles_hostd_state_dir)/hostd.sock}"
+	printf '%s\n' "${DOTFILES_HOSTD_SOCKET:-$(dotfiles_hostd_runtime_dir)/hostd.sock}"
+}
+
+dotfiles_hostd_container_dir() {
+	printf '/run/host-services/dotfiles-hostd\n'
 }
 
 dotfiles_hostd_container_sock() {
-	printf '/run/host-services/dotfiles-hostd.sock\n'
+	printf '%s/hostd.sock\n' "$(dotfiles_hostd_container_dir)"
 }
 
 dotfiles_hostd_enabled() {
@@ -410,7 +418,8 @@ write_dotfiles_hostd_service() {
 	server_script="$state_dir/hostd-server"
 	handler_script="$state_dir/hostd-handler"
 
-	mkdir -p "$state_dir" "$HOME/Library/LaunchAgents"
+	mkdir -p "$state_dir" "$(dotfiles_hostd_runtime_dir)" "$HOME/Library/LaunchAgents"
+	rm -f "$state_dir/hostd.sock"
 
 	cat >"$handler_script" <<EOF
 #!/usr/bin/env bash
@@ -1137,7 +1146,7 @@ run_macos_docker() {
 	local recreate="${1:-0}"
 	local rebuild="${2:-$recreate}"
 	local announce="${3:-1}"
-	local docker_bin image platform container work_root home_volume docker_socket ssh_auth_sock hostd_sock
+	local docker_bin image platform container work_root home_volume docker_socket ssh_auth_sock hostd_sock hostd_container_sock
 	local platform_args=()
 	local docker_socket_args=()
 	local ssh_auth_sock_args=()
@@ -1169,7 +1178,8 @@ run_macos_docker() {
 		ssh_auth_sock_args=(-v "$ssh_auth_sock:/run/host-services/ssh-auth.sock" -e SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock)
 	fi
 	if [[ -n "$hostd_sock" ]]; then
-		hostd_sock_args=(-v "$hostd_sock:$(dotfiles_hostd_container_sock)" -e "DOTFILES_HOSTD_SOCK=$(dotfiles_hostd_container_sock)")
+		hostd_container_sock="$(dotfiles_hostd_container_dir)/$(basename "$hostd_sock")"
+		hostd_sock_args=(-v "$(dirname "$hostd_sock"):$(dotfiles_hostd_container_dir)" -e "DOTFILES_HOSTD_SOCK=$hostd_container_sock")
 	fi
 
 	ensure_macos_docker_image "$docker_bin" "$image" "$platform" "$rebuild"
@@ -1205,10 +1215,10 @@ run_macos_docker() {
 			elif [[ -n "$ssh_auth_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock'; then
 				printf 'Existing container does not export the host SSH agent socket; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
-			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx "$(dotfiles_hostd_container_sock)"; then
+			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx "$(dotfiles_hostd_container_dir)"; then
 				printf 'Existing container does not mount the dotfiles host socket; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
-			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx "DOTFILES_HOSTD_SOCK=$(dotfiles_hostd_container_sock)"; then
+			elif [[ -n "$hostd_sock" ]] && ! "$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx "DOTFILES_HOSTD_SOCK=$hostd_container_sock"; then
 				printf 'Existing container does not export the dotfiles host socket path; recreating %s...\n' "$container" >&2
 				"$docker_bin" rm -f "$container" >/dev/null
 			else
@@ -1437,7 +1447,7 @@ run_doctor() {
 		elif "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
 			printf 'container    %s\n' "$("$docker_bin" inspect -f '{{.Name}} {{.State.Status}} {{.Config.Image}}' "$container" | sed 's#^/##')"
 			printf 'ssh-agent    %s\n' "$("$docker_bin" exec "$container" /bin/bash -lc 'if [[ -S /run/host-services/ssh-auth.sock ]]; then printf mounted; elif [[ -e /run/host-services/ssh-auth.sock ]]; then printf present-not-socket; else printf missing; fi' 2>/dev/null || printf unavailable)"
-			printf 'hostd-mount  %s\n' "$("$docker_bin" exec "$container" /bin/bash -lc 'sock="${DOTFILES_HOSTD_SOCK:-/run/host-services/dotfiles-hostd.sock}"; if [[ -S "$sock" ]]; then printf mounted; elif [[ -e "$sock" ]]; then printf present-not-socket; else printf missing; fi' 2>/dev/null || printf unavailable)"
+			printf 'hostd-mount  %s\n' "$("$docker_bin" exec "$container" /bin/bash -lc 'sock="${DOTFILES_HOSTD_SOCK:-/run/host-services/dotfiles-hostd/hostd.sock}"; if [[ -S "$sock" ]]; then printf mounted; elif [[ -e "$sock" ]]; then printf present-not-socket; else printf missing; fi' 2>/dev/null || printf unavailable)"
 		else
 			printf 'container    %s not created\n' "$container"
 		fi

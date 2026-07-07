@@ -113,9 +113,9 @@ direct Linux-container 1Password desktop integration is not attempted.
 
 The profile also installs a small macOS user `launchd` service named
 `com.alexallocated.dotfiles.hostd`. It listens on
-`~/.local/share/dotfiles/hostd.sock`, and the managed container mounts that
-socket at `/run/host-services/dotfiles-hostd.sock`. Inside the container, use
-the allowlisted host command surface for host-only integrations:
+`~/.local/share/dotfiles/hostd/hostd.sock`, and the managed container mounts
+that runtime directory at `/run/host-services/dotfiles-hostd`. Inside the
+container, use the allowlisted host command surface for host-only integrations:
 
 ```sh
 dotctl host ping
