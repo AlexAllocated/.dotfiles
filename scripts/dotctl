@@ -1423,6 +1423,12 @@ macos_docker_container_ready_for_fast_shell() {
 	"$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/run/host-services/ssh-auth.sock' || return 1
 	"$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock' || return 1
 	"$docker_bin" exec "$container" /bin/bash -lc 'test -S /run/host-services/ssh-auth.sock' >/dev/null 2>&1 || return 1
+
+	if dotfiles_hostd_enabled; then
+		"$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx "$(dotfiles_hostd_container_dir)" || return 1
+		"$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -q '^DOTFILES_HOSTD_SOCK=' || return 1
+		"$docker_bin" exec "$container" /bin/bash -lc 'sock="${DOTFILES_HOSTD_SOCK:-/run/host-services/dotfiles-hostd/hostd.sock}"; test -S "$sock"' >/dev/null 2>&1 || return 1
+	fi
 }
 
 shell_macos_docker() {
