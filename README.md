@@ -123,10 +123,11 @@ host socket path before applying the profile. This only forwards the SSH agent;
 direct Linux-container 1Password desktop integration is not attempted.
 
 The profile also installs a small macOS user `launchd` service named
-`com.alexallocated.dotfiles.hostd`. It listens on
-`~/.local/share/dotfiles/hostd/hostd.sock`, and the managed container mounts
-that runtime directory at `/run/host-services/dotfiles-hostd`. Inside the
-container, use the allowlisted host command surface for host-only integrations:
+`com.alexallocated.dotfiles.hostd`. It listens on host localhost port `17661`
+by default, and the managed container mounts a token from
+`~/.local/share/dotfiles/hostd` at `/run/host-services/dotfiles-hostd`. Inside
+the container, use the allowlisted host command surface for host-only
+integrations:
 
 ```sh
 dotctl host ping
@@ -135,9 +136,9 @@ dotctl host op item get "Item Name" --fields label=username,password
 ```
 
 `dotctl host op ...` runs the macOS host `op` binary so 1Password desktop app
-integration, Touch ID, and company policy stay on the host. The socket does not
-expose arbitrary host shell. Set `DOTFILES_HOSTD=0` before applying the profile
-to skip hostd setup.
+integration, Touch ID, and company policy stay on the host. The service requires
+the mounted token and does not expose arbitrary host shell. Set
+`DOTFILES_HOSTD=0` before applying the profile to skip hostd setup.
 
 Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
 or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the
