@@ -119,6 +119,7 @@ let
     ncurses
     neovim
     nodejs
+    bun
     openssh
     procps
     ripgrep
