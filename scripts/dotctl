@@ -192,6 +192,10 @@ ensure_homebrew() {
 	fi
 }
 
+brew_noninteractive() {
+	HOMEBREW_NO_ASK=1 HOMEBREW_NO_ENV_HINTS=1 brew "$@"
+}
+
 ensure_wezterm() {
 	if command_exists wezterm || [[ -d /Applications/WezTerm.app ]]; then
 		return 0
@@ -199,7 +203,7 @@ ensure_wezterm() {
 
 	ensure_homebrew
 	printf 'WezTerm is not installed; installing WezTerm with Homebrew...\n' >&2
-	brew install --cask wezterm >&2
+	brew_noninteractive install --cask wezterm >&2
 }
 
 host_tool_command() {
@@ -226,7 +230,7 @@ ensure_homebrew_formula() {
 
 	ensure_homebrew
 	printf '%s is not installed; installing %s with Homebrew...\n' "$cmd" "$formula" >&2
-	brew install "$formula" >&2
+	brew_noninteractive install "$formula" >&2
 
 	if ! host_tool_command "$cmd" >/dev/null 2>&1; then
 		printf '%s was not found after installation. Open a new shell and retry.\n' "$cmd" >&2
@@ -246,13 +250,13 @@ ensure_1password() {
 	if [[ ! -d /Applications/1Password.app ]]; then
 		ensure_homebrew
 		printf '1Password is not installed; installing 1Password with Homebrew...\n' >&2
-		brew install --cask 1password >&2
+		brew_noninteractive install --cask 1password >&2
 	fi
 
 	if ! onepassword_cli_command >/dev/null 2>&1; then
 		ensure_homebrew
 		printf '1Password CLI is not installed; installing 1Password CLI with Homebrew...\n' >&2
-		brew install --cask 1password-cli >&2
+		brew_noninteractive install --cask 1password-cli >&2
 	fi
 
 	if ! onepassword_cli_command >/dev/null 2>&1; then
@@ -424,7 +428,7 @@ ensure_docker() {
 	else
 		ensure_homebrew
 		printf 'Docker is not installed; installing Docker Desktop with Homebrew...\n' >&2
-		brew install --cask docker >&2
+		brew_noninteractive install --cask docker >&2
 		docker_bin="$(docker_command 2>/dev/null || true)"
 	fi
 
