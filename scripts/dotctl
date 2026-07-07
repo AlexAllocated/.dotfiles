@@ -785,7 +785,7 @@ sync_macos_git_identity_to_container() {
 		return 0
 	fi
 
-	"$docker_bin" cp "$stage_home/." "$container:/home/alex/"
+	"$docker_bin" cp "$stage_home/." "$container:/home/alex/" >/dev/null
 	"$docker_bin" exec --user root "$container" /bin/bash -lc '
 		set -euo pipefail
 		chown -R 1000:1000 /home/alex/.config/git 2>/dev/null || true
