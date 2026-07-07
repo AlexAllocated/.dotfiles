@@ -1100,9 +1100,38 @@ hostd_client_token_file() {
 	fi
 }
 
+hostd_send_request() {
+	local host="$1"
+	local port="$2"
+	local request="$3"
+	local timeout_seconds="${DOTFILES_HOSTD_TIMEOUT:-300}"
+
+	if command_exists timeout; then
+		timeout "$timeout_seconds" bash -c '
+			set -euo pipefail
+			host="$1"
+			port="$2"
+			request="$3"
+			exec 3<>"/dev/tcp/$host/$port"
+			printf "%s\n" "$request" >&3
+			cat <&3
+		' hostd-client "$host" "$port" "$request"
+	else
+		bash -c '
+			set -euo pipefail
+			host="$1"
+			port="$2"
+			request="$3"
+			exec 3<>"/dev/tcp/$host/$port"
+			printf "%s\n" "$request" >&3
+			cat <&3
+		' hostd-client "$host" "$port" "$request"
+	fi
+}
+
 run_host_client() {
 	local subcommand="${1:-}"
-	local action request response host port token_file token socat_bin jq_bin exit_code
+	local action request response host port token_file token jq_bin exit_code
 
 	[[ -n "$subcommand" ]] || {
 		printf 'Usage: dotctl host <ping|op ...>\n' >&2
@@ -1132,10 +1161,6 @@ run_host_client() {
 		printf 'jq is required for dotctl host. Rebuild the workshop image or install jq on the host.\n' >&2
 		return 127
 	fi
-	if ! socat_bin="$(host_tool_command socat 2>/dev/null)"; then
-		printf 'socat is required for dotctl host. Rebuild the workshop image or install socat on the host.\n' >&2
-		return 127
-	fi
 
 	host="$(hostd_client_host)"
 	port="$(hostd_client_port)"
@@ -1152,7 +1177,7 @@ run_host_client() {
 	fi
 
 	request="$("$jq_bin" -cn --arg token "$token" --arg action "$action" '$ARGS.positional as $args | {token:$token,action:$action,args:$args}' --args -- "$@")"
-	if ! response="$(printf '%s\n' "$request" | "$socat_bin" - "TCP4:$host:$port,connect-timeout=2")"; then
+	if ! response="$(hostd_send_request "$host" "$port" "$request")"; then
 		printf 'dotfiles host request failed while connecting to %s:%s.\n' "$host" "$port" >&2
 		return 1
 	fi
