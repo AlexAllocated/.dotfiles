@@ -346,6 +346,8 @@ ensure_1password() {
 		printf '1Password CLI was not found after installation. Open a new shell and retry.\n' >&2
 		return 1
 	fi
+
+	ensure_1password_ssh_auth_sock_service
 }
 
 dotfiles_hostd_label() {
@@ -354,6 +356,97 @@ dotfiles_hostd_label() {
 
 dotfiles_hostd_state_dir() {
 	printf '%s/.local/share/dotfiles\n' "$HOME"
+}
+
+onepassword_ssh_agent_sock() {
+	printf '%s/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock\n' "$HOME"
+}
+
+onepassword_ssh_auth_sock_label() {
+	printf 'com.alexallocated.dotfiles.1password-ssh-auth-sock\n'
+}
+
+write_1password_ssh_auth_sock_service() {
+	local state_dir agent_sock label plist script log_out log_err
+	local escaped_label escaped_script escaped_log_out escaped_log_err
+
+	state_dir="$(dotfiles_hostd_state_dir)"
+	agent_sock="$(onepassword_ssh_agent_sock)"
+	label="$(onepassword_ssh_auth_sock_label)"
+	plist="$HOME/Library/LaunchAgents/$label.plist"
+	script="$state_dir/1password-ssh-auth-sock"
+	log_out="$state_dir/1password-ssh-auth-sock.out.log"
+	log_err="$state_dir/1password-ssh-auth-sock.err.log"
+
+	mkdir -p "$state_dir" "$HOME/Library/LaunchAgents"
+
+	cat >"$script" <<EOF
+#!/bin/sh
+set -eu
+
+agent_sock="$agent_sock"
+
+if [ -z "\${SSH_AUTH_SOCK:-}" ]; then
+	exit 0
+fi
+
+if [ "\$SSH_AUTH_SOCK" = "\$agent_sock" ]; then
+	exit 0
+fi
+
+/bin/ln -sf "\$agent_sock" "\$SSH_AUTH_SOCK"
+EOF
+	chmod 700 "$script"
+
+	escaped_label="$(printf '%s' "$label" | xml_escape)"
+	escaped_script="$(printf '%s' "$script" | xml_escape)"
+	escaped_log_out="$(printf '%s' "$log_out" | xml_escape)"
+	escaped_log_err="$(printf '%s' "$log_err" | xml_escape)"
+
+	cat >"$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>$escaped_label</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>$escaped_script</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>$escaped_log_out</string>
+	<key>StandardErrorPath</key>
+	<string>$escaped_log_err</string>
+</dict>
+</plist>
+EOF
+	chmod 600 "$plist"
+}
+
+ensure_1password_ssh_auth_sock_service() {
+	local label plist service_target
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		return 0
+	fi
+
+	write_1password_ssh_auth_sock_service
+
+	label="$(onepassword_ssh_auth_sock_label)"
+	plist="$HOME/Library/LaunchAgents/$label.plist"
+	service_target="gui/$(id -u)"
+
+	launchctl bootout "$service_target" "$plist" >/dev/null 2>&1 || true
+	launchctl bootstrap "$service_target" "$plist" >/dev/null 2>&1 || launchctl load "$plist" >/dev/null 2>&1
+	launchctl kickstart -k "$service_target/$label" >/dev/null 2>&1 || true
+
+	if [[ -n "${SSH_AUTH_SOCK:-}" && "$SSH_AUTH_SOCK" != "$(onepassword_ssh_agent_sock)" ]]; then
+		/bin/ln -sf "$(onepassword_ssh_agent_sock)" "$SSH_AUTH_SOCK" 2>/dev/null || true
+	fi
 }
 
 dotfiles_hostd_runtime_dir() {
@@ -1301,14 +1394,23 @@ run_workshop_update() {
 	printf 'Restart this workshop from the host with: dotctl apply --recreate macos-docker\n'
 }
 
+macos_docker_container_ready_for_fast_shell() {
+	local docker_bin="$1"
+	local container="$2"
+
+	"$docker_bin" container inspect "$container" >/dev/null 2>&1 || return 1
+	"$docker_bin" start "$container" >/dev/null 2>&1 || return 1
+	"$docker_bin" inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$container" | grep -qx '/run/host-services/ssh-auth.sock' || return 1
+	"$docker_bin" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -qx 'SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock' || return 1
+	"$docker_bin" exec "$container" /bin/bash -lc 'test -S /run/host-services/ssh-auth.sock' >/dev/null 2>&1 || return 1
+}
+
 shell_macos_docker() {
 	local docker_bin container
 	container="$(macos_docker_container)"
 
-	if docker_bin="$(docker_command 2>/dev/null)" && "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
-		if "$docker_bin" start "$container" >/dev/null 2>&1; then
-			exec "$docker_bin" exec -it "$container" /bin/zsh -l
-		fi
+	if docker_bin="$(docker_command 2>/dev/null)" && macos_docker_container_ready_for_fast_shell "$docker_bin" "$container"; then
+		exec "$docker_bin" exec -it "$container" /bin/zsh -l
 	fi
 
 	run_macos_docker 0 0 0
@@ -1432,6 +1534,11 @@ run_doctor() {
 			printf '%-12s %s\n' "1password" "/Applications/1Password.app"
 		else
 			printf '%-12s missing\n' "1password"
+		fi
+		if [[ -S "$(onepassword_ssh_agent_sock)" ]]; then
+			printf '%-12s %s\n' "1p-ssh" "$(onepassword_ssh_agent_sock)"
+		else
+			printf '%-12s missing (%s)\n' "1p-ssh" "$(onepassword_ssh_agent_sock)"
 		fi
 		if [[ -S "$(dotfiles_hostd_sock)" ]]; then
 			printf '%-12s %s\n' "hostd" "$(dotfiles_hostd_sock)"

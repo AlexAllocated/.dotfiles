@@ -109,9 +109,15 @@ When Docker Desktop exposes its host SSH agent bridge, `macos-docker` mounts it
 into the container at `/run/host-services/ssh-auth.sock` and links
 `~/.1password/agent.sock` plus the standard macOS 1Password agent path to that
 socket. This lets Git and SSH inside the container use the host 1Password SSH
-agent and still prompt through the macOS desktop app. The profile installs the
-desktop app and CLI if they are missing, but sign-in, Touch ID, CLI integration,
-and SSH-agent enablement still happen in 1Password itself. Set
+agent and still prompt through the macOS desktop app. On the host, the profile
+also installs a `launchd` agent named
+`com.alexallocated.dotfiles.1password-ssh-auth-sock` that applies 1Password's
+global `SSH_AUTH_SOCK` bridge so Docker Desktop's forwarded socket resolves to
+1Password instead of the default macOS agent. The profile installs the desktop
+app and CLI if they are missing, but sign-in, Touch ID, CLI integration, and
+SSH-agent enablement still happen in 1Password itself. If Docker Desktop was
+already running before that bridge was installed, restart Docker Desktop once
+and recreate the container. Set
 `DOTCTL_DOCKER_SSH_AUTH_SOCK=0` to disable the mount, or set it to a custom
 host socket path before applying the profile. This only forwards the SSH agent;
 direct Linux-container 1Password desktop integration is not attempted.

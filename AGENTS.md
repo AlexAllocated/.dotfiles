@@ -55,7 +55,7 @@
 ## 1Password SSH Agent
 
 - Enable the SSH agent inside the 1Password desktop app (macOS, Linux, or Windows) and confirm it lists your keys with `ssh-add -l` before bootstrapping these dotfiles.
-- Home Manager exports `SSH_AUTH_SOCK=$HOME/.1password/agent.sock` on macOS/Linux when that stable socket path exists.
-- The `macos-docker` profile installs the host 1Password desktop app and CLI when missing, mounts Docker Desktop's host SSH agent bridge at `/run/host-services/ssh-auth.sock`, then links `~/.1password/agent.sock` and the standard macOS 1Password agent path to that socket inside the container.
+- Home Manager exports `SSH_AUTH_SOCK=$HOME/.1password/agent.sock` on macOS/Linux when that stable socket path exists. Inside `macos-docker`, it prefers Docker Desktop's `/run/host-services/ssh-auth.sock`.
+- The `macos-docker` profile installs the host 1Password desktop app and CLI when missing, installs the `com.alexallocated.dotfiles.1password-ssh-auth-sock` launch agent so the host `SSH_AUTH_SOCK` bridge points at 1Password, mounts Docker Desktop's host SSH agent bridge at `/run/host-services/ssh-auth.sock`, then links `~/.1password/agent.sock` and the standard macOS 1Password agent path to that socket inside the container.
 - The `macos-docker` profile also installs a user `launchd` host daemon at `~/.local/share/dotfiles/hostd/hostd.sock`; the container mounts its runtime directory at `/run/host-services/dotfiles-hostd`, and `dotctl host op ...` runs the host `op` binary through an allowlisted JSON socket API.
 - On WSL, Home Manager unsets `SSH_AUTH_SOCK` and wraps `ssh`, `scp`, `sftp`, `ssh-add`, and `ssh-agent` to call their Windows counterparts when available. Git uses `GIT_SSH_COMMAND="ssh.exe -o StrictHostKeyChecking=accept-new"` so first-time host keys do not block unattended operations.

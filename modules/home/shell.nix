@@ -176,8 +176,13 @@ in
             return
           fi
 
+          if [[ -n "$DOTFILES_WORKSHOP" && -S /run/host-services/ssh-auth.sock ]]; then
+            export SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock
+            return
+          fi
+
           local sock="$HOME/.1password/agent.sock"
-          if [[ -S "$sock" || ! -e "$sock" ]]; then
+          if [[ -S "$sock" ]]; then
             export SSH_AUTH_SOCK="$sock"
           fi
         }
