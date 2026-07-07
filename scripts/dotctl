@@ -945,11 +945,21 @@ hostd_command_response() {
 	local exit_code="$1"
 	local stdout_file="$2"
 	local stderr_file="$3"
-	local jq_bin stdout_b64 stderr_b64
+	local jq_bin stdout_b64 stderr_b64 encode_error
 
 	jq_bin="$(host_tool_command jq)"
-	stdout_b64="$(base64_encode_file "$stdout_file")"
-	stderr_b64="$(base64_encode_file "$stderr_file")"
+	encode_error="$(mktemp)"
+	if ! stdout_b64="$(base64_encode_file "$stdout_file" 2>"$encode_error")"; then
+		hostd_error_response "failed to encode host command stdout: $(cat "$encode_error")" 1
+		rm -f "$encode_error"
+		return 0
+	fi
+	if ! stderr_b64="$(base64_encode_file "$stderr_file" 2>"$encode_error")"; then
+		hostd_error_response "failed to encode host command stderr: $(cat "$encode_error")" 1
+		rm -f "$encode_error"
+		return 0
+	fi
+	rm -f "$encode_error"
 	"$jq_bin" -cn \
 		--argjson exit_code "$exit_code" \
 		--arg stdout_b64 "$stdout_b64" \
@@ -957,7 +967,37 @@ hostd_command_response() {
 		'{ok:($exit_code == 0),exit_code:$exit_code,stdout_b64:$stdout_b64,stderr_b64:$stderr_b64}'
 }
 
+hostd_response_is_valid() {
+	local response_file="$1"
+	local jq_bin
+
+	jq_bin="$(host_tool_command jq 2>/dev/null || true)"
+	[[ -n "$jq_bin" ]] || return 1
+	"$jq_bin" -e 'type == "object" and has("exit_code")' "$response_file" >/dev/null 2>&1
+}
+
 run_hostd_handle() {
+	local response_file err_file exit_code message
+
+	response_file="$(mktemp)"
+	err_file="$(mktemp)"
+
+	if run_hostd_handle_impl >"$response_file" 2>"$err_file" && hostd_response_is_valid "$response_file"; then
+		cat "$response_file"
+		rm -f "$response_file" "$err_file"
+		return 0
+	fi
+
+	exit_code=$?
+	message="$(cat "$err_file" 2>/dev/null || true)"
+	if [[ -z "$message" ]]; then
+		message='hostd handler failed before writing a valid response'
+	fi
+	hostd_error_response "$message" "$exit_code"
+	rm -f "$response_file" "$err_file"
+}
+
+run_hostd_handle_impl() {
 	local request jq_bin action stdout_file stderr_file exit_code op_bin token_file expected_token request_token
 	local args=()
 	local arg
