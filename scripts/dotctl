@@ -22,9 +22,11 @@ Usage: dotctl <command> [profile] [options]
 
 Commands:
   apply [profile] [--update] [--recreate]
-                                Apply a NixOS, nix-darwin, or Home Manager profile.
+                                Apply a NixOS, macOS, nix-darwin, or Home Manager profile.
   shell [profile]              Open an interactive shell for a container profile.
   import-host-state [profile]  Copy host auth/config state into a container profile.
+  restore-container-state [container]
+                               Copy Codex and GitHub CLI state from a container to the host.
   workshop-update              Rebuild a workshop image from the current checkout.
   host <ping|op ...>           Run an allowlisted macOS host integration command.
   update                       Update all repo-managed pins.
@@ -34,6 +36,7 @@ Commands:
 Profiles:
   nixos-wsl       NixOS running inside WSL.
   linux           Home Manager only, any Linux with Nix.
+  macos-managed   Host-native macOS managed with Homebrew and symlinks, no Nix.
   macos-docker    Managed macOS host using the dotfiles Linux Docker container.
   macos           Home Manager only, Apple Silicon macOS.
   macos-intel     Home Manager only, Intel macOS.
@@ -57,7 +60,7 @@ detect_profile() {
 		printf 'nixos-wsl\n'
 	elif [[ "$(uname -s)" == "Darwin" ]]; then
 		if ! command_exists nix; then
-			printf 'macos-docker\n'
+			printf 'macos-managed\n'
 			return
 		fi
 		if [[ "$(uname -m)" == "arm64" ]]; then
@@ -79,6 +82,9 @@ flake_ref_for_profile() {
 			;;
 		linux)
 			printf '%s#linux\n' "$REPO_ROOT"
+			;;
+		macos-managed)
+			printf '%s#macos-managed\n' "$REPO_ROOT"
 			;;
 		macos-docker)
 			printf '%s#macos-docker\n' "$REPO_ROOT"
@@ -111,6 +117,22 @@ backup_path() {
 	mkdir -p "$backup_dir"
 	mv "$path" "$backup_dir/$(basename "$path").$stamp"
 	printf 'Backed up %s to %s\n' "$path" "$backup_dir/$(basename "$path").$stamp"
+}
+
+backup_copy_path() {
+	local path="$1"
+	local backup_root="$2"
+	local backup_target
+
+	[[ -e "$path" || -L "$path" ]] || return 0
+	mkdir -p "$backup_root"
+	backup_target="$backup_root/$(basename "$path")"
+	if command_exists rsync; then
+		rsync -a "$path/" "$backup_target/" 2>/dev/null || rsync -a "$path" "$backup_target"
+	else
+		cp -R "$path" "$backup_target"
+	fi
+	printf 'Backed up %s to %s\n' "$path" "$backup_target"
 }
 
 link_path() {
@@ -152,6 +174,23 @@ apply_macos_host_links() {
 	remove_repo_link "$HOME/.config/nvim" "$REPO_ROOT/nvim"
 	link_path "$HOME/.wezterm.lua" "$REPO_ROOT/.wezterm.lua"
 	link_path "$HOME/.config/wezterm" "$REPO_ROOT/wezterm"
+	link_path "$HOME/.local/bin/dotctl" "$REPO_ROOT/scripts/dotctl"
+}
+
+apply_macos_managed_links() {
+	mkdir -p "$HOME/.codex/rules" "$HOME/.config" "$HOME/.local/bin"
+
+	link_path "$HOME/.zprofile" "$REPO_ROOT/.zprofile"
+	link_path "$HOME/.zshrc" "$REPO_ROOT/.zshrc"
+	link_path "$HOME/.gitconfig" "$REPO_ROOT/.gitconfig"
+	link_path "$HOME/.p10k.zsh" "$REPO_ROOT/.p10k.zsh"
+	link_path "$HOME/.tool-versions" "$REPO_ROOT/.tool-versions"
+	link_path "$HOME/.wezterm.lua" "$REPO_ROOT/.wezterm.lua"
+	link_path "$HOME/rustfmt.toml" "$REPO_ROOT/rustfmt.toml"
+	link_path "$HOME/.config/nvim" "$REPO_ROOT/nvim"
+	link_path "$HOME/.config/wezterm" "$REPO_ROOT/wezterm"
+	link_path "$HOME/.codex/config.toml" "$REPO_ROOT/codex/config.toml"
+	link_path "$HOME/.codex/rules/default.rules" "$REPO_ROOT/codex/rules/default.rules"
 	link_path "$HOME/.local/bin/dotctl" "$REPO_ROOT/scripts/dotctl"
 }
 
@@ -325,6 +364,171 @@ ensure_homebrew_formula() {
 	fi
 }
 
+ensure_homebrew_formula_installed() {
+	local formula="$1"
+
+	if brew list "$formula" >/dev/null 2>&1; then
+		return 0
+	fi
+
+	ensure_homebrew
+	printf '%s is not installed; installing with Homebrew...\n' "$formula" >&2
+	brew_noninteractive install "$formula" >&2
+}
+
+ensure_homebrew_cask() {
+	local cask="$1"
+	local command_name="${2:-}"
+	local app_path="${3:-}"
+
+	if [[ -n "$command_name" ]] && host_tool_command "$command_name" >/dev/null 2>&1; then
+		return 0
+	fi
+	if [[ -n "$app_path" && -e "$app_path" ]]; then
+		return 0
+	fi
+	if brew list --cask "$cask" >/dev/null 2>&1; then
+		return 0
+	fi
+
+	ensure_homebrew
+	printf '%s is not installed; installing %s with Homebrew...\n' "${command_name:-$cask}" "$cask" >&2
+	brew_noninteractive install --cask "$cask" >&2
+}
+
+ensure_macos_managed_homebrew_packages() {
+	local update="${1:-0}"
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		printf 'macos-managed can only be applied on macOS.\n' >&2
+		return 1
+	fi
+
+	ensure_homebrew
+	if [[ "$update" == "1" ]]; then
+		printf 'Updating Homebrew metadata and installed formulae...\n'
+		brew_noninteractive update >&2
+		brew_noninteractive upgrade >&2
+	fi
+
+	local formulas=(
+		"bat:bat"
+		"bun:bun"
+		"cmake:cmake"
+		"curl:curl"
+		"delta:git-delta"
+		"direnv:direnv"
+		"eza:eza"
+		"fastfetch:fastfetch"
+		"fd:fd"
+		"fzf:fzf"
+		"gawk:gawk"
+		"gh:gh"
+		"git:git"
+		"gpg:gnupg"
+		"go:go"
+		"helm:helm"
+		"jq:jq"
+		"k9s:k9s"
+		"kubectl:kubernetes-cli"
+		"lazygit:lazygit"
+		"lua:lua"
+		"lynx:lynx"
+		"mise:mise"
+		"neovim:neovim"
+		"ninja:ninja"
+		"node:node"
+		"pkg-config:pkg-config"
+		"python3:python"
+		"rg:ripgrep"
+		"rsync:rsync"
+		"rust-analyzer:rust-analyzer"
+		"rustc:rust"
+		"shellcheck:shellcheck"
+		"stylua:stylua"
+		"tree:tree"
+		"tree-sitter:tree-sitter"
+		"wget:wget"
+		"zoxide:zoxide"
+	)
+	local item cmd formula
+	for item in "${formulas[@]}"; do
+		cmd="${item%%:*}"
+		formula="${item#*:}"
+		ensure_homebrew_formula "$cmd" "$formula"
+	done
+
+	ensure_homebrew_formula_installed powerlevel10k
+	ensure_homebrew_formula_installed zsh-autosuggestions
+	ensure_homebrew_formula_installed zsh-syntax-highlighting
+	ensure_homebrew_formula_installed zsh-vi-mode
+	ensure_homebrew_cask 1password "" "/Applications/1Password.app"
+	ensure_homebrew_cask 1password-cli op ""
+	ensure_homebrew_cask dotnet-sdk dotnet ""
+	ensure_homebrew_cask google-cloud-sdk gcloud ""
+	ensure_homebrew_cask wezterm wezterm "/Applications/WezTerm.app"
+
+	if [[ "${DOTFILES_MACOS_MANAGED_INSTALL_DOCKER:-0}" == "1" ]]; then
+		ensure_homebrew_cask docker docker "/Applications/Docker.app"
+	fi
+}
+
+write_macos_managed_mise_config() {
+	local target="$HOME/.config/mise/config.toml"
+	local tmp
+
+	mkdir -p "$(dirname "$target")"
+	tmp="$(mktemp)"
+	cat >"$tmp" <<'EOF'
+[settings]
+python.compile = false
+EOF
+
+	if [[ -f "$target" ]] && cmp -s "$target" "$tmp"; then
+		rm -f "$tmp"
+		return 0
+	fi
+	if [[ -e "$target" || -L "$target" ]]; then
+		backup_path "$target"
+	fi
+	mv "$tmp" "$target"
+	printf 'Wrote %s\n' "$target"
+}
+
+ensure_macos_managed_mise_tools() {
+	local update="${1:-0}"
+
+	if ! command_exists mise; then
+		return 0
+	fi
+
+	if [[ -f "$REPO_ROOT/.tool-versions" ]]; then
+		( cd "$REPO_ROOT" && mise --yes install )
+	fi
+	if [[ "$update" == "1" && -f "$REPO_ROOT/.tool-versions" ]]; then
+		( cd "$REPO_ROOT" && mise --yes upgrade )
+	fi
+}
+
+ensure_macos_managed_codex() {
+	if command_exists codex; then
+		return 0
+	fi
+
+	if ! command_exists npm; then
+		printf 'npm is required to install Codex on macos-managed.\n' >&2
+		return 1
+	fi
+
+	printf 'Codex CLI is not installed; installing @openai/codex@latest with npm...\n' >&2
+	npm install -g @openai/codex@latest >&2
+	hash -r
+	if ! command_exists codex; then
+		printf 'Codex CLI was not found after npm install. Open a new shell and retry.\n' >&2
+		return 1
+	fi
+}
+
 onepassword_cli_command() {
 	host_tool_command op
 }
@@ -351,7 +555,27 @@ ensure_1password() {
 		return 1
 	fi
 
+	ensure_1password_agent_link
 	ensure_1password_ssh_auth_sock_service
+}
+
+ensure_1password_agent_link() {
+	local target="$HOME/.1password/agent.sock"
+	local source
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		return 0
+	fi
+
+	source="$(onepassword_ssh_agent_sock)"
+	mkdir -p "$(dirname "$target")"
+	if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+		return 0
+	fi
+	if [[ -e "$target" && ! -L "$target" ]]; then
+		backup_path "$target"
+	fi
+	ln -sfn "$source" "$target"
 }
 
 dotfiles_hostd_label() {
@@ -779,6 +1003,47 @@ prime_macos_docker_neovim() {
 	'
 }
 
+prime_macos_managed_neovim() {
+	if [[ "${DOTFILES_MACOS_MANAGED_PRIME_NVIM:-1}" == "0" ]]; then
+		return 0
+	fi
+	if ! command_exists nvim; then
+		return 0
+	fi
+
+	local stamp_file="$HOME/.local/share/dotfiles/nvim-bootstrap.sha256"
+	local log_file="$HOME/.cache/dotfiles/nvim-bootstrap.log"
+	local lock_file="$HOME/.local/share/dotfiles/lazy-lock.json"
+	local config_root="$REPO_ROOT/nvim"
+	local stamp
+
+	[[ -d "$config_root" ]] || return 0
+	mkdir -p "$HOME/.cache/dotfiles" "$HOME/.local/share/dotfiles"
+
+	stamp="$(
+		find "$config_root" -type f -print0 |
+			sort -z |
+			xargs -0 shasum -a 256 |
+			shasum -a 256 |
+			awk '{print $1}'
+	)"
+
+	if [[ -f "$stamp_file" ]] && [[ "$(cat "$stamp_file")" == "$stamp" ]]; then
+		return 0
+	fi
+
+	printf 'Priming host Neovim plugins, Mason registry, and Treesitter parsers...\n'
+	cp "$config_root/lazy-lock.json" "$lock_file"
+	if DOTFILES_NVIM_AUTOMATION=1 DOTFILES_NVIM_LOCKFILE="$lock_file" nvim --headless "+set nomore" "+Lazy! restore" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa >"$log_file" 2>&1; then
+		printf '%s\n' "$stamp" >"$stamp_file"
+		return 0
+	fi
+
+	printf 'Neovim bootstrap failed. Last log lines from %s:\n' "$log_file" >&2
+	tail -n 80 "$log_file" >&2 || true
+	return 1
+}
+
 stage_path_if_exists() {
 	local source="$1"
 	local dest="$2"
@@ -909,6 +1174,60 @@ sync_macos_git_identity_to_container() {
 		chown -R 1000:1000 /home/alex/.config/git 2>/dev/null || true
 	'
 	rm -rf "$stage_dir"
+}
+
+restore_macos_docker_state_to_host() {
+	local container="${1:-$(macos_docker_container)}"
+	local docker_bin stage_dir backup_root copied=0
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		printf 'restore-container-state is intended to run from the macOS host.\n' >&2
+		return 1
+	fi
+	if ! docker_bin="$(docker_command 2>/dev/null)"; then
+		printf 'Docker CLI is not available. Start Docker Desktop or pass a different migration source manually.\n' >&2
+		return 1
+	fi
+	if ! "$docker_bin" info >/dev/null 2>&1; then
+		printf 'Docker Desktop is not reachable. Start Docker Desktop and retry.\n' >&2
+		return 1
+	fi
+	if ! "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
+		printf 'Container not found: %s\n' "$container" >&2
+		return 1
+	fi
+
+	"$docker_bin" start "$container" >/dev/null 2>&1 || true
+	stage_dir="$(mktemp -d)"
+	backup_root="$HOME/.backup_dotfiles/container-state-$(date +%Y%m%d%H%M%S)"
+
+	if "$docker_bin" exec "$container" /bin/bash -lc 'test -d ~/.codex' >/dev/null 2>&1; then
+		mkdir -p "$stage_dir/codex" "$HOME/.codex"
+		"$docker_bin" cp "$container:/home/alex/.codex/." "$stage_dir/codex/"
+		backup_copy_path "$HOME/.codex" "$backup_root"
+		rsync -a \
+			--exclude '/config.toml' \
+			--exclude '/rules/default.rules' \
+			"$stage_dir/codex/" "$HOME/.codex/"
+		copied=1
+		printf 'Restored Codex auth/session state from %s to %s\n' "$container" "$HOME/.codex"
+	fi
+
+	if "$docker_bin" exec "$container" /bin/bash -lc 'test -d ~/.config/gh' >/dev/null 2>&1; then
+		mkdir -p "$stage_dir/gh" "$HOME/.config/gh"
+		"$docker_bin" cp "$container:/home/alex/.config/gh/." "$stage_dir/gh/"
+		backup_copy_path "$HOME/.config/gh" "$backup_root"
+		rsync -a "$stage_dir/gh/" "$HOME/.config/gh/"
+		copied=1
+		printf 'Restored GitHub CLI state from %s to %s\n' "$container" "$HOME/.config/gh"
+	fi
+
+	rm -rf "$stage_dir"
+	if [[ "$copied" != "1" ]]; then
+		printf 'No .codex or .config/gh state was found in %s.\n' "$container" >&2
+		return 1
+	fi
+	printf 'Container state restore complete. Backup root: %s\n' "$backup_root"
 }
 
 hostd_error_response() {
@@ -1625,11 +1944,34 @@ shell_macos_docker() {
 	exec "$docker_bin" exec -it "$container" /bin/zsh -l
 }
 
+run_macos_managed() {
+	local update="${1:-0}"
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		printf 'macos-managed can only be applied on macOS.\n' >&2
+		return 1
+	fi
+
+	ensure_git_identity
+	ensure_macos_managed_homebrew_packages "$update"
+	ensure_1password
+	apply_macos_managed_links
+	write_macos_managed_mise_config
+	ensure_macos_managed_mise_tools "$update"
+	ensure_macos_managed_codex
+	prime_macos_managed_neovim
+	write_macos_host_profile macos-managed
+	printf 'macos-managed is ready. Open a new terminal or run: exec zsh -l\n'
+}
+
 apply_profile() {
 	local profile="$1"
 	local flake_ref
 
 	case "$profile" in
+		macos-managed)
+			run_macos_managed 0
+			;;
 		macos-docker)
 			run_macos_docker 0
 			;;
@@ -1833,6 +2175,8 @@ main() {
 			if ((update)); then
 				if [[ "$profile" == "macos-docker" ]]; then
 					run_macos_docker 1 1
+				elif [[ "$profile" == "macos-managed" ]]; then
+					run_macos_managed 1
 				else
 					run_update
 					run_check
@@ -1840,7 +2184,11 @@ main() {
 			elif ((recreate)) && [[ "$profile" == "macos-docker" ]]; then
 				run_macos_docker 1 0
 			fi
-			if [[ "$profile" != "macos-docker" || ( "$update" != "1" && "$recreate" != "1" ) ]]; then
+			if [[ "$profile" == "macos-docker" && ( "$update" == "1" || "$recreate" == "1" ) ]]; then
+				:
+			elif [[ "$profile" == "macos-managed" && "$update" == "1" ]]; then
+				:
+			else
 				apply_profile "$profile"
 			fi
 			if ((update)); then
@@ -1874,6 +2222,9 @@ main() {
 					exit 2
 					;;
 			esac
+			;;
+		restore-container-state)
+			restore_macos_docker_state_to_host "${1:-$(macos_docker_container)}"
 			;;
 		workshop-update)
 			run_workshop_update

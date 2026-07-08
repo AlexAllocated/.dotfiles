@@ -2,10 +2,10 @@
 
 ## Project Structure & Module Organization
 
-- `flake.nix` is the primary configuration entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles macOS.
+- `flake.nix` is the primary Nix entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles personal macOS. `macos-managed` in `scripts/dotctl` is the host-native company Mac path when Nix is not allowed.
 - `modules/home/`, `modules/nixos/`, `modules/darwin/`, and `modules/docker/` hold reusable Nix modules. `homeModules.*` is the public Home Manager module API. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
-- `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, and diagnostics.
+- `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, diagnostics, and the temporary Docker-to-host state restore.
 - The NixOS-WSL profile uses `alex` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Assets are under `images/`; helper binaries land in `bin/`. Root-level files are limited to active repo config and Home Manager sources.
@@ -15,6 +15,7 @@
 - `dotctl check` runs the flake checks when Nix is available.
 - `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation from inside the `NixOS` distro; restart the distro afterward.
 - `dotctl apply linux` applies the generic Linux Home Manager profile.
+- `dotctl apply macos-managed` applies host-native macOS setup with Homebrew and symlinks, no Nix.
 - `dotctl apply --update` refreshes repo-managed pins, runs flake checks, and reapplies the detected profile; `updoot` aliases to this in the Home Manager shell.
 - `./dot-bootstrap nixos-wsl` installs the side-by-side `NixOS` WSL distro.
 - `nix build .#docker-linux` builds the full Linux container image.

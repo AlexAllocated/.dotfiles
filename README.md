@@ -45,10 +45,12 @@ See `docs/nix-wsl-rollout.md` for the full WSL rollout and cutover notes.
 
 ### macOS
 
-This repo has three macOS tracks:
+This repo has four macOS tracks:
 
-- `macos-docker`: company-managed Macs, with plain host shell startup, host
-  WezTerm, and a locally built workshop container.
+- `macos-managed`: company-managed Macs where Nix is not allowed. Homebrew owns
+  host tools and this repo owns symlinks into the macOS home directory.
+- `macos-docker`: legacy Docker workshop flow. Keep this only until state has
+  been migrated back to the host.
 - `macos` / `macos-intel`: Home Manager-only profiles for Macs where Nix is
   allowed but nix-darwin is not.
 - `darwin-macos` / `darwin-macos-intel`: nix-darwin system profiles for a Mac
@@ -56,13 +58,48 @@ This repo has three macOS tracks:
 
 #### Company-managed Mac
 
-Use the Docker-backed profile here. It does not install Nix on macOS or manage
-system settings. The host stays intentionally minimal: Homebrew, 1Password,
-WezTerm, Docker Desktop, a `dotctl` link, and WezTerm config. Shell startup,
-prompt, Neovim, Codex, language tools, and the rest of the portable environment
-live in the Linux container. If missing, the profile installs Homebrew,
-1Password, 1Password CLI, WezTerm, and Docker Desktop, then uses a `nixos/nix`
-builder container to build the managed workshop image from this checkout.
+Use `macos-managed` here. It does not install Nix and does not put the daily dev
+environment inside Docker. The profile installs Homebrew-managed host tools,
+links shell/Git/Neovim/WezTerm/Codex config from this checkout, prompts for
+local Git identity, installs Codex with npm when missing, primes Neovim, and
+writes the macOS profile marker that keeps WezTerm opening a normal host shell.
+
+Bootstrap or refresh the host-native profile:
+
+```sh
+cd ~/.dotfiles
+./scripts/dotctl apply macos-managed
+./scripts/dotctl doctor
+```
+
+If you previously used the Docker workshop on this Mac, restore Codex
+auth/conversations and GitHub CLI auth from the container back to the host:
+
+```sh
+./scripts/macos/restore-container-state.sh
+# equivalent:
+./scripts/dotctl restore-container-state dotfiles-workshop
+```
+
+The restore command copies hidden files from container `~/.codex` and
+`~/.config/gh`, backs up existing host copies under `~/.backup_dotfiles`, and
+leaves repo-managed Codex config links alone.
+
+`dotctl apply --update macos-managed` updates Homebrew formulae, refreshes mise
+tools from `.tool-versions`, reinstalls missing host links, verifies Codex, and
+primes Neovim without requiring Nix.
+
+#### Legacy Docker Workshop
+
+The Docker-backed profile is retained temporarily for migration and for testing
+the portable image, but it is no longer the recommended long-lived Mac dev
+environment. It does not install Nix on macOS or manage system settings. The
+host stays intentionally minimal: Homebrew, 1Password, WezTerm, Docker Desktop,
+a `dotctl` link, and WezTerm config. Shell startup, prompt, Neovim, Codex,
+language tools, and the rest of the portable environment live in the Linux
+container. If missing, the profile installs Homebrew, 1Password, 1Password CLI,
+WezTerm, and Docker Desktop, then uses a `nixos/nix` builder container to build
+the managed workshop image from this checkout.
 
 Bootstrap or refresh the host links, host dependencies, Docker Desktop, and the
 managed container:
@@ -217,11 +254,14 @@ On Linux Home Manager and macOS hosts, the final apply command becomes
 `home-manager switch --flake "$HOME/.dotfiles#linux"` or
 `home-manager switch --flake "$HOME/.dotfiles#macos"`. On a personal Mac using
 nix-darwin, use `darwin-rebuild switch --flake "$HOME/.dotfiles#darwin-macos"`.
+On `macos-managed`, `dotctl apply --update` uses Homebrew, mise, npm, and
+Neovim directly because Nix is intentionally absent.
 
 Profile names:
 
 - `nixos-wsl`
 - `linux`
+- `macos-managed`
 - `macos-docker`
 - `macos`
 - `macos-intel`
