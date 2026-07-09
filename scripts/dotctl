@@ -239,6 +239,35 @@ EOF
 	printf 'Wrote Git identity to %s\n' "$identity"
 }
 
+ensure_dotfiles_remote() {
+	local desired="git@github.com:AlexAllocated/.dotfiles.git"
+	local current current_lower push_url push_lower
+
+	if ! command_exists git || ! git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		return 0
+	fi
+	if ! current="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null)"; then
+		return 0
+	fi
+
+	current_lower="$(printf '%s' "$current" | tr '[:upper:]' '[:lower:]')"
+	case "$current_lower" in
+		*github.com:beekeeperalex/.dotfiles* | *github.com/beekeeperalex/.dotfiles* | *github.com:chevcast/.dotfiles* | *github.com/chevcast/.dotfiles*)
+			printf 'Updating dotfiles origin remote from %s to %s\n' "$current" "$desired" >&2
+			git -C "$REPO_ROOT" remote set-url origin "$desired"
+			;;
+	esac
+
+	if push_url="$(git -C "$REPO_ROOT" remote get-url --push origin 2>/dev/null)"; then
+		push_lower="$(printf '%s' "$push_url" | tr '[:upper:]' '[:lower:]')"
+		case "$push_lower" in
+			*github.com:beekeeperalex/.dotfiles* | *github.com/beekeeperalex/.dotfiles* | *github.com:chevcast/.dotfiles* | *github.com/chevcast/.dotfiles*)
+				git -C "$REPO_ROOT" remote set-url --push origin "$desired" >/dev/null 2>&1 || true
+				;;
+		esac
+	fi
+}
+
 ensure_git_identity() {
 	local identity existing_name existing_email name email default_name default_email
 
@@ -283,18 +312,29 @@ ensure_git_identity() {
 	write_git_identity "$name" "$email"
 }
 
-ensure_homebrew() {
-	if command_exists brew; then
+load_homebrew_shellenv_if_present() {
+	local brew_bin
+
+	if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" && -x /opt/homebrew/bin/brew ]]; then
+		eval "$(/opt/homebrew/bin/brew shellenv)"
 		return 0
 	fi
 
-	if [[ -x /opt/homebrew/bin/brew ]]; then
-		eval "$(/opt/homebrew/bin/brew shellenv)"
+	if brew_bin="$(command -v brew 2>/dev/null)"; then
+		eval "$("$brew_bin" shellenv)"
 		return 0
 	fi
 
 	if [[ -x /usr/local/bin/brew ]]; then
 		eval "$(/usr/local/bin/brew shellenv)"
+		return 0
+	fi
+
+	return 1
+}
+
+ensure_homebrew() {
+	if load_homebrew_shellenv_if_present; then
 		return 0
 	fi
 
@@ -322,6 +362,25 @@ brew_noninteractive() {
 	HOMEBREW_NO_ASK=1 HOMEBREW_NO_ENV_HINTS=1 brew "$@"
 }
 
+remove_legacy_homebrew_taps() {
+	local legacy_taps=(
+		"jesseduffield/lazygit"
+		"oven-sh/bun"
+		"wez/wezterm-linuxbrew"
+		"wezterm/wezterm-linuxbrew"
+	)
+	local tapped tap
+
+	ensure_homebrew
+	tapped="$(brew tap 2>/dev/null || true)"
+	for tap in "${legacy_taps[@]}"; do
+		if printf '%s\n' "$tapped" | grep -qx "$tap"; then
+			printf 'Removing legacy Homebrew tap %s...\n' "$tap" >&2
+			brew_noninteractive untap "$tap" >/dev/null 2>&1 || printf 'Unable to untap %s; continuing.\n' "$tap" >&2
+		fi
+	done
+}
+
 ensure_wezterm() {
 	if command_exists wezterm || [[ -d /Applications/WezTerm.app ]]; then
 		return 0
@@ -335,7 +394,11 @@ ensure_wezterm() {
 host_tool_command() {
 	local cmd="$1"
 
-	if command_exists "$cmd"; then
+	if [[ "$(uname -s)" == "Darwin" && -x "/opt/homebrew/bin/$cmd" ]]; then
+		printf '/opt/homebrew/bin/%s\n' "$cmd"
+	elif [[ "$(uname -s)" == "Darwin" && -x "/usr/local/bin/$cmd" ]]; then
+		printf '/usr/local/bin/%s\n' "$cmd"
+	elif command_exists "$cmd"; then
 		command -v "$cmd"
 	elif [[ -x "/opt/homebrew/bin/$cmd" ]]; then
 		printf '/opt/homebrew/bin/%s\n' "$cmd"
@@ -350,12 +413,12 @@ ensure_homebrew_formula() {
 	local cmd="$1"
 	local formula="$2"
 
-	if host_tool_command "$cmd" >/dev/null 2>&1; then
+	ensure_homebrew
+	if brew list "$formula" >/dev/null 2>&1 && host_tool_command "$cmd" >/dev/null 2>&1; then
 		return 0
 	fi
 
-	ensure_homebrew
-	printf '%s is not installed; installing %s with Homebrew...\n' "$cmd" "$formula" >&2
+	printf '%s is not installed with Homebrew; installing %s...\n' "$cmd" "$formula" >&2
 	brew_noninteractive install "$formula" >&2
 
 	if ! host_tool_command "$cmd" >/dev/null 2>&1; then
@@ -405,6 +468,7 @@ ensure_macos_managed_homebrew_packages() {
 	fi
 
 	ensure_homebrew
+	remove_legacy_homebrew_taps
 	if [[ "$update" == "1" ]]; then
 		printf 'Updating Homebrew metadata and installed formulae...\n'
 		brew_noninteractive update >&2
@@ -435,7 +499,7 @@ ensure_macos_managed_homebrew_packages() {
 		"lua:lua"
 		"lynx:lynx"
 		"mise:mise"
-		"neovim:neovim"
+		"nvim:neovim"
 		"ninja:ninja"
 		"node:node"
 		"pkg-config:pkg-config"
@@ -511,8 +575,18 @@ ensure_macos_managed_mise_tools() {
 }
 
 ensure_macos_managed_codex() {
+	local update="${1:-0}"
+	local codex_path
+
 	if command_exists codex; then
-		return 0
+		codex_path="$(command -v codex)"
+	fi
+
+	if [[ "$update" != "1" && -n "${codex_path:-}" ]] && codex --version >/dev/null 2>&1; then
+		case "$codex_path" in
+			"$HOME/.bun/"* | "$HOME/.cache/.bun/"*) ;;
+			*) return 0 ;;
+		esac
 	fi
 
 	if ! command_exists npm; then
@@ -520,10 +594,21 @@ ensure_macos_managed_codex() {
 		return 1
 	fi
 
-	printf 'Codex CLI is not installed; installing @openai/codex@latest with npm...\n' >&2
+	if [[ "$update" == "1" ]]; then
+		printf 'Updating @openai/codex@latest with npm...\n' >&2
+	else
+		printf 'Codex CLI is not installed or is not runnable; installing @openai/codex@latest with npm...\n' >&2
+	fi
 	npm install -g @openai/codex@latest >&2
 	hash -r
-	if ! command_exists codex; then
+	if [[ -x /opt/homebrew/bin/codex ]]; then
+		mkdir -p "$HOME/.local/bin"
+		ln -sfn /opt/homebrew/bin/codex "$HOME/.local/bin/codex"
+	elif [[ -x /usr/local/bin/codex ]]; then
+		mkdir -p "$HOME/.local/bin"
+		ln -sfn /usr/local/bin/codex "$HOME/.local/bin/codex"
+	fi
+	if ! command_exists codex || ! codex --version >/dev/null 2>&1; then
 		printf 'Codex CLI was not found after npm install. Open a new shell and retry.\n' >&2
 		return 1
 	fi
@@ -843,6 +928,27 @@ ensure_dotfiles_hostd() {
 	return 1
 }
 
+disable_dotfiles_hostd() {
+	local label plist service_target
+
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		return 0
+	fi
+
+	label="$(dotfiles_hostd_label)"
+	plist="$HOME/Library/LaunchAgents/$label.plist"
+	service_target="gui/$(id -u)"
+
+	launchctl bootout "$service_target" "$plist" >/dev/null 2>&1 || true
+	launchctl bootout "$service_target/$label" >/dev/null 2>&1 || true
+	launchctl remove "$label" >/dev/null 2>&1 || true
+	if [[ -f "$plist" ]]; then
+		rm -f "$plist"
+		printf 'Disabled legacy dotfiles hostd service.\n'
+	fi
+	rm -f "$(dotfiles_hostd_runtime_dir)/hostd.sock" 2>/dev/null || true
+}
+
 docker_command() {
 	if command_exists docker; then
 		command -v docker
@@ -1004,10 +1110,12 @@ prime_macos_docker_neovim() {
 }
 
 prime_macos_managed_neovim() {
+	local nvim_bin
+
 	if [[ "${DOTFILES_MACOS_MANAGED_PRIME_NVIM:-1}" == "0" ]]; then
 		return 0
 	fi
-	if ! command_exists nvim; then
+	if ! nvim_bin="$(host_tool_command nvim 2>/dev/null)"; then
 		return 0
 	fi
 
@@ -1034,7 +1142,7 @@ prime_macos_managed_neovim() {
 
 	printf 'Priming host Neovim plugins, Mason registry, and Treesitter parsers...\n'
 	cp "$config_root/lazy-lock.json" "$lock_file"
-	if DOTFILES_NVIM_AUTOMATION=1 DOTFILES_NVIM_LOCKFILE="$lock_file" nvim --headless "+set nomore" "+Lazy! restore" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa >"$log_file" 2>&1; then
+	if DOTFILES_NVIM_AUTOMATION=1 DOTFILES_NVIM_LOCKFILE="$lock_file" "$nvim_bin" --headless "+set nomore" "+Lazy! restore" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa >"$log_file" 2>&1; then
 		printf '%s\n' "$stamp" >"$stamp_file"
 		return 0
 	fi
@@ -1968,12 +2076,14 @@ run_macos_managed() {
 	fi
 
 	ensure_git_identity
+	ensure_dotfiles_remote
 	ensure_macos_managed_homebrew_packages "$update"
+	disable_dotfiles_hostd
 	ensure_1password
 	apply_macos_managed_links
 	write_macos_managed_mise_config
 	ensure_macos_managed_mise_tools "$update"
-	ensure_macos_managed_codex
+	ensure_macos_managed_codex "$update"
 	prime_macos_managed_neovim
 	write_macos_host_profile macos-managed
 	printf 'macos-managed is ready. Open a new terminal or run: exec zsh -l\n'
@@ -2067,6 +2177,10 @@ run_doctor() {
 	local detected_profile
 	detected_profile="$(detect_profile)"
 
+	if [[ "$(uname -s)" == "Darwin" ]]; then
+		load_homebrew_shellenv_if_present >/dev/null 2>&1 || true
+	fi
+
 	printf 'dotfiles repo: %s\n' "$REPO_ROOT"
 	printf 'detected profile: %s\n' "$detected_profile"
 	printf 'uname: %s\n' "$(uname -a)"
@@ -2107,10 +2221,12 @@ run_doctor() {
 		else
 			printf '%-12s missing (%s)\n' "1p-ssh" "$(onepassword_ssh_agent_sock)"
 		fi
-		if run_host_client ping >/dev/null 2>&1; then
+		if [[ "$detected_profile" == "macos-docker" ]] && run_host_client ping >/dev/null 2>&1; then
 			printf '%-12s 127.0.0.1:%s\n' "hostd" "$(dotfiles_hostd_port)"
-		else
+		elif [[ "$detected_profile" == "macos-docker" ]]; then
 			printf '%-12s missing (127.0.0.1:%s)\n' "hostd" "$(dotfiles_hostd_port)"
+		elif run_host_client ping >/dev/null 2>&1; then
+			printf '%-12s stale-running (127.0.0.1:%s)\n' "hostd" "$(dotfiles_hostd_port)"
 		fi
 	elif [[ "$detected_profile" == "macos-docker" ]]; then
 		if [[ -S /run/host-services/ssh-auth.sock ]]; then
