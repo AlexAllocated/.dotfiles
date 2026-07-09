@@ -105,6 +105,9 @@ elseif wezterm.target_triple:match("darwin") then
 		config.default_prog = macos_docker_shell()
 		config.default_cwd = home
 		config.exit_behavior = "Hold"
+	elseif managed_profile == "macos-managed" then
+		config.default_prog = { "/bin/zsh", "-l" }
+		config.default_cwd = home
 	end
 end
 

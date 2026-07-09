@@ -2120,6 +2120,7 @@ run_macos_managed() {
 
 	ensure_git_identity
 	ensure_dotfiles_remote
+	write_macos_host_profile macos-managed
 	ensure_macos_managed_homebrew_packages "$update"
 	disable_dotfiles_hostd
 	ensure_1password
@@ -2128,7 +2129,6 @@ run_macos_managed() {
 	ensure_macos_managed_mise_tools "$update"
 	ensure_macos_managed_codex "$update"
 	prime_macos_managed_neovim
-	write_macos_host_profile macos-managed
 	printf 'macos-managed is ready. Open a new terminal or run: exec zsh -l\n'
 }
 
