@@ -26,7 +26,7 @@ Commands:
   shell [profile]              Open an interactive shell for a container profile.
   import-host-state [profile]  Copy host auth/config state into a container profile.
   restore-container-state [container]
-                               Copy Codex and GitHub CLI state from a container to the host.
+                               Copy Codex/GitHub CLI state back to the host and rewrite Codex paths.
   workshop-update              Rebuild a workshop image from the current checkout.
   host <ping|op ...>           Run an allowlisted macOS host integration command.
   update                       Update all repo-managed pins.
@@ -1179,6 +1179,7 @@ sync_macos_git_identity_to_container() {
 restore_macos_docker_state_to_host() {
 	local container="${1:-$(macos_docker_container)}"
 	local docker_bin stage_dir backup_root copied=0
+	local host_code_root python_bin
 
 	if [[ "$(uname -s)" != "Darwin" ]]; then
 		printf 'restore-container-state is intended to run from the macOS host.\n' >&2
@@ -1200,10 +1201,24 @@ restore_macos_docker_state_to_host() {
 	"$docker_bin" start "$container" >/dev/null 2>&1 || true
 	stage_dir="$(mktemp -d)"
 	backup_root="$HOME/.backup_dotfiles/container-state-$(date +%Y%m%d%H%M%S)"
+	host_code_root="$(macos_docker_work_root)"
 
 	if "$docker_bin" exec "$container" /bin/bash -lc 'test -d ~/.codex' >/dev/null 2>&1; then
 		mkdir -p "$stage_dir/codex" "$HOME/.codex"
 		"$docker_bin" cp "$container:/home/alex/.codex/." "$stage_dir/codex/"
+		if ! python_bin="$(host_tool_command python3 2>/dev/null)"; then
+			printf 'python3 is required to rewrite restored Codex conversation paths. Run dotctl apply macos-managed first, then retry restore-container-state.\n' >&2
+			rm -rf "$stage_dir"
+			return 1
+		fi
+		"$python_bin" "$REPO_ROOT/scripts/codex/rewrite-host-paths.py" \
+			--codex-root "$stage_dir/codex" \
+			--old-home /home/alex \
+			--new-home "$HOME" \
+			--old-dotfiles /home/alex/.dotfiles \
+			--new-dotfiles "$REPO_ROOT" \
+			--old-code /home/alex/code \
+			--new-code "$host_code_root"
 		backup_copy_path "$HOME/.codex" "$backup_root"
 		rsync -a \
 			--exclude '/config.toml' \

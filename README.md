@@ -73,7 +73,8 @@ cd ~/.dotfiles
 ```
 
 If you previously used the Docker workshop on this Mac, restore Codex
-auth/conversations and GitHub CLI auth from the container back to the host:
+auth/conversations and GitHub CLI auth from the container back to the host after
+the `macos-managed` apply has installed the host tools:
 
 ```sh
 ./scripts/macos/restore-container-state.sh
@@ -83,7 +84,9 @@ auth/conversations and GitHub CLI auth from the container back to the host:
 
 The restore command copies hidden files from container `~/.codex` and
 `~/.config/gh`, backs up existing host copies under `~/.backup_dotfiles`, and
-leaves repo-managed Codex config links alone.
+leaves repo-managed Codex config links alone. During the Codex restore, it
+rewrites restored conversation JSONL files and `state_5.sqlite` thread metadata
+from container paths such as `/home/alex/code` to host paths such as `~/code`.
 
 `dotctl apply --update macos-managed` updates Homebrew formulae, refreshes mise
 tools from `.tool-versions`, reinstalls missing host links, verifies Codex, and

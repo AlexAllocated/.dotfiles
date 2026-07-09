@@ -5,7 +5,7 @@
 - `flake.nix` is the primary Nix entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles personal macOS. `macos-managed` in `scripts/dotctl` is the host-native company Mac path when Nix is not allowed.
 - `modules/home/`, `modules/nixos/`, `modules/darwin/`, and `modules/docker/` hold reusable Nix modules. `homeModules.*` is the public Home Manager module API. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
-- `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, diagnostics, and the temporary Docker-to-host state restore.
+- `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, diagnostics, and the temporary Docker-to-host state restore that rewrites Codex conversation paths.
 - The NixOS-WSL profile uses `alex` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Assets are under `images/`; helper binaries land in `bin/`. Root-level files are limited to active repo config and Home Manager sources.
