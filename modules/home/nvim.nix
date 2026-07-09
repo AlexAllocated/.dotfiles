@@ -13,6 +13,7 @@ in
       git
       gnumake
       lua
+      marksman
       neovim
       nodejs
       python3

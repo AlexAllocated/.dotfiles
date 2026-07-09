@@ -165,6 +165,7 @@ let
       k9s
       kubectl
       lynx
+      marksman
       mise
       ninja
       pkg-config

@@ -498,6 +498,7 @@ ensure_macos_managed_homebrew_packages() {
 		"lazygit:lazygit"
 		"lua:lua"
 		"lynx:lynx"
+		"marksman:marksman"
 		"mise:mise"
 		"nvim:neovim"
 		"ninja:ninja"

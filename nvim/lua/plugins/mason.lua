@@ -11,6 +11,7 @@ return {
 		"MasonLog",
 	},
 	opts = function(_, opts)
+		opts.PATH = "append"
 		opts.ensure_installed = opts.ensure_installed or {}
 		if not vim.tbl_contains(opts.ensure_installed, "rust-analyzer") then
 			table.insert(opts.ensure_installed, "rust-analyzer")
