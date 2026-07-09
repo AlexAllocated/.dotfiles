@@ -511,7 +511,7 @@ ensure_macos_managed_homebrew_packages() {
 		"shellcheck:shellcheck"
 		"stylua:stylua"
 		"tree:tree"
-		"tree-sitter:tree-sitter"
+		"tree-sitter:tree-sitter-cli"
 		"wget:wget"
 		"zoxide:zoxide"
 	)
@@ -2121,11 +2121,11 @@ run_macos_managed() {
 	ensure_git_identity
 	ensure_dotfiles_remote
 	write_macos_host_profile macos-managed
+	apply_macos_managed_links
+	write_macos_managed_mise_config
 	ensure_macos_managed_homebrew_packages "$update"
 	disable_dotfiles_hostd
 	ensure_1password
-	apply_macos_managed_links
-	write_macos_managed_mise_config
 	ensure_macos_managed_mise_tools "$update"
 	ensure_macos_managed_codex "$update"
 	prime_macos_managed_neovim
