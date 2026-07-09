@@ -50,6 +50,7 @@
 ## Environment & Security
 
 - Never commit personal secrets or machine-specific IDs; use placeholders and document required env vars in `README.md`.
+- On `macos-managed`, prefer Homebrew for host tools and language runtimes whenever a suitable formula/cask exists. npm-registry CLI tools that are not Homebrew-managed should be installed with Bun, not npm globals.
 - Shell startup must not run interactive authentication. Keep 1Password, GitHub, and other credential refreshes behind explicit commands such as `op` or `gh auth login`.
 - Git aliases and shared behavior are tracked, but Git author identity is local in `~/.config/git/identity`; `dotctl apply` should prompt for it on new setups or accept `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 

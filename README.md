@@ -61,8 +61,10 @@ This repo has four macOS tracks:
 Use `macos-managed` here. It does not install Nix and does not put the daily dev
 environment inside Docker. The profile installs Homebrew-managed host tools,
 links shell/Git/Neovim/WezTerm/Codex config from this checkout, prompts for
-local Git identity, installs Codex with npm when missing, primes Neovim, and
+local Git identity, installs Codex with Bun when missing, primes Neovim, and
 writes the macOS profile marker that keeps WezTerm opening a normal host shell.
+Homebrew is preferred for host tools and language runtimes; Bun owns npm-registry
+CLI installs when Homebrew is not the right source.
 
 Bootstrap or refresh the host-native profile:
 
@@ -88,9 +90,10 @@ leaves repo-managed Codex config links alone. During the Codex restore, it
 rewrites restored conversation JSONL files and `state_5.sqlite` thread metadata
 from container paths such as `/home/alex/code` to host paths such as `~/code`.
 
-`dotctl apply --update macos-managed` updates Homebrew formulae, refreshes mise
-tools from `.tool-versions`, reinstalls missing host links, verifies Codex, and
-primes Neovim without requiring Nix.
+`dotctl apply --update macos-managed` updates Homebrew formulae, refreshes
+Bun-managed Codex, reinstalls missing host links, verifies Codex, and primes
+Neovim without requiring Nix. Set `DOTFILES_MACOS_MANAGED_MISE_TOOLS=1` if you
+explicitly want this profile to install repo-level `.tool-versions` with mise.
 
 #### Legacy Docker Workshop
 
@@ -257,8 +260,8 @@ On Linux Home Manager and macOS hosts, the final apply command becomes
 `home-manager switch --flake "$HOME/.dotfiles#linux"` or
 `home-manager switch --flake "$HOME/.dotfiles#macos"`. On a personal Mac using
 nix-darwin, use `darwin-rebuild switch --flake "$HOME/.dotfiles#darwin-macos"`.
-On `macos-managed`, `dotctl apply --update` uses Homebrew, mise, npm, and
-Neovim directly because Nix is intentionally absent.
+On `macos-managed`, `dotctl apply --update` uses Homebrew, Bun, and Neovim
+directly because Nix is intentionally absent.
 
 Profile names:
 

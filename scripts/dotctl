@@ -184,7 +184,7 @@ apply_macos_managed_links() {
 	link_path "$HOME/.zshrc" "$REPO_ROOT/.zshrc"
 	link_path "$HOME/.gitconfig" "$REPO_ROOT/.gitconfig"
 	link_path "$HOME/.p10k.zsh" "$REPO_ROOT/.p10k.zsh"
-	link_path "$HOME/.tool-versions" "$REPO_ROOT/.tool-versions"
+	remove_repo_link "$HOME/.tool-versions" "$REPO_ROOT/.tool-versions"
 	link_path "$HOME/.wezterm.lua" "$REPO_ROOT/.wezterm.lua"
 	link_path "$HOME/rustfmt.toml" "$REPO_ROOT/rustfmt.toml"
 	link_path "$HOME/.config/nvim" "$REPO_ROOT/nvim"
@@ -562,6 +562,9 @@ EOF
 ensure_macos_managed_mise_tools() {
 	local update="${1:-0}"
 
+	if [[ "${DOTFILES_MACOS_MANAGED_MISE_TOOLS:-0}" != "1" ]]; then
+		return 0
+	fi
 	if ! command_exists mise; then
 		return 0
 	fi
@@ -574,42 +577,82 @@ ensure_macos_managed_mise_tools() {
 	fi
 }
 
+codex_path_is_bun_managed() {
+	local path="$1"
+	local target
+
+	case "$path" in
+		"$HOME/.bun/"* | "$HOME/.cache/.bun/"*)
+			return 0
+			;;
+		"$HOME/.local/bin/codex")
+			if [[ -L "$path" ]]; then
+				target="$(readlink "$path")"
+				case "$target" in
+					"$HOME/.bun/"* | "$HOME/.cache/.bun/"*) return 0 ;;
+				esac
+			fi
+			;;
+	esac
+
+	return 1
+}
+
+remove_legacy_npm_codex_shims() {
+	local shim target
+
+	for shim in /opt/homebrew/bin/codex /usr/local/bin/codex; do
+		[[ -L "$shim" ]] || continue
+		target="$(readlink "$shim")"
+		case "$target" in
+			*"/lib/node_modules/@openai/codex/"* | "../lib/node_modules/@openai/codex/"*)
+				if rm -f "$shim" 2>/dev/null; then
+					printf 'Removed legacy npm Codex shim: %s\n' "$shim" >&2
+				else
+					printf 'Unable to remove legacy npm Codex shim: %s\n' "$shim" >&2
+				fi
+				;;
+		esac
+	done
+}
+
 ensure_macos_managed_codex() {
 	local update="${1:-0}"
-	local codex_path
+	local bun_bin bun_global_bin codex_path
 
 	if command_exists codex; then
 		codex_path="$(command -v codex)"
 	fi
 
-	if [[ "$update" != "1" && -n "${codex_path:-}" ]] && codex --version >/dev/null 2>&1; then
-		case "$codex_path" in
-			"$HOME/.bun/"* | "$HOME/.cache/.bun/"*) ;;
-			*) return 0 ;;
-		esac
+	if [[ "$update" != "1" && -n "${codex_path:-}" ]] && codex_path_is_bun_managed "$codex_path" && codex --version >/dev/null 2>&1; then
+		return 0
 	fi
 
-	if ! command_exists npm; then
-		printf 'npm is required to install Codex on macos-managed.\n' >&2
+	if ! bun_bin="$(host_tool_command bun 2>/dev/null)"; then
+		printf 'Bun is required to install Codex on macos-managed.\n' >&2
 		return 1
 	fi
+	bun_global_bin="$("$bun_bin" pm bin -g 2>/dev/null || printf '%s/.bun/bin\n' "$HOME")"
+	mkdir -p "$bun_global_bin" "$HOME/.local/bin"
 
 	if [[ "$update" == "1" ]]; then
-		printf 'Updating @openai/codex@latest with npm...\n' >&2
+		printf 'Updating @openai/codex@latest with Bun...\n' >&2
 	else
-		printf 'Codex CLI is not installed or is not runnable; installing @openai/codex@latest with npm...\n' >&2
+		printf 'Codex CLI is not installed or is not Bun-managed; installing @openai/codex@latest with Bun...\n' >&2
 	fi
-	npm install -g @openai/codex@latest >&2
+	"$bun_bin" add --global @openai/codex@latest >&2
 	hash -r
-	if [[ -x /opt/homebrew/bin/codex ]]; then
-		mkdir -p "$HOME/.local/bin"
-		ln -sfn /opt/homebrew/bin/codex "$HOME/.local/bin/codex"
-	elif [[ -x /usr/local/bin/codex ]]; then
-		mkdir -p "$HOME/.local/bin"
-		ln -sfn /usr/local/bin/codex "$HOME/.local/bin/codex"
+	if [[ -x "$bun_global_bin/codex" ]]; then
+		ln -sfn "$bun_global_bin/codex" "$HOME/.local/bin/codex"
 	fi
-	if ! command_exists codex || ! codex --version >/dev/null 2>&1; then
-		printf 'Codex CLI was not found after npm install. Open a new shell and retry.\n' >&2
+	remove_legacy_npm_codex_shims
+	if [[ -x "$bun_global_bin/codex" ]]; then
+		"$bun_global_bin/codex" --version >/dev/null 2>&1 || {
+			printf 'Bun-managed Codex was installed but is not runnable: %s\n' "$bun_global_bin/codex" >&2
+			return 1
+		}
+	elif ! command_exists codex || ! codex_path_is_bun_managed "$(command -v codex)" || ! codex --version >/dev/null 2>&1; then
+		printf 'Codex CLI was not found after Bun install. Open a new shell and retry.\n' >&2
 		return 1
 	fi
 }

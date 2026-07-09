@@ -5,13 +5,25 @@ if [[ -n "${DOTFILES_ZPROFILE_LOADED:-}" ]]; then
 fi
 export DOTFILES_ZPROFILE_LOADED=1
 
-dotfiles_prepend_path() {
+dotfiles_append_path() {
 	local dir="$1"
 	[[ -d "$dir" ]] || return 0
 	case ":$PATH:" in
 		*":$dir:"*) ;;
-		*) export PATH="$dir:$PATH" ;;
+		*) export PATH="$PATH:$dir" ;;
 	esac
+}
+
+dotfiles_load_homebrew() {
+	if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" && -x /opt/homebrew/bin/brew ]]; then
+		eval "$(/opt/homebrew/bin/brew shellenv)"
+	elif command -v brew >/dev/null 2>&1; then
+		eval "$(brew shellenv)"
+	elif [[ -x /usr/local/bin/brew ]]; then
+		eval "$(/usr/local/bin/brew shellenv)"
+	elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+		eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+	fi
 }
 
 [[ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]] &&
@@ -19,27 +31,21 @@ dotfiles_prepend_path() {
 [[ -r "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" ]] &&
 	source "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh"
 
-if command -v brew >/dev/null 2>&1; then
-	eval "$(brew shellenv)"
-elif [[ -x /opt/homebrew/bin/brew ]]; then
-	eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ -x /usr/local/bin/brew ]]; then
-	eval "$(/usr/local/bin/brew shellenv)"
-elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
-	eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
+dotfiles_load_homebrew
 
 if command -v mise >/dev/null 2>&1; then
 	eval "$(mise activate zsh)"
 fi
 
-dotfiles_prepend_path "$HOME/.bun/bin"
-dotfiles_prepend_path "$HOME/.cache/.bun/bin"
-dotfiles_prepend_path "$HOME/.volta/bin"
-dotfiles_prepend_path "$HOME/.cargo/bin"
-dotfiles_prepend_path "$HOME/.local/bin"
-dotfiles_prepend_path "$HOME/bin"
-dotfiles_prepend_path "$HOME/go/bin"
+dotfiles_append_path "$HOME/.local/bin"
+dotfiles_append_path "$HOME/bin"
+dotfiles_append_path "$HOME/.bun/bin"
+dotfiles_append_path "$HOME/.cache/.bun/bin"
+dotfiles_append_path "$HOME/.cargo/bin"
+dotfiles_append_path "$HOME/go/bin"
+dotfiles_append_path "$HOME/.volta/bin"
+
+dotfiles_load_homebrew
 
 [[ -r "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
@@ -53,7 +59,7 @@ load_dotfiles_env_file() {
 }
 load_dotfiles_env_file "$HOME/.dotfiles/.env"
 
-unset -f dotfiles_prepend_path load_dotfiles_env_file
+unset -f dotfiles_append_path dotfiles_load_homebrew load_dotfiles_env_file
 
 export EDITOR="${EDITOR:-nvim}"
 export HOMEBREW_NO_ENV_HINTS=1
