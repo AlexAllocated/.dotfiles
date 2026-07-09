@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import shutil
-import sqlite3
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -106,65 +105,6 @@ def rewrite_jsonl_file(path: Path, replacements: list[tuple[str, str]]) -> tuple
 	return lines_changed, bytes_changed
 
 
-def quote_identifier(identifier: str) -> str:
-	return '"' + identifier.replace('"', '""') + '"'
-
-
-def rewrite_sqlite_file(path: Path, replacements: list[tuple[str, str]]) -> tuple[int, int]:
-	rows_changed = 0
-	cells_changed = 0
-
-	connection = sqlite3.connect(str(path))
-	try:
-		connection.execute("PRAGMA busy_timeout=5000")
-		tables = [
-			row[0]
-			for row in connection.execute(
-				"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-			)
-		]
-		for table in tables:
-			columns = [
-				row[1]
-				for row in connection.execute(f"PRAGMA table_info({quote_identifier(table)})")
-				if "TEXT" in (row[2] or "").upper()
-			]
-			if not columns:
-				continue
-
-			table_sql = quote_identifier(table)
-			column_sql = ", ".join(quote_identifier(column) for column in columns)
-			select_sql = f"SELECT rowid, {column_sql} FROM {table_sql}"
-			for row in connection.execute(select_sql):
-				rowid = row[0]
-				updates: list[tuple[str, str]] = []
-				for column, value in zip(columns, row[1:]):
-					if not isinstance(value, str) or not contains_old_path(value, replacements):
-						continue
-					new_value = rewrite_string(value, replacements)
-					if new_value != value:
-						updates.append((column, new_value))
-
-				if not updates:
-					continue
-
-				assignments = ", ".join(f"{quote_identifier(column)} = ?" for column, _ in updates)
-				values = [value for _, value in updates]
-				connection.execute(f"UPDATE {table_sql} SET {assignments} WHERE rowid = ?", [*values, rowid])
-				rows_changed += 1
-				cells_changed += len(updates)
-
-		if rows_changed:
-			connection.commit()
-			connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-		else:
-			connection.rollback()
-	finally:
-		connection.close()
-
-	return rows_changed, cells_changed
-
-
 def conversation_jsonl_files(codex_root: Path) -> list[Path]:
 	files: list[Path] = []
 	history = codex_root / "history.jsonl"
@@ -176,10 +116,6 @@ def conversation_jsonl_files(codex_root: Path) -> list[Path]:
 		files.extend(sorted(sessions.rglob("*.jsonl")))
 
 	return files
-
-
-def state_sqlite_files(codex_root: Path) -> list[Path]:
-	return [path for path in [codex_root / "state_5.sqlite", codex_root / "sqlite/state_5.sqlite"] if path.is_file()]
 
 
 def main() -> int:
@@ -195,9 +131,6 @@ def main() -> int:
 
 	jsonl_files_changed = 0
 	jsonl_lines_changed = 0
-	sqlite_files_changed = 0
-	sqlite_rows_changed = 0
-	sqlite_cells_changed = 0
 
 	for path in conversation_jsonl_files(codex_root):
 		lines_changed, _ = rewrite_jsonl_file(path, replacements)
@@ -205,21 +138,13 @@ def main() -> int:
 			jsonl_files_changed += 1
 			jsonl_lines_changed += lines_changed
 
-	for path in state_sqlite_files(codex_root):
-		rows_changed, cells_changed = rewrite_sqlite_file(path, replacements)
-		if rows_changed:
-			sqlite_files_changed += 1
-			sqlite_rows_changed += rows_changed
-			sqlite_cells_changed += cells_changed
-
-	if not any([jsonl_files_changed, sqlite_files_changed]):
+	if not jsonl_files_changed:
 		print("No container Codex paths found to rewrite.")
 		return 0
 
 	print(
 		"Rewrote Codex host paths: "
-		f"{jsonl_lines_changed} JSONL lines across {jsonl_files_changed} files; "
-		f"{sqlite_rows_changed} SQLite rows / {sqlite_cells_changed} cells across {sqlite_files_changed} files."
+		f"{jsonl_lines_changed} JSONL lines across {jsonl_files_changed} files."
 	)
 	return 0
 

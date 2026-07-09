@@ -1374,6 +1374,11 @@ restore_macos_docker_state_to_host() {
 		rsync -a \
 			--exclude '/config.toml' \
 			--exclude '/rules/default.rules' \
+			--exclude '*.sqlite' \
+			--exclude '*.sqlite-shm' \
+			--exclude '*.sqlite-wal' \
+			--exclude '/sqlite/' \
+			--exclude '/db-backups/' \
 			"$stage_dir/codex/" "$HOME/.codex/"
 		copied=1
 		printf 'Restored Codex auth/session state from %s to %s\n' "$container" "$HOME/.codex"

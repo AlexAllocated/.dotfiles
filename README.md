@@ -87,8 +87,10 @@ the `macos-managed` apply has installed the host tools:
 The restore command copies hidden files from container `~/.codex` and
 `~/.config/gh`, backs up existing host copies under `~/.backup_dotfiles`, and
 leaves repo-managed Codex config links alone. During the Codex restore, it
-rewrites restored conversation JSONL files and `state_5.sqlite` thread metadata
-from container paths such as `/home/alex/code` to host paths such as `~/code`.
+rewrites restored conversation JSONL files from container paths such as
+`/home/alex/code` to host paths such as `~/code`. It intentionally does not
+restore copied Codex SQLite databases; Codex rebuilds those local indexes from
+the restored saved data.
 
 `dotctl apply --update macos-managed` updates Homebrew formulae, refreshes
 Bun-managed Codex, reinstalls missing host links, verifies Codex, and primes
