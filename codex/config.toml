@@ -14,6 +14,9 @@ web_search = true
 theme = "gruvbox-dark"
 status_line = ["model-with-reasoning", "current-dir", "context-remaining", "git-branch", "five-hour-limit", "weekly-limit", "task-progress"]
 
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
 [notice]
 hide_gpt5_1_migration_prompt = true
 "hide_gpt-5.1-codex-max_migration_prompt" = true
@@ -26,6 +29,7 @@ hide_rate_limit_model_nudge = true
 
 [features]
 memories = true
+prevent_idle_sleep = true
 
 [plugins."cloudflare@openai-curated"]
 enabled = true
@@ -45,6 +49,24 @@ enabled = true
 [plugins."stripe@openai-curated"]
 enabled = true
 
+[plugins."linear@openai-curated"]
+enabled = true
+
 [memories]
 use_memories = true
 generate_memories = true
+
+[projects."/home/alex/code"]
+trust_level = "trusted"
+
+[projects."/home/alex"]
+trust_level = "trusted"
+
+[projects."/home/alex/.dotfiles"]
+trust_level = "trusted"
+
+[projects."/Users/alexford/code"]
+trust_level = "trusted"
+
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"
