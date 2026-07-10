@@ -4,6 +4,5 @@ let
 in
 {
   imports = [ ./core.nix ];
-
-  config.home.packages = toolsets.cloud;
+  config.home.packages = toolsets.foundation;
 }

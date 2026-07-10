@@ -59,8 +59,6 @@ config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
 -- config.window_padding = { left = 10, right = 10, top = 25, bottom = 10 }
 config.window_padding = { left = 0, right = 0, top = 10, bottom = 0 }
 
--- Determine system path.
-local wallpaper_path = "~/.dotfiles/images/wezterm-wallpapers/"
 if wezterm.target_triple:match("windows") then
 	local available = {}
 	for _, domain in ipairs(wezterm.default_wsl_domains()) do
@@ -70,83 +68,15 @@ if wezterm.target_triple:match("windows") then
 	config.wsl_domains = {}
 	local nixos = available.NixOS
 	if nixos then
-		nixos.username = "alex"
-		nixos.default_cwd = "/home/alex"
 		table.insert(config.wsl_domains, nixos)
 		config.default_domain = nixos.name
 	end
-	config.default_cwd = "/home/alex"
-	wallpaper_path = "\\\\wsl.localhost\\NixOS\\home\\alex\\.dotfiles\\images\\wezterm-wallpapers\\"
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
 elseif wezterm.target_triple:match("darwin") then
-	local home = os.getenv("HOME") or "/Users/alexford"
-	local dotctl = home .. "/.dotfiles/scripts/dotctl"
-	wallpaper_path = home .. "/.dotfiles/images/wezterm-wallpapers/"
-
-	local function macos_docker_shell()
-		return { "/bin/bash", dotctl, "shell", "macos-docker" }
-	end
-
-	local managed_profile = nil
-	local profile_file = io.open(home .. "/.local/share/dotfiles/profile", "r")
-	if profile_file then
-		managed_profile = profile_file:read("*l")
-		profile_file:close()
-	end
-
-	config.launch_menu = config.launch_menu or {}
-	table.insert(config.launch_menu, {
-		label = "Dotfiles Docker",
-		args = macos_docker_shell(),
-	})
-
-	if managed_profile == "macos-docker" and os.getenv("DOTFILES_WEZTERM_HOST_SHELL") ~= "1" then
-		config.default_prog = macos_docker_shell()
-		config.default_cwd = home
-		config.exit_behavior = "Hold"
-	elseif managed_profile == "macos-managed" then
-		config.default_prog = { "/bin/zsh", "-l" }
-		config.default_cwd = home
-	end
+	local home = os.getenv("HOME") or "."
+	config.default_prog = { "/bin/zsh", "-l" }
+	config.default_cwd = home
 end
-
-local function get_random_wallpaper()
-	-- Get random wallpaper image.
-	local wallpapers = wezterm.read_dir(wallpaper_path)
-	if #wallpapers > 0 then
-		math.randomseed(os.time())
-		return wallpapers[math.random(#wallpapers)]
-	end
-	return nil
-end
-
--- if wallpaper then
--- config.background = {
--- 	{
--- 		source = {
--- 			-- File = wallpaper_path .. "svgmeadow.png",
--- 			File = get_random_wallpaper(),
--- 		},
--- 		opacity = 1,
--- 		attachment = "Fixed",
--- 		repeat_x = "NoRepeat",
--- 		repeat_y = "NoRepeat",
--- 		vertical_align = "Bottom",
--- 		horizontal_align = "Center",
--- 		height = "Cover",
--- 		width = "Cover",
--- 	},
--- 	{
--- 		source = {
--- 			-- Color = "#000000",
--- 			Color = color_schemes[config.color_scheme].background,
--- 		},
--- 		opacity = 0.9,
--- 		width = "100%",
--- 		height = "100%",
--- 	},
--- }
--- end
 
 return config

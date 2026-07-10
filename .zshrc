@@ -84,8 +84,4 @@ alias ll="eza --color=always --all --long --git --icons=always --no-time --no-pe
 alias nv="nvim"
 alias vi="nvim"
 alias vim="nvim"
-if [[ "${DOTFILES_WORKSHOP:-0}" == "1" ]]; then
-	alias updoot="dotctl workshop-update"
-else
-	alias updoot="dotctl apply --update"
-fi
+alias updoot="dotctl apply --update"

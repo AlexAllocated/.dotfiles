@@ -1,0 +1,17 @@
+[formatter.nix]
+command = "nixfmt"
+includes = ["**/*.nix"]
+
+[formatter.shell]
+command = "shfmt"
+options = ["-w", "-i", "0", "-ci"]
+includes = ["dot-bootstrap", "scripts/dotctl", "scripts/**/*.sh", "tests/*.bash"]
+
+[formatter.lua]
+command = "stylua"
+includes = ["**/*.lua"]
+
+[formatter.prettier]
+command = "prettier"
+options = ["--write"]
+includes = ["**/*.md", "**/*.json", "**/*.yaml", "**/*.yml"]

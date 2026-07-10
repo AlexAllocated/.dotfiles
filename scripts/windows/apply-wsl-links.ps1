@@ -1,6 +1,6 @@
 param(
    [string]$DistroName = "NixOS",
-   [string]$LinuxHome = "/home/alex"
+   [string]$LinuxHome = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,8 +45,19 @@ function Set-Symlink {
       New-Item -ItemType Directory -Force -Path $parent | Out-Null
    }
 
-   if (Test-Path -LiteralPath $LinkPath) {
-      Remove-Item -LiteralPath $LinkPath -Recurse -Force
+   $existing = Get-Item -LiteralPath $LinkPath -Force -ErrorAction SilentlyContinue
+   if ($existing -and $existing.LinkType -eq "SymbolicLink" -and $existing.Target -contains $TargetPath) {
+      return
+   }
+
+   if ($existing) {
+      $stamp = Get-Date -Format "yyyyMMddHHmmss"
+      $backupRoot = Join-Path $env:USERPROFILE ".backup_dotfiles\windows-$stamp"
+      New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+      $backupName = ($Name -replace '[^A-Za-z0-9._-]', '-')
+      $backupPath = Join-Path $backupRoot $backupName
+      Move-Item -LiteralPath $LinkPath -Destination $backupPath -Force
+      Write-Host "Backed up $Name to $backupPath"
    }
 
    Write-Host "Linking $Name"
@@ -54,6 +65,14 @@ function Set-Symlink {
 }
 
 Assert-SymlinkCreationAvailable
+
+if (-not $LinuxHome) {
+   $LinuxHome = (& wsl.exe -d $DistroName -e sh -lc 'printf %s "$HOME"') -replace "`0", ""
+   $LinuxHome = $LinuxHome.Trim()
+   if (-not $LinuxHome.StartsWith("/")) {
+      throw "Could not detect the default Linux home for '$DistroName'. Pass -LinuxHome explicitly."
+   }
+}
 
 Set-Symlink "WezTerm config" (Join-Path $env:USERPROFILE ".wezterm.lua") (Normalize-WslTarget ".wezterm.lua")
 Set-Symlink "WezTerm directory" (Join-Path $env:USERPROFILE ".wezterm") (Normalize-WslTarget "wezterm")

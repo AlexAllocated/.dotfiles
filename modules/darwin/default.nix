@@ -4,13 +4,12 @@
   inputs,
   self,
   toolPkgs,
-  fullName,
-  userEmail,
   profile ? "macos",
   ...
 }:
 {
   system.stateVersion = 6;
+  system.primaryUser = user;
   nixpkgs.config.allowUnfree = true;
 
   nix.settings.experimental-features = [
@@ -37,11 +36,8 @@
     # Keep first macOS adoption non-destructive. Tighten this after every
     # Homebrew package that should remain installed is declared here.
     onActivation.cleanup = "none";
-    taps = [
-      "stripe/stripe-cli"
-    ];
     brews = [
-      "stripe/stripe-cli/stripe"
+      "stripe-cli"
     ];
     casks = [
       "1password-cli"
@@ -58,9 +54,7 @@
       inputs
       self
       user
-      fullName
       toolPkgs
-      userEmail
       ;
     inherit profile;
   };
@@ -68,13 +62,9 @@
     imports = [ ../home/default.nix ];
     home.username = user;
     home.homeDirectory = "/Users/${user}";
+    home.stateVersion = "26.05";
     dotfiles = {
-      inherit
-        fullName
-        profile
-        userEmail
-        ;
-      userName = user;
+      inherit profile;
     };
   };
 }

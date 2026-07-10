@@ -1,7 +1,9 @@
 param(
    [string]$DistroName = "NixOS",
-   [string]$InstallLocation = "D:\WSL\NixOS",
-   [string]$DownloadDirectory = "D:\Installers\NixOS-WSL",
+   [string]$InstallLocation = "",
+   [string]$DownloadDirectory = "",
+   [string]$Release = "2605.7.2",
+   [string]$Sha256 = "e7180ad555fdcb8e1e057e2ef056de467603a5e502ff8531053738371be3f6b9",
    [switch]$NoLaunch
 )
 
@@ -17,6 +19,13 @@ function Assert-Command {
 
 Assert-Command "wsl.exe"
 
+if (-not $InstallLocation) {
+   $InstallLocation = Join-Path $env:LOCALAPPDATA "WSL\$DistroName"
+}
+if (-not $DownloadDirectory) {
+   $DownloadDirectory = Join-Path $env:LOCALAPPDATA "dotfiles\downloads"
+}
+
 $existing = & wsl.exe --list --quiet | ForEach-Object { $_ -replace "`0", "" } | Where-Object { $_ -eq $DistroName }
 if ($existing) {
    Write-Host "WSL distro '$DistroName' already exists; skipping install."
@@ -26,18 +35,23 @@ if ($existing) {
 New-Item -ItemType Directory -Force -Path $InstallLocation | Out-Null
 New-Item -ItemType Directory -Force -Path $DownloadDirectory | Out-Null
 
-$release = Invoke-RestMethod -Uri "https://api.github.com/repos/nix-community/NixOS-WSL/releases/latest"
-$asset = $release.assets | Where-Object { $_.name -eq "nixos.wsl" } | Select-Object -First 1
-if (-not $asset) {
-   throw "Unable to find nixos.wsl in latest NixOS-WSL release."
+$imagePath = Join-Path $DownloadDirectory "nixos-$Release.wsl"
+$downloadUrl = "https://github.com/nix-community/NixOS-WSL/releases/download/$Release/nixos.wsl"
+if (Test-Path -LiteralPath $imagePath) {
+   $actual = (Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+   if ($actual -ne $Sha256.ToLowerInvariant()) {
+      Write-Host "Cached image checksum does not match; downloading it again."
+      Remove-Item -LiteralPath $imagePath -Force
+   }
 }
-
-$imagePath = Join-Path $DownloadDirectory "nixos.wsl"
 if (-not (Test-Path -LiteralPath $imagePath)) {
-   Write-Host "Downloading $($asset.browser_download_url)"
-   Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $imagePath
-} else {
-   Write-Host "Using existing image: $imagePath"
+   Write-Host "Downloading pinned NixOS-WSL $Release"
+   Invoke-WebRequest -Uri $downloadUrl -OutFile $imagePath
+}
+$actual = (Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $Sha256.ToLowerInvariant()) {
+   Remove-Item -LiteralPath $imagePath -Force
+   throw "NixOS-WSL image checksum mismatch. Expected $Sha256, got $actual."
 }
 
 $arguments = @(

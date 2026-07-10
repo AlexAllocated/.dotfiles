@@ -1,26 +1,19 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.dotfiles;
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
+  toolsets = import ../../lib/toolsets.nix { inherit lib pkgs; };
 in
 {
   imports = [ ./core.nix ];
 
   config = {
-    home.packages = with pkgs; [
-      fd
-      gcc
-      git
-      gnumake
-      lua
-      marksman
-      neovim
-      nodejs
-      python3
-      ripgrep
-      stylua
-      tree-sitter
-    ];
+    home.packages = toolsets.editor;
 
     home.sessionVariables = {
       EDITOR = "nvim";

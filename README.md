@@ -1,360 +1,188 @@
-# Alex's .dotfiles
+# Portable personal environments
 
-Personal environment automation for Linux, WSL, and macOS. The current repo is
-Nix-first: NixOS-WSL is the primary host, Home Manager owns shared user config,
-and nix-darwin is available only for opt-in macOS host integration.
+This repository builds a consistent shell and developer environment across
+NixOS-WSL, generic Linux, and macOS. Nix is the primary configuration engine,
+Home Manager provides reusable user-level capabilities, and Homebrew supports
+company-managed Macs where Nix is unavailable.
 
-The final commit before the Nix rewrite is tagged `pre-nix`.
+The final pre-Nix version is preserved by the `pre-nix` tag.
 
-## Architecture
+## Profiles
 
-- `flake.nix` is the entrypoint for all supported profiles.
-- `homeModules.*` exposes thin, reusable Home Manager modules for shell, Git,
-  Neovim, Codex, cloud CLIs, terminal config, Windows helpers, and shared
-  packages.
-- `modules/nixos/` holds NixOS-WSL host configuration.
-- `modules/home/` holds shared Home Manager user configuration.
-- `modules/darwin/` holds macOS host configuration through nix-darwin.
-- `modules/docker/` holds Linux container image definitions built by Nix.
-- `nvim/`, `wezterm/`, and `komorebi/` hold mutable app configuration linked
-  into place by Home Manager or the Windows link script.
-- `dot-bootstrap` installs the side-by-side NixOS WSL distro.
-- `scripts/dotctl` is the day-to-day maintenance command.
+| Profile                              | Configuration owner         | Intended use                                  |
+| ------------------------------------ | --------------------------- | --------------------------------------------- |
+| `nixos-wsl`                          | NixOS + Home Manager        | Primary Windows development environment       |
+| `linux`                              | Home Manager                | Ubuntu and other Linux distributions with Nix |
+| `macos-managed`                      | Homebrew + repository links | Macs where `/nix` cannot be installed         |
+| `macos`, `macos-intel`               | Home Manager                | Macs with Nix but without nix-darwin          |
+| `darwin-macos`, `darwin-macos-intel` | nix-darwin + Home Manager   | Personally managed Macs                       |
 
-The NixOS-WSL profile uses `alex` as the default Linux user.
+Flake outputs use `wsl`, `linux`, `macos-arm64`, and `macos-x86_64`
+consistently inside their respective NixOS, Home Manager, and nix-darwin
+namespaces. The older names remain as compatibility aliases.
 
-## Bootstrap
-
-Install the side-by-side NixOS WSL distro from an existing WSL control-plane
-distro:
+`dotctl` detects the normal profile automatically, so routine maintenance is:
 
 ```sh
-./dot-bootstrap nixos-wsl
-```
-
-Then, inside the new NixOS distro:
-
-```sh
-git clone git@github.com:AlexAllocated/.dotfiles.git ~/.dotfiles
-cd ~/.dotfiles
-sudo nixos-rebuild boot --flake .#nixos-wsl
+dotctl apply
+updoot
 dotctl doctor
 ```
 
-See `docs/nix-wsl-rollout.md` for the full WSL rollout and cutover notes.
+`updoot` is an alias for `dotctl apply --update`. Updates happen in a staging
+checkout with isolated Neovim state. New lockfiles are copied into this checkout
+only after Neovim automation and all-system Nix evaluation succeed. After the
+validated profile is applied, `updoot` commits every outstanding change in the
+dotfiles checkout and pushes the current branch. `dotctl update` refreshes pins
+without applying, committing, or pushing them.
 
-### macOS
+## Fast setup
 
-This repo has four macOS tracks:
+Clone over HTTPS so first setup does not depend on an SSH agent:
 
-- `macos-managed`: company-managed Macs where Nix is not allowed. Homebrew owns
-  host tools and this repo owns symlinks into the macOS home directory.
-- `macos-docker`: legacy Docker workshop flow. Keep this only until state has
-  been migrated back to the host.
-- `macos` / `macos-intel`: Home Manager-only profiles for Macs where Nix is
-  allowed but nix-darwin is not.
-- `darwin-macos` / `darwin-macos-intel`: nix-darwin system profiles for a Mac
-  where this repo is allowed to manage host-level settings.
+```sh
+git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
+```
 
-#### Company-managed Mac
+The first apply prompts for a machine-local Git author name and email. For
+unattended setup, set `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 
-Use `macos-managed` here. It does not install Nix and does not put the daily dev
-environment inside Docker. The profile installs Homebrew-managed host tools,
-links shell/Git/Neovim/WezTerm/Codex config from this checkout, prompts for
-local Git identity, installs Codex with Bun when missing, primes Neovim, and
-writes the macOS profile marker that keeps WezTerm opening a normal host shell.
-Homebrew is preferred for host tools and language runtimes; Bun owns npm-registry
-CLI installs when Homebrew is not the right source.
+### NixOS-WSL
 
-Bootstrap or refresh the host-native profile:
+From an existing WSL distribution:
+
+```sh
+cd ~/.dotfiles
+./dot-bootstrap nixos-wsl
+```
+
+The bootstrap downloads a pinned NixOS-WSL image, verifies its checksum, and
+installs it beside the existing distribution. Inside the new distribution:
+
+```sh
+git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
+sudo nixos-rebuild boot --flake .#wsl
+wsl.exe -t NixOS
+```
+
+After reopening NixOS, run `dotctl doctor`. See
+[`docs/nix-wsl-rollout.md`](docs/nix-wsl-rollout.md) for Windows links and the
+optional shared Codex conversation migration.
+
+### Managed macOS
 
 ```sh
 cd ~/.dotfiles
 ./scripts/dotctl apply macos-managed
-./scripts/dotctl doctor
+exec zsh -l
 ```
 
-If you previously used the Docker workshop on this Mac, restore Codex
-auth/conversations and GitHub CLI auth from the container back to the host after
-the `macos-managed` apply has installed the host tools:
+The tracked `platforms/macos-managed/Brewfile` declares host software. Homebrew
+owns global tools and runtimes; Bun owns npm-registry CLIs such as Codex. Mise is
+available for project-local runtime versions but does not own global tools.
+
+### Linux or macOS with Nix
 
 ```sh
-./scripts/macos/restore-container-state.sh
-# equivalent:
-./scripts/dotctl restore-container-state dotfiles-workshop
+./dot-bootstrap linux # use macos on macOS
+# Open a new shell after Nix installation.
+./scripts/dotctl apply linux
 ```
 
-The restore command copies hidden files from container `~/.codex` and
-`~/.config/gh`, backs up existing host copies under `~/.backup_dotfiles`, and
-leaves repo-managed Codex config links alone. During the Codex restore, it
-rewrites restored conversation JSONL files from container paths such as
-`/home/alex/code` to host paths such as `~/code`. It intentionally does not
-restore copied Codex SQLite databases; Codex rebuilds those local indexes from
-the restored saved data.
+Use `macos` or `macos-intel` instead of `linux` for a Home Manager-only Mac.
+On a personal Mac using nix-darwin, apply `darwin-macos` or
+`darwin-macos-intel`.
 
-`dotctl apply --update macos-managed` updates Homebrew formulae, refreshes
-Bun-managed Codex, reinstalls missing host links, verifies Codex, and primes
-Neovim without requiring Nix. Set `DOTFILES_MACOS_MANAGED_MISE_TOOLS=1` if you
-explicitly want this profile to install repo-level `.tool-versions` with mise.
+## Capabilities
 
-#### Legacy Docker Workshop
-
-The Docker-backed profile is retained temporarily for migration and for testing
-the portable image, but it is no longer the recommended long-lived Mac dev
-environment. It does not install Nix on macOS or manage system settings. The
-host stays intentionally minimal: Homebrew, 1Password, WezTerm, Docker Desktop,
-a `dotctl` link, and WezTerm config. Shell startup, prompt, Neovim, Codex,
-language tools, and the rest of the portable environment live in the Linux
-container. If missing, the profile installs Homebrew, 1Password, 1Password CLI,
-WezTerm, and Docker Desktop, then uses a `nixos/nix` builder container to build
-the managed workshop image from this checkout.
-
-Bootstrap or refresh the host links, host dependencies, Docker Desktop, and the
-managed container:
-
-```sh
-cd ~/.dotfiles
-./scripts/dotctl apply macos-docker
-./scripts/dotctl doctor
-```
-
-Enter the container:
-
-```sh
-~/.dotfiles/scripts/dotctl shell macos-docker
-```
-
-After first setup, `dotctl shell macos-docker` uses a fast path that starts the
-existing managed container and enters zsh without re-running host provisioning.
-Run `dotctl apply macos-docker` after pulling dotfiles changes or when host
-links, sockets, imports, or container mounts need to be repaired.
-
-`macos-docker` links only host `~/.wezterm.lua`, `~/.config/wezterm`, and
-`~/.local/bin/dotctl` to this checkout. It removes repo-owned host shell and
-developer config links from earlier installs so macOS Terminal opens a normal
-host shell. WezTerm gets a `Dotfiles Docker` launch entry and, after the profile
-marker is written, opens the Docker shell by default by calling
-`~/.dotfiles/scripts/dotctl` directly through `/bin/bash`, so it does not depend
-on host shell startup or `PATH`. Set `DOTFILES_WEZTERM_HOST_SHELL=1` before
-launching WezTerm to force a host shell.
-
-The managed container uses `dotfiles-workshop:local` by default. It mounts this
-checkout at `~/.dotfiles` and the host `~/code` directory at container
-`~/code`, then starts shells in `~/code`. Run `dotctl apply --update
-macos-docker` to rebuild the local image from the current checkout and recreate
-the container while preserving the Docker home volume. Override the image tag
-with `DOTCTL_DOCKER_IMAGE`; override the mounted work tree with
-`DOTCTL_DOCKER_WORK`, which must stay under the host home directory.
-Container provisioning primes Neovim with pinned `Lazy restore`, `MasonUpdate`,
-and `TSUpdateSync` whenever the repo Neovim config changes, so first interactive
-`nvim` launch should not spend time installing plugins, Mason metadata, or
-Treesitter parsers. Set `DOTCTL_DOCKER_PRIME_NVIM=0` to skip that step.
-
-When Docker Desktop exposes its host SSH agent bridge, `macos-docker` mounts it
-into the container at `/run/host-services/ssh-auth.sock` and links
-`~/.1password/agent.sock` plus the standard macOS 1Password agent path to that
-socket. This lets Git and SSH inside the container use the host 1Password SSH
-agent and still prompt through the macOS desktop app. On the host, the profile
-also installs a `launchd` agent named
-`com.alexallocated.dotfiles.1password-ssh-auth-sock` that applies 1Password's
-global `SSH_AUTH_SOCK` bridge so Docker Desktop's forwarded socket resolves to
-1Password instead of the default macOS agent. The profile installs the desktop
-app and CLI if they are missing, but sign-in, Touch ID, CLI integration, and
-SSH-agent enablement still happen in 1Password itself. If Docker Desktop was
-already running before that bridge was installed, restart Docker Desktop once
-and recreate the container. Set
-`DOTCTL_DOCKER_SSH_AUTH_SOCK=0` to disable the mount, or set it to a custom
-host socket path before applying the profile. This only forwards the SSH agent;
-direct Linux-container 1Password desktop integration is not attempted.
-
-The profile also installs a small macOS user `launchd` service named
-`com.alexallocated.dotfiles.hostd`. It listens on host localhost port `17661`
-by default, and the managed container mounts a token from
-`~/.local/share/dotfiles/hostd` at `/run/host-services/dotfiles-hostd`. Inside
-the container, use the allowlisted host command surface for host-only
-integrations:
-
-```sh
-dotctl host ping
-dotctl host op account list
-dotctl host op item get "Item Name" --fields label=username,password
-```
-
-`dotctl host op ...` runs the macOS host `op` binary so 1Password desktop app
-integration, Touch ID, and company policy stay on the host. The service requires
-the mounted token and does not expose arbitrary host shell. Set
-`DOTFILES_HOSTD=0` before applying the profile to skip hostd setup.
-
-Inside the workshop, `updoot` maps to `dotctl workshop-update`. It leaves dirty
-or untracked dotfiles changes alone, rebuilds `dotfiles-workshop:local` from the
-current checkout when Docker is reachable, and then tells you to restart the
-managed container from the host with `dotctl apply --recreate macos-docker`.
-The first local build is large; the Nix builder store is cached in the Docker
-volume `dotfiles-nix-builder-store`.
-
-On first setup, the profile imports allowlisted host auth/config state into the
-container home, including Codex auth/session state, SSH files, GitHub CLI
-config, and common cloud CLI credential stores. Repo-managed files such as
-shell startup, WezTerm, Neovim, and `codex/config.toml` remain linked from the
-checkout. To re-run the import later:
-
-```sh
-dotctl import-host-state macos-docker
-```
-
-#### Mac With Nix
-
-Use the Home Manager-only profile on Macs where Nix is allowed but host-level
-nix-darwin management is not:
-
-```sh
-curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh
-. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-cd ~/.dotfiles
-nix --extra-experimental-features "nix-command flakes" run github:nix-community/home-manager/release-26.05 -- switch -b hm-backup --flake "$PWD#macos"
-```
-
-#### Personal Mac
-
-Use the nix-darwin profile on a Mac you own and are comfortable letting this
-repo manage at the host level:
-
-```sh
-curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh
-. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-cd ~/.dotfiles
-sudo /nix/var/nix/profiles/default/bin/nix --extra-experimental-features "nix-command flakes" run github:nix-darwin/nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake "$PWD#darwin-macos"
-./scripts/dotctl doctor
-```
-
-After the first nix-darwin switch, day-to-day applies use:
-
-```sh
-dotctl apply darwin-macos
-```
-
-Homebrew cleanup is disabled in the nix-darwin profile so existing Homebrew
-installs are not removed while packages are being migrated into Nix or declared
-in `modules/darwin/default.nix`.
-
-## Maintenance
-
-```sh
-dotctl check
-dotctl apply nixos-wsl
-dotctl apply linux
-dotctl apply --update
-nix run .#dotctl -- doctor
-```
-
-`dotctl apply --update` is the Nix-era `updoot`. It refreshes repo-managed
-pins, refreshes Neovim's local plugin runtime, runs the flake checks, applies
-the detected profile, and leaves changed lockfiles in the checkout for review:
-
-```sh
-nix flake update --flake "$HOME/.dotfiles"
-DOTFILES_NVIM_AUTOMATION=1 nvim --headless "+set nomore" "+Lazy! update" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa
-nix flake check "$HOME/.dotfiles"
-sudo nixos-rebuild boot --flake "$HOME/.dotfiles#nixos-wsl"
-```
-
-On Linux Home Manager and macOS hosts, the final apply command becomes
-`home-manager switch --flake "$HOME/.dotfiles#linux"` or
-`home-manager switch --flake "$HOME/.dotfiles#macos"`. On a personal Mac using
-nix-darwin, use `darwin-rebuild switch --flake "$HOME/.dotfiles#darwin-macos"`.
-On `macos-managed`, `dotctl apply --update` uses Homebrew, Bun, and Neovim
-directly because Nix is intentionally absent.
-
-Profile names:
-
-- `nixos-wsl`
-- `linux`
-- `macos-managed`
-- `macos-docker`
-- `macos`
-- `macos-intel`
-- `darwin-macos`
-- `darwin-macos-intel`
-
-Reusable modules can be imported individually from this flake, for example:
+The reusable Home Manager API is identity-neutral:
 
 ```nix
-inputs.dotfiles.homeModules.nvim
-inputs.dotfiles.homeModules.codex
+{
+  inputs.dotfiles.url = "github:AlexAllocated/.dotfiles";
+
+  outputs = { home-manager, nixpkgs, dotfiles, ... }: {
+    homeConfigurations.me = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        dotfiles.homeModules.shell
+        dotfiles.homeModules.git
+        dotfiles.homeModules.nvim
+        dotfiles.homeModules.codex
+        {
+          home.username = "me";
+          home.homeDirectory = "/home/me";
+          home.stateVersion = "26.05";
+        }
+      ];
+    };
+  };
+}
 ```
 
-Shell startup does not authenticate external services. Run tools such as `op`
-or `gh auth login` explicitly when credentials need attention.
+Available modules:
 
-## Git Identity
+- `foundation`: core command-line utilities
+- `shell`: zsh, Powerlevel10k, navigation, and shell integrations
+- `git`: Git, Delta, and Lazygit without an embedded author identity
+- `nvim`: the complete Neovim configuration and runtime dependencies
+- `codex`: Codex, Bun, Node, and reusable sanitized configuration
+- `development`: compilers, language runtimes, formatters, and build tools
+- `cloud`: Kubernetes and cloud CLIs
+- `terminal`: WezTerm configuration
+- `windows`: Windows-side link helper
+- `default`: the complete workstation composition
 
-Shared Git behavior lives in the tracked `.gitconfig`, including aliases,
-Delta settings, default branch behavior, and credential helpers. Machine- or
-account-specific author identity is intentionally local. On first apply,
-`dotctl` prompts for a Git author name and email, then writes:
+`nixosModules.wsl` exposes the host module with neutral defaults; set
+`dotfiles.wsl.user` and `dotfiles.wsl.userDescription` in the consuming NixOS
+configuration.
 
-```sh
-~/.config/git/identity
-```
-
-For unattended setup, provide:
-
-```sh
-DOTFILES_GIT_NAME="Alex" DOTFILES_GIT_EMAIL="alex@example.com" dotctl apply
-```
-
-Optional machine-local Git overrides can live in `~/.config/git/local`; the
-tracked config includes it when present. On `macos-docker`, the host identity
-is copied into the managed container during provisioning.
+Consumers set their own `home.stateVersion`, username, home directory, and Git
+identity.
 
 ## Containers
 
-The flake builds two Linux images. `docker-linux` is the portable workshop
-image: it includes the dotfiles source at `~/.dotfiles`, starts in `~/code`,
-and links the default shell/editor/Codex config from that built-in source.
-`docker-pocket-knife` is the smaller repair shell.
+Containers are distribution and emergency-repair artifacts, not the recommended
+daily workstation boundary.
 
 ```sh
 nix build .#docker-linux
 nix build .#docker-pocket-knife
-```
-
-Load a local build with:
-
-```sh
 docker load < result
 ```
 
-The pocket-knife image is for quick repair work on a machine without your usual
-tools:
+The full image contains the workstation toolset. The smaller pocket knife keeps
+the shell, Git, Neovim, Codex, and practical repair utilities. Both use the
+neutral `dev` user and are published for AMD64 and ARM64 Linux:
 
 ```sh
-docker run --rm -it \
-  -v "$PWD:/work" \
+docker run --rm -it -v "$PWD:/work" \
   ghcr.io/alexallocated/dotfiles-pocket-knife:latest
 ```
 
-Published image names:
+Commit-addressed `sha-<commit>` tags are published alongside `latest`.
 
-- `ghcr.io/alexallocated/dotfiles-linux:latest`
-- `ghcr.io/alexallocated/dotfiles-pocket-knife:latest`
-
-Try the published workshop directly:
+## Development
 
 ```sh
-docker run --rm -it ghcr.io/alexallocated/dotfiles-linux:latest
+nix develop
+nix fmt
+dotctl check
 ```
 
-The Dockerfiles under `docker/` are thin extension entrypoints. The canonical
-image definitions live in Nix.
+Checks cover Nix formatting and evaluation, ShellCheck, Bash syntax, Lua syntax,
+Stylua, Python compilation, the public Home Manager module API, and container
+smoke tests in CI.
 
-## Windows Links
-
-Windows-side application shortcuts are managed separately from Home Manager:
+Windows-side application links are applied separately and existing files are
+backed up before replacement:
 
 ```powershell
-.\scripts\windows\apply-wsl-links.ps1 -DistroName NixOS
+pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS
 ```
 
-That script points Windows WezTerm, Neovim, komorebi, and whkd config locations
-at the files inside the WSL distro.
+Shared Git behavior is tracked in `.gitconfig`; author identity stays in
+`~/.config/git/identity`. Optional machine-only Git overrides belong in
+`~/.config/git/local`.

@@ -1,55 +1,71 @@
-name: Publish Docker images
+name: Publish container images
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+   workflow_dispatch:
+   push:
+      branches:
+         - main
 
 permissions:
-  contents: read
-  packages: write
+   contents: read
+   packages: write
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+   build:
+      strategy:
+         fail-fast: false
+         matrix:
+            include:
+               - runner: ubuntu-24.04
+                 system: x86_64-linux
+                 arch: amd64
+               - runner: ubuntu-24.04-arm
+                 system: aarch64-linux
+                 arch: arm64
+      runs-on: ${{ matrix.runner }}
+      steps:
+         - uses: actions/checkout@v5
+         - uses: cachix/install-nix-action@v31
+           with:
+              extra_nix_config: experimental-features = nix-command flakes
+         - name: Build and load images
+           run: |
+              nix build ".#packages.${{ matrix.system }}.docker-linux" -o result-linux
+              nix build ".#packages.${{ matrix.system }}.docker-pocket-knife" -o result-pocket
+              docker load -i result-linux
+              docker load -i result-pocket
+         - name: Smoke test images
+           run: |
+              docker run --rm ghcr.io/alexallocated/dotfiles-linux:latest git --version
+              docker run --rm ghcr.io/alexallocated/dotfiles-linux:latest nvim --version
+              docker run --rm ghcr.io/alexallocated/dotfiles-pocket-knife:latest codex --version
+         - name: Log in to GHCR
+           run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+         - name: Push architecture images
+           run: |
+              short_sha="${GITHUB_SHA::12}"
+              for image in dotfiles-linux dotfiles-pocket-knife; do
+                source="ghcr.io/alexallocated/${image}:latest"
+                target="ghcr.io/alexallocated/${image}:sha-${short_sha}-${{ matrix.arch }}"
+                docker tag "$source" "$target"
+                docker push "$target"
+              done
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      - name: Check flake
-        run: nix flake check
-
-      - name: Build image tarballs
-        run: |
-          nix build .#docker-linux -o result-linux
-          nix build .#docker-pocket-knife -o result-pocket-knife
-
-      - name: Load images
-        run: |
-          docker load -i result-linux
-          docker load -i result-pocket-knife
-
-      - name: Tag images
-        run: |
-          short_sha="${GITHUB_SHA::12}"
-          docker tag ghcr.io/alexallocated/dotfiles-linux:latest "ghcr.io/alexallocated/dotfiles-linux:sha-${short_sha}"
-          docker tag ghcr.io/alexallocated/dotfiles-pocket-knife:latest "ghcr.io/alexallocated/dotfiles-pocket-knife:sha-${short_sha}"
-
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Push images
-        run: |
-          short_sha="${GITHUB_SHA::12}"
-          docker push ghcr.io/alexallocated/dotfiles-linux:latest
-          docker push "ghcr.io/alexallocated/dotfiles-linux:sha-${short_sha}"
-          docker push ghcr.io/alexallocated/dotfiles-pocket-knife:latest
-          docker push "ghcr.io/alexallocated/dotfiles-pocket-knife:sha-${short_sha}"
+   manifest:
+      needs: build
+      runs-on: ubuntu-24.04
+      steps:
+         - uses: docker/setup-buildx-action@v3
+         - name: Log in to GHCR
+           run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+         - name: Publish multi-architecture manifests
+           run: |
+              short_sha="${GITHUB_SHA::12}"
+              for image in dotfiles-linux dotfiles-pocket-knife; do
+                base="ghcr.io/alexallocated/${image}"
+                docker buildx imagetools create \
+                  --tag "${base}:latest" \
+                  --tag "${base}:sha-${short_sha}" \
+                  "${base}:sha-${short_sha}-amd64" \
+                  "${base}:sha-${short_sha}-arm64"
+              done

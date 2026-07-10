@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$repo_root"
+
+# shellcheck source=scripts/lib/common.sh
+source "$repo_root/scripts/lib/common.sh"
+# shellcheck source=scripts/commands/update.sh
+source "$repo_root/scripts/commands/update.sh"
+
+assert_equal() {
+	local expected="$1"
+	local actual="$2"
+	[[ "$actual" == "$expected" ]] || {
+		printf 'expected %q, got %q\n' "$expected" "$actual" >&2
+		exit 1
+	}
+}
+
+assert_equal "$repo_root#linux" "$(flake_ref_for_profile linux)"
+assert_equal "$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
+assert_equal "/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
+if flake_ref_for_profile macos-managed >/dev/null 2>&1; then
+	printf 'macos-managed unexpectedly resolved to a flake output\n' >&2
+	exit 1
+fi
+
+fixture="$(mktemp -d)"
+trap 'rm -rf "$fixture"' EXIT
+mkdir -p "$fixture/source/modules/home"
+printf 'untracked module\n' >"$fixture/source/modules/home/foundation.nix"
+REPO_ROOT="$fixture/source"
+stage_repo "$fixture/candidate"
+assert_equal "untracked module" "$(cat "$fixture/candidate/modules/home/foundation.nix")"
+
+git init --quiet --bare "$fixture/remote.git"
+git init --quiet --initial-branch=main "$fixture/checkout"
+git -C "$fixture/checkout" config user.name "Dotfiles Test"
+git -C "$fixture/checkout" config user.email "dotfiles@example.test"
+printf 'initial\n' >"$fixture/checkout/tracked"
+git -C "$fixture/checkout" add tracked
+git -C "$fixture/checkout" commit --quiet -m initial
+git -C "$fixture/checkout" remote add origin "$fixture/remote.git"
+git -C "$fixture/checkout" push --quiet --set-upstream origin main
+printf 'changed\n' >"$fixture/checkout/tracked"
+printf 'untracked\n' >"$fixture/checkout/untracked"
+REPO_ROOT="$fixture/checkout"
+DOTFILES_UPDOOT_COMMIT_MESSAGE="test: automatic updoot" commit_and_push_updates >/dev/null
+assert_equal "test: automatic updoot" "$(git -C "$fixture/checkout" log -1 --pretty=%s)"
+assert_equal "$(git -C "$fixture/checkout" rev-parse HEAD)" "$(git --git-dir="$fixture/remote.git" rev-parse main)"
+assert_equal "" "$(git -C "$fixture/checkout" status --short)"
+
+printf 'dotctl helper tests passed\n'

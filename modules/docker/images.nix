@@ -2,22 +2,16 @@
   pkgs,
   toolPkgs ? pkgs,
   source,
-  user ? "alex",
-  fullName ? "Alex",
-  userEmail ? "Alex@HiveTech.ai",
+  user ? "dev",
+  fullName ? "Dotfiles User",
 }:
 let
   inherit (pkgs) lib;
+  toolsets = import ../../lib/toolsets.nix { inherit lib pkgs toolPkgs; };
 
   uid = 1000;
   gid = 1000;
-  codexPackage = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
   caBundle = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-  localeArchive = "${pkgs.glibcLocales}/lib/locale/locale-archive";
-
-  optionalPackage =
-    packageSet: name:
-    lib.optional (builtins.hasAttr name packageSet) (builtins.getAttr name packageSet);
 
   usersAndGroups = pkgs.writeTextDir "etc/passwd" ''
     root:x:0:0:root:/root:/bin/bash
@@ -59,9 +53,8 @@ let
     export USER=${user}
     export HOME=/home/${user}
     export SHELL=/bin/zsh
-    export LANG=en_US.UTF-8
-    export LC_ALL=en_US.UTF-8
-    export LOCALE_ARCHIVE=${localeArchive}
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
     export EDITOR=nvim
     export VISUAL=nvim
     export SSL_CERT_FILE=${caBundle}
@@ -71,13 +64,13 @@ let
 
   homeSkeleton = pkgs.runCommand "dotfiles-container-home" { } ''
     mkdir -p \
-    	$out/home/${user}/.codex/rules \
-    	$out/home/${user}/.config \
-    	$out/home/${user}/.local/bin \
-	$out/home/${user}/.dotfiles \
-	$out/home/${user}/code \
-    	$out/root \
-    	$out/work
+      $out/home/${user}/.codex/rules \
+      $out/home/${user}/.config \
+      $out/home/${user}/.local/bin \
+      $out/home/${user}/.dotfiles \
+      $out/home/${user}/code \
+      $out/root \
+      $out/work
 
     cp -R ${source}/. $out/home/${user}/.dotfiles/
     chmod -R u+rwX $out/home/${user}/.dotfiles
@@ -92,102 +85,8 @@ let
     ln -s /home/${user}/.dotfiles/codex/rules/default.rules $out/home/${user}/.codex/rules/default.rules
     ln -s /home/${user}/.dotfiles/scripts/dotctl $out/home/${user}/.local/bin/dotctl
     ln -s /home/${user}/.dotfiles/.p10k.zsh $out/home/${user}/.p10k.zsh
-    ln -s /home/${user}/.dotfiles/.tool-versions $out/home/${user}/.tool-versions
     ln -s /home/${user}/.dotfiles/rustfmt.toml $out/home/${user}/rustfmt.toml
   '';
-
-  basePackages = with pkgs; [
-    bashInteractive
-    bat
-    cacert
-    coreutils
-    curl
-    delta
-    eza
-    fastfetch
-    fd
-    file
-    findutils
-    fzf
-    gawk
-    git
-    gnugrep
-    gnused
-    gzip
-    jq
-    less
-    ncurses
-    neovim
-    nodejs
-    bun
-    openssh
-    procps
-    ripgrep
-    rsync
-    shadow
-    socat
-    sudo
-    gnutar
-    unzip
-    wget
-    which
-    zoxide
-    zsh
-  ];
-
-  pocketPackages =
-    basePackages
-    ++ (with pkgs; [
-      gcc
-      gnumake
-      lazygit
-      lua
-      python3
-      tree
-      tree-sitter
-    ])
-    ++ lib.concatMap (optionalPackage pkgs) [
-      "zsh-powerlevel10k"
-      "zsh-vi-mode"
-    ]
-    ++ [
-      codexPackage
-    ];
-
-  fullPackages =
-    pocketPackages
-    ++ (with pkgs; [
-      cmake
-      gh
-      gnupg
-      go
-      helm
-      k9s
-      kubectl
-      lynx
-      marksman
-      mise
-      ninja
-      pkg-config
-      rust-analyzer
-      rustc
-      cargo
-      shellcheck
-      stylua
-    ])
-    ++ lib.concatMap (optionalPackage pkgs) [
-      "_1password-cli"
-      "azure-cli"
-      "docker-client"
-      "dotnet-sdk"
-      "google-cloud-sdk"
-      "nil"
-      "nix"
-      "nixfmt"
-      "stripe-cli"
-      "tlrc"
-      "wordnet"
-    ];
 
   rootFor =
     name: packages:
@@ -226,7 +125,7 @@ let
       tag = "latest";
       contents = [ (rootFor name packages) ];
       fakeRootCommands = ''
-        mkdir -p ./tmp ./usr/bin ./bin ./run/host-services/dotfiles-hostd
+        mkdir -p ./tmp ./usr/bin ./bin
         chmod 1777 ./tmp
         if [ -L ./home/${user} ]; then
           homeTarget="$(readlink ./home/${user})"
@@ -256,11 +155,9 @@ let
           "USER=${user}"
           "HOME=/home/${user}"
           "SHELL=/bin/zsh"
-          "LANG=en_US.UTF-8"
-          "LC_ALL=en_US.UTF-8"
-          "LOCALE_ARCHIVE=${localeArchive}"
+          "LANG=C.UTF-8"
+          "LC_ALL=C.UTF-8"
           "DOTFILES_ROOT=/home/${user}/.dotfiles"
-          "DOTFILES_WORKSHOP=1"
           "EDITOR=nvim"
           "VISUAL=nvim"
           "SSL_CERT_FILE=${caBundle}"
@@ -278,13 +175,13 @@ in
 {
   docker-linux = mkImage {
     name = "dotfiles-linux";
-    packages = fullPackages;
+    packages = toolsets.workstation;
     description = "Full Linux tool environment from Alex's dotfiles.";
   };
 
   docker-pocket-knife = mkImage {
     name = "dotfiles-pocket-knife";
-    packages = pocketPackages;
+    packages = toolsets.pocketKnife;
     description = "Slim repair shell with Git, Neovim, Codex, and core diagnostics.";
   };
 }

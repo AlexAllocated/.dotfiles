@@ -2,7 +2,8 @@
 {
   imports = [
     ./core.nix
-    ./packages.nix
+    ./foundation.nix
+    ./development.nix
     ./shell.nix
     ./git.nix
     ./nvim.nix
@@ -12,7 +13,5 @@
     ./windows.nix
   ];
 
-  # Keep existing personal Codex state local unless a consumer explicitly opts
-  # into the reusable sanitized config.
-  dotfiles.codex.manageConfig = lib.mkDefault false;
+  dotfiles.codex.manageConfig = lib.mkDefault true;
 }

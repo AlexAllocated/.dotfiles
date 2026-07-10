@@ -35,7 +35,7 @@ case "$target" in
 		else
 			curl --proto '=https' --tlsv1.2 -fsSL https://install.determinate.systems/nix | sh -s -- install
 		fi
-		echo "Open a new shell, then run: dotctl apply $target"
+		echo "Open a new shell, then run: ./scripts/dotctl apply $target"
 		;;
 	-h | --help | help)
 		usage

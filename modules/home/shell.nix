@@ -7,7 +7,7 @@
 let
   cfg = config.dotfiles;
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
-  optionalPackage = name: lib.optional (builtins.hasAttr name pkgs) (builtins.getAttr name pkgs);
+  toolsets = import ../../lib/toolsets.nix { inherit lib pkgs; };
   p10kTheme =
     if builtins.hasAttr "zsh-powerlevel10k" pkgs then
       "${pkgs.zsh-powerlevel10k}/share/zsh-powerlevel10k/powerlevel10k.zsh-theme"
@@ -23,22 +23,27 @@ in
   imports = [ ./core.nix ];
 
   config = {
-    home.packages =
-      (with pkgs; [
-        zsh
-      ])
-      ++ lib.concatMap optionalPackage [
-        "zsh-powerlevel10k"
-        "zsh-vi-mode"
-      ];
+    home.packages = toolsets.shell;
 
     home.file.".p10k.zsh".source = sourceRoot + "/.p10k.zsh";
     home.file.".zprofile".source = sourceRoot + "/.zprofile";
-    home.file.".tool-versions".source = sourceRoot + "/.tool-versions";
     home.file."rustfmt.toml".source = sourceRoot + "/rustfmt.toml";
     home.file.".local/bin/dotctl" = {
-      source = sourceRoot + "/scripts/dotctl";
       executable = true;
+      text = ''
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        if [[ -n "''${DOTFILES_ROOT:-}" && -x "''${DOTFILES_ROOT}/scripts/dotctl" && -f "''${DOTFILES_ROOT}/scripts/lib/common.sh" ]]; then
+          exec env DOTFILES_ROOT="''${DOTFILES_ROOT}" "''${DOTFILES_ROOT}/scripts/dotctl" "$@"
+        fi
+
+        if [[ -x "$HOME/.dotfiles/scripts/dotctl" && -f "$HOME/.dotfiles/scripts/lib/common.sh" ]]; then
+          exec env DOTFILES_ROOT="$HOME/.dotfiles" "$HOME/.dotfiles/scripts/dotctl" "$@"
+        fi
+
+        exec env DOTFILES_ROOT="${sourceRoot}" "${sourceRoot}/scripts/dotctl" "$@"
+      '';
     };
 
     xdg.configFile."mise/config.toml".text = ''
@@ -137,6 +142,9 @@ in
             export APPDATA="$WINHOME/AppData/Roaming"
             export DESKTOP="$WINHOME/Desktop"
             export DOWNLOADS="$WINHOME/Downloads"
+            if [[ -d "$WINHOME/.codex" ]]; then
+              export CODEX_HOME="$WINHOME/.codex"
+            fi
           fi
 
           if [[ -d "/mnt/g" ]]; then
@@ -173,11 +181,6 @@ in
               export GIT_SSH_COMMAND="ssh.exe -o StrictHostKeyChecking=accept-new"
             fi
             unset SSH_AUTH_SOCK
-            return
-          fi
-
-          if [[ -n "$DOTFILES_WORKSHOP" && -S /run/host-services/ssh-auth.sock ]]; then
-            export SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock
             return
           fi
 

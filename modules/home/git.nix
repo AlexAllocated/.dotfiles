@@ -1,15 +1,12 @@
-{ config, pkgs, ... }:
+{ lib, pkgs, ... }:
 let
-  cfg = config.dotfiles;
+  toolsets = import ../../lib/toolsets.nix { inherit lib pkgs; };
 in
 {
   imports = [ ./core.nix ];
 
   config = {
-    home.packages = with pkgs; [
-      git
-      lazygit
-    ];
+    home.packages = toolsets.git;
 
     programs.git = {
       enable = true;
@@ -33,7 +30,7 @@ in
           df = "diff";
           ready = "rebase -i @{u}";
           lg = "log --pretty=format:'%Cred%h%Creset -%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'";
-          standup = "log --pretty=format:'%Cred%h%Creset -%Creset %s %Cgreen(%cD) %C(bold blue)<%an>%Creset' --since yesterday --author ${cfg.fullName}";
+          standup = "!git log --pretty=format:'%Cred%h%Creset -%Creset %s %Cgreen(%cD) %C(bold blue)<%an>%Creset' --since yesterday --author=\"$(git config user.name)\"";
           purr = "pull --rebase";
           whoami = "!echo \"\${GIT_AUTHOR_NAME:-$(git config user.name)} (\${GIT_AUTHOR_EMAIL:-$(git config user.email)})\"";
         };

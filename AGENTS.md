@@ -5,10 +5,10 @@
 - `flake.nix` is the primary Nix entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles personal macOS. `macos-managed` in `scripts/dotctl` is the host-native company Mac path when Nix is not allowed.
 - `modules/home/`, `modules/nixos/`, `modules/darwin/`, and `modules/docker/` hold reusable Nix modules. `homeModules.*` is the public Home Manager module API. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
-- `scripts/dotctl` is the maintenance entrypoint for checks, applies, updates, diagnostics, and the temporary Docker-to-host state restore that rewrites Codex conversation paths.
+- `scripts/dotctl` is the small maintenance dispatcher. Shared helpers live under `scripts/lib/`, commands under `scripts/commands/`, and non-Nix platform profiles under `scripts/profiles/`.
 - The NixOS-WSL profile uses `alex` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
-- Assets are under `images/`; helper binaries land in `bin/`. Root-level files are limited to active repo config and Home Manager sources.
+- Reusable package capabilities are defined once in `lib/toolsets.nix`; the managed Mac manifest lives at `platforms/macos-managed/Brewfile`. Helper binaries land in `bin/`.
 
 ## Build, Test, and Development Commands
 
@@ -16,9 +16,9 @@
 - `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation from inside the `NixOS` distro; restart the distro afterward.
 - `dotctl apply linux` applies the generic Linux Home Manager profile.
 - `dotctl apply macos-managed` applies host-native macOS setup with Homebrew and symlinks, no Nix.
-- `dotctl apply --update` refreshes repo-managed pins, runs flake checks, and reapplies the detected profile; `updoot` aliases to this in the Home Manager shell.
+- `dotctl apply --update` refreshes repo-managed pins, runs flake checks, reapplies the detected profile, then commits and pushes all dotfiles changes; `updoot` aliases to this in the Home Manager shell.
 - `./dot-bootstrap nixos-wsl` installs the side-by-side `NixOS` WSL distro.
-- `nix build .#docker-linux` builds the full Linux container image.
+- `nix build .#docker-linux` builds the full Linux container image on AMD64 or ARM64 Linux.
 - `nix build .#docker-pocket-knife` builds the slim repair container image.
 - `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS` updates Windows-side app links to the WSL repo copy.
 
@@ -32,8 +32,8 @@
 
 ## Testing Guidelines
 
-- For Nix changes, run `nix flake check` or `dotctl check` once Nix is available.
-- For the WSL target, run `sudo nixos-rebuild build --flake .#nixos-wsl` or `sudo nixos-rebuild boot --flake .#nixos-wsl`.
+- For Nix changes, run `nix flake check --all-systems` or `dotctl check` once Nix is available.
+- For the WSL target, run `sudo nixos-rebuild build --flake .#wsl` or `sudo nixos-rebuild boot --flake .#wsl`.
 - For the standalone Linux target, run `home-manager build --flake .#linux`.
 - For container image changes, run `nix build .#docker-pocket-knife` and, when practical, `nix build .#docker-linux`.
 - For Neovim config updates, run `nvim --headless "+Lazy! sync" +qa` to catch plugin errors.
@@ -50,14 +50,12 @@
 ## Environment & Security
 
 - Never commit personal secrets or machine-specific IDs; use placeholders and document required env vars in `README.md`.
-- On `macos-managed`, prefer Homebrew for host tools and language runtimes whenever a suitable formula/cask exists. npm-registry CLI tools that are not Homebrew-managed should be installed with Bun, not npm globals.
+- On `macos-managed`, declare host tools and language runtimes in `platforms/macos-managed/Brewfile`. npm-registry CLI tools that are not Homebrew-managed should be installed with Bun, not npm globals. Mise is project-local only.
 - Shell startup must not run interactive authentication. Keep 1Password, GitHub, and other credential refreshes behind explicit commands such as `op` or `gh auth login`.
 - Git aliases and shared behavior are tracked, but Git author identity is local in `~/.config/git/identity`; `dotctl apply` should prompt for it on new setups or accept `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 
 ## 1Password SSH Agent
 
 - Enable the SSH agent inside the 1Password desktop app (macOS, Linux, or Windows) and confirm it lists your keys with `ssh-add -l` before bootstrapping these dotfiles.
-- Home Manager exports `SSH_AUTH_SOCK=$HOME/.1password/agent.sock` on macOS/Linux when that stable socket path exists. Inside `macos-docker`, it prefers Docker Desktop's `/run/host-services/ssh-auth.sock`.
-- The `macos-docker` profile installs the host 1Password desktop app and CLI when missing, installs the `com.alexallocated.dotfiles.1password-ssh-auth-sock` launch agent so the host `SSH_AUTH_SOCK` bridge points at 1Password, mounts Docker Desktop's host SSH agent bridge at `/run/host-services/ssh-auth.sock`, then links `~/.1password/agent.sock` and the standard macOS 1Password agent path to that socket inside the container.
-- The `macos-docker` profile also installs a token-protected user `launchd` host daemon on host localhost port `17661`; the container mounts its token directory at `/run/host-services/dotfiles-hostd`, and `dotctl host op ...` runs the host `op` binary through an allowlisted JSON API.
+- Home Manager exports `SSH_AUTH_SOCK=$HOME/.1password/agent.sock` on macOS/Linux when that stable socket path exists. `macos-managed` links that path to the 1Password desktop agent socket.
 - On WSL, Home Manager unsets `SSH_AUTH_SOCK` and wraps `ssh`, `scp`, `sftp`, `ssh-add`, and `ssh-agent` to call their Windows counterparts when available. Git uses `GIT_SSH_COMMAND="ssh.exe -o StrictHostKeyChecking=accept-new"` so first-time host keys do not block unattended operations.
