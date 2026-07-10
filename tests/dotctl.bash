@@ -43,12 +43,21 @@ git -C "$fixture/checkout" add tracked
 git -C "$fixture/checkout" commit --quiet -m initial
 git -C "$fixture/checkout" remote add origin "$fixture/remote.git"
 git -C "$fixture/checkout" push --quiet --set-upstream origin main
+git clone --quiet --branch main "$fixture/remote.git" "$fixture/peer"
+git -C "$fixture/peer" config user.name "Dotfiles Peer"
+git -C "$fixture/peer" config user.email "peer@example.test"
+printf 'peer\n' >"$fixture/peer/peer-change"
+git -C "$fixture/peer" add peer-change
+git -C "$fixture/peer" commit --quiet -m "peer update"
+git -C "$fixture/peer" push --quiet
+peer_commit="$(git -C "$fixture/peer" rev-parse HEAD)"
 printf 'changed\n' >"$fixture/checkout/tracked"
 printf 'untracked\n' >"$fixture/checkout/untracked"
 REPO_ROOT="$fixture/checkout"
 DOTFILES_UPDOOT_COMMIT_MESSAGE="test: automatic updoot" commit_and_push_updates >/dev/null
 assert_equal "test: automatic updoot" "$(git -C "$fixture/checkout" log -1 --pretty=%s)"
 assert_equal "$(git -C "$fixture/checkout" rev-parse HEAD)" "$(git --git-dir="$fixture/remote.git" rev-parse main)"
+git -C "$fixture/checkout" merge-base --is-ancestor "$peer_commit" HEAD
 assert_equal "" "$(git -C "$fixture/checkout" status --short)"
 
 printf 'dotctl helper tests passed\n'

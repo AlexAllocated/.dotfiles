@@ -33,8 +33,9 @@ dotctl doctor
 checkout with isolated Neovim state. New lockfiles are copied into this checkout
 only after Neovim automation and all-system Nix evaluation succeed. After the
 validated profile is applied, `updoot` commits every outstanding change in the
-dotfiles checkout and pushes the current branch. `dotctl update` refreshes pins
-without applying, committing, or pushing them.
+dotfiles checkout, rebases it onto an updated upstream when necessary, and
+pushes the current branch. `dotctl update` refreshes pins without applying,
+committing, or pushing them.
 
 ## Fast setup
 

@@ -104,7 +104,7 @@ run_update() {
 }
 
 commit_and_push_updates() {
-	local branch message
+	local branch message remote remote_branch upstream
 	require_command git
 	git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
 		printf 'Cannot publish updoot changes: %s is not a Git checkout.\n' "$REPO_ROOT" >&2
@@ -124,7 +124,14 @@ commit_and_push_updates() {
 		printf 'No repository changes to commit.\n'
 	fi
 
-	if git -C "$REPO_ROOT" rev-parse --verify '@{upstream}' >/dev/null 2>&1; then
+	if upstream="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
+		remote="${upstream%%/*}"
+		remote_branch="${upstream#*/}"
+		git -C "$REPO_ROOT" fetch "$remote" "$remote_branch"
+		if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
+			printf 'Rebasing updoot commit onto the latest %s...\n' "$upstream"
+			git -C "$REPO_ROOT" rebase "$upstream"
+		fi
 		git -C "$REPO_ROOT" push
 	elif git -C "$REPO_ROOT" remote get-url origin >/dev/null 2>&1; then
 		git -C "$REPO_ROOT" push --set-upstream origin "$branch"
