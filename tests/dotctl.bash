@@ -54,10 +54,24 @@ peer_commit="$(git -C "$fixture/peer" rev-parse HEAD)"
 printf 'changed\n' >"$fixture/checkout/tracked"
 printf 'untracked\n' >"$fixture/checkout/untracked"
 REPO_ROOT="$fixture/checkout"
-DOTFILES_UPDOOT_COMMIT_MESSAGE="test: automatic updoot" commit_and_push_updates >/dev/null
+sync_before_update >/dev/null
+git -C "$fixture/checkout" merge-base --is-ancestor "$peer_commit" HEAD
+assert_equal "changed" "$(cat "$fixture/checkout/tracked")"
+assert_equal "untracked" "$(cat "$fixture/checkout/untracked")"
+assert_equal "" "$(git -C "$fixture/checkout" stash list)"
+DOTFILES_UPDOOT_COMMIT_MESSAGE="test: automatic updoot" commit_updates >/dev/null
+printf 'late peer\n' >"$fixture/peer/late-peer-change"
+git -C "$fixture/peer" add late-peer-change
+git -C "$fixture/peer" commit --quiet -m "late peer update"
+git -C "$fixture/peer" push --quiet
+late_peer_commit="$(git -C "$fixture/peer" rev-parse HEAD)"
+rebased=0
+fetch_and_rebase_upstream rebased >/dev/null
+assert_equal "1" "$rebased"
+git -C "$fixture/checkout" merge-base --is-ancestor "$late_peer_commit" HEAD
+push_updates >/dev/null
 assert_equal "test: automatic updoot" "$(git -C "$fixture/checkout" log -1 --pretty=%s)"
 assert_equal "$(git -C "$fixture/checkout" rev-parse HEAD)" "$(git --git-dir="$fixture/remote.git" rev-parse main)"
-git -C "$fixture/checkout" merge-base --is-ancestor "$peer_commit" HEAD
 assert_equal "" "$(git -C "$fixture/checkout" status --short)"
 
 printf 'dotctl helper tests passed\n'

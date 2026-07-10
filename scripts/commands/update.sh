@@ -103,8 +103,8 @@ run_update() {
 	printf 'Updated pins passed validation for %s.\n' "$profile"
 }
 
-commit_and_push_updates() {
-	local branch message remote remote_branch upstream
+ensure_updoot_checkout() {
+	local branch
 	require_command git
 	git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
 		printf 'Cannot publish updoot changes: %s is not a Git checkout.\n' "$REPO_ROOT" >&2
@@ -115,6 +115,66 @@ commit_and_push_updates() {
 		printf 'Cannot publish updoot changes from a detached HEAD.\n' >&2
 		return 1
 	fi
+}
+
+fetch_and_rebase_upstream() {
+	local result_var="$1"
+	local remote remote_branch upstream
+	printf -v "$result_var" '0'
+	if ! upstream="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
+		return 0
+	fi
+	remote="${upstream%%/*}"
+	remote_branch="${upstream#*/}"
+	git -C "$REPO_ROOT" fetch "$remote" "$remote_branch"
+	if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
+		printf 'Rebasing onto the latest %s...\n' "$upstream"
+		git -C "$REPO_ROOT" rebase "$upstream"
+		printf -v "$result_var" '1'
+	fi
+}
+
+restore_updoot_stash() {
+	local stash_ref="$1"
+	if git -C "$REPO_ROOT" stash apply --index "$stash_ref"; then
+		git -C "$REPO_ROOT" stash drop "$stash_ref" >/dev/null
+		printf 'Restored local dotfiles changes after upstream sync.\n'
+		return 0
+	fi
+	printf 'Local changes conflicted with upstream and remain in %s.\n' "$stash_ref" >&2
+	printf 'Resolve the working tree, then drop the stash after confirming its changes are present.\n' >&2
+	return 1
+}
+
+sync_before_update() {
+	local rebased=0 stash_ref=""
+	ensure_updoot_checkout
+	if [[ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal)" ]]; then
+		git -C "$REPO_ROOT" stash push --include-untracked --message "dotfiles updoot pre-sync $(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
+		stash_ref='stash@{0}'
+		printf 'Saved local dotfiles changes before upstream sync.\n'
+	fi
+	if ! fetch_and_rebase_upstream rebased; then
+		if [[ -n "$stash_ref" ]]; then
+			if [[ ! -d "$(git -C "$REPO_ROOT" rev-parse --git-path rebase-merge)" && ! -d "$(git -C "$REPO_ROOT" rev-parse --git-path rebase-apply)" ]]; then
+				restore_updoot_stash "$stash_ref" || true
+			else
+				printf 'Local changes remain saved in %s while the rebase is resolved.\n' "$stash_ref" >&2
+			fi
+		fi
+		return 1
+	fi
+	if [[ "$rebased" == "1" ]]; then
+		printf 'Integrated upstream changes before refreshing pins.\n'
+	fi
+	if [[ -n "$stash_ref" ]]; then
+		restore_updoot_stash "$stash_ref"
+	fi
+}
+
+commit_updates() {
+	local message
+	ensure_updoot_checkout
 
 	git -C "$REPO_ROOT" add -A
 	if ! git -C "$REPO_ROOT" diff --cached --quiet; then
@@ -123,15 +183,12 @@ commit_and_push_updates() {
 	else
 		printf 'No repository changes to commit.\n'
 	fi
+}
 
-	if upstream="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
-		remote="${upstream%%/*}"
-		remote_branch="${upstream#*/}"
-		git -C "$REPO_ROOT" fetch "$remote" "$remote_branch"
-		if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
-			printf 'Rebasing updoot commit onto the latest %s...\n' "$upstream"
-			git -C "$REPO_ROOT" rebase "$upstream"
-		fi
+push_updates() {
+	local branch
+	branch="$(git -C "$REPO_ROOT" branch --show-current)"
+	if git -C "$REPO_ROOT" rev-parse --verify '@{upstream}' >/dev/null 2>&1; then
 		git -C "$REPO_ROOT" push
 	elif git -C "$REPO_ROOT" remote get-url origin >/dev/null 2>&1; then
 		git -C "$REPO_ROOT" push --set-upstream origin "$branch"

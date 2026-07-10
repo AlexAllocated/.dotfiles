@@ -32,8 +32,29 @@ apply_profile() {
 	esac
 }
 
+revalidate_and_reapply_profile() {
+	local profile="$1"
+	local work candidate
+	printf 'Late upstream changes were integrated; validating and reapplying the merged checkout...\n'
+	if [[ "$profile" == "macos-managed" ]]; then
+		apply_macos_managed 0
+		return
+	fi
+	work="$(mktemp -d)"
+	candidate="$work/repo"
+	trap 'rm -rf "$work"' EXIT
+	stage_repo "$candidate"
+	validate_update_candidate "$candidate"
+	apply_profile "$profile" "$candidate"
+	sync_live_neovim_runtime
+	trap - EXIT
+	rm -rf "$work"
+}
+
 apply_with_update() {
 	local profile="$1"
+	local rebased=0
+	sync_before_update
 	if [[ "$profile" == "macos-managed" ]]; then
 		DOTFILES_SKIP_NVIM_PRIME=1 apply_macos_managed 1
 		run_update "$profile"
@@ -52,6 +73,11 @@ apply_with_update() {
 		rm -rf "$work"
 		printf 'Updated pins passed validation and were applied to %s.\n' "$profile"
 	fi
-	commit_and_push_updates
+	commit_updates
+	fetch_and_rebase_upstream rebased
+	if [[ "$rebased" == "1" ]]; then
+		revalidate_and_reapply_profile "$profile"
+	fi
+	push_updates
 	print_repo_status
 }
