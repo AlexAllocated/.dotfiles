@@ -33,7 +33,8 @@ dotctl doctor
 checkout with isolated Neovim state. Before staging, local changes are saved,
 the branch is rebased onto its latest upstream, and the local changes are
 restored. New lockfiles are accepted only after Neovim automation and all-system
-Nix evaluation succeed. After applying, `updoot` commits every outstanding
+Nix evaluation succeed. Neovim, Lazy, Mason, and Treesitter progress is streamed
+directly to the terminal. After applying, `updoot` commits every outstanding
 change and fetches again. Any late upstream changes are rebased, validated, and
 reapplied before the current branch is pushed. `dotctl update` refreshes pins
 without applying, committing, or pushing them.
