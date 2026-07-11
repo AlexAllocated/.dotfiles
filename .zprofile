@@ -14,6 +14,15 @@ dotfiles_append_path() {
 	esac
 }
 
+dotfiles_prepend_path() {
+	local dir="$1"
+	[[ -d "$dir" ]] || return 0
+	case ":$PATH:" in
+		*":$dir:"*) ;;
+		*) export PATH="$dir:$PATH" ;;
+	esac
+}
+
 dotfiles_load_homebrew() {
 	if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" && -x /opt/homebrew/bin/brew ]]; then
 		eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -33,10 +42,7 @@ dotfiles_load_homebrew() {
 
 dotfiles_load_homebrew
 
-if command -v mise >/dev/null 2>&1; then
-	eval "$(mise activate zsh)"
-fi
-
+dotfiles_prepend_path "$HOME/.local/share/mise/shims"
 dotfiles_append_path "$HOME/.local/bin"
 dotfiles_append_path "$HOME/bin"
 dotfiles_append_path "$HOME/.bun/bin"
@@ -44,8 +50,6 @@ dotfiles_append_path "$HOME/.cache/.bun/bin"
 dotfiles_append_path "$HOME/.cargo/bin"
 dotfiles_append_path "$HOME/go/bin"
 dotfiles_append_path "$HOME/.volta/bin"
-
-dotfiles_load_homebrew
 
 [[ -r "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
@@ -59,7 +63,7 @@ load_dotfiles_env_file() {
 }
 load_dotfiles_env_file "$HOME/.dotfiles/.env"
 
-unset -f dotfiles_append_path dotfiles_load_homebrew load_dotfiles_env_file
+unset -f dotfiles_append_path dotfiles_prepend_path dotfiles_load_homebrew load_dotfiles_env_file
 
 export EDITOR="${EDITOR:-nvim}"
 export HOMEBREW_NO_ENV_HINTS=1

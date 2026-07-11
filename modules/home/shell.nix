@@ -78,6 +78,19 @@ in
     programs.zsh = {
       enable = true;
       enableCompletion = true;
+      completionInit = ''
+        autoload -Uz compinit
+        zcompdump="''${ZDOTDIR:-$HOME}/.zcompdump"
+        zcompaudit_stamp="''${XDG_CACHE_HOME:-$HOME/.cache}/zsh/compaudit"
+        if [[ ! -s "$zcompdump" || ! -e "$zcompaudit_stamp" || -n "$zcompaudit_stamp"(#qN.mh+24) ]]; then
+          compinit -d "$zcompdump"
+          mkdir -p "''${zcompaudit_stamp:h}"
+          : > "$zcompaudit_stamp"
+        else
+          compinit -C -d "$zcompdump"
+        fi
+        unset zcompaudit_stamp zcompdump
+      '';
       autosuggestion.enable = true;
       syntaxHighlighting.enable = true;
       history = {
@@ -94,106 +107,123 @@ in
         ll = "eza --color=always --all --long --git --icons=always --no-time --no-permissions";
         updoot = "dotctl apply --update";
       };
-      initContent = ''
-        [[ -r "$HOME/.zprofile" ]] && source "$HOME/.zprofile"
-        [[ -r "${sourceRoot}/wezterm-shell-integration.sh" ]] && source "${sourceRoot}/wezterm-shell-integration.sh"
-
-        : "$NEOVIM_SRC_DIR"
-
-        function chpwd {
-          echo "\x1b]1337;SetUserVar=panetitle=$(echo -n $(basename $(pwd)) | base64)\x07"
-        }
-        chpwd
-
-        bindkey -v
-
-        [[ -f "${p10kTheme}" ]] && source "${p10kTheme}"
-        [[ -f "${zshViMode}" ]] && source "${zshViMode}"
-        [[ -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
-
-        prompt_customprefix() {
-          :
-        }
-        typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
-          customprefix
-          os_icon
-          dir
-          vcs
-          newline
-          prompt_char
-        )
-
-        get_windows_userprofile() {
-          if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -NoLogo -NoProfile -Command '$env:UserProfile' 2>/dev/null && return
+      initContent = lib.mkMerge [
+        (lib.mkBefore ''
+          if [[ -r "''${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-''${(%):-%n}.zsh" ]]; then
+            source "''${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-''${(%):-%n}.zsh"
           fi
+        '')
+        ''
+            [[ -r "$HOME/.zprofile" ]] && source "$HOME/.zprofile"
+            [[ -r "${sourceRoot}/wezterm-shell-integration.sh" ]] && source "${sourceRoot}/wezterm-shell-integration.sh"
 
-          if [[ -x /init && -x /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe ]]; then
-            /init /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -Command '$env:UserProfile' 2>/dev/null && return
-          fi
+          : "$NEOVIM_SRC_DIR"
 
-          return 1
-        }
+          function chpwd {
+            echo "\x1b]1337;SetUserVar=panetitle=$(echo -n $(basename $(pwd)) | base64)\x07"
+          }
+          chpwd
 
-        if command -v wslpath >/dev/null 2>&1; then
-          windows_userprofile="$(get_windows_userprofile | tr -d '\r')"
-          if [[ -n "$windows_userprofile" ]]; then
-            export WINHOME=$(wslpath -u "$windows_userprofile")
-            export APPDATA="$WINHOME/AppData/Roaming"
-            export DESKTOP="$WINHOME/Desktop"
-            export DOWNLOADS="$WINHOME/Downloads"
-            if [[ -d "$WINHOME/.codex" ]]; then
-              export CODEX_HOME="$WINHOME/.codex"
+          bindkey -v
+
+          [[ -f "${p10kTheme}" ]] && source "${p10kTheme}"
+          [[ -f "${zshViMode}" ]] && source "${zshViMode}"
+          [[ -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
+
+          prompt_customprefix() {
+            :
+          }
+          typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
+            customprefix
+            os_icon
+            dir
+            vcs
+            newline
+            prompt_char
+          )
+
+          get_windows_userprofile() {
+            if command -v powershell.exe >/dev/null 2>&1; then
+              powershell.exe -NoLogo -NoProfile -Command '$env:UserProfile' 2>/dev/null && return
+            fi
+
+            if [[ -x /init && -x /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe ]]; then
+              /init /mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -Command '$env:UserProfile' 2>/dev/null && return
+            fi
+
+            return 1
+          }
+
+          if command -v wslpath >/dev/null 2>&1; then
+            windows_profile_cache="''${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/windows-userprofile"
+            windows_userprofile=""
+            if [[ -r "$windows_profile_cache" ]]; then
+              windows_userprofile="$(<"$windows_profile_cache")"
+              WINHOME="$(wslpath -u "$windows_userprofile" 2>/dev/null)"
+              [[ -d "$WINHOME" ]] || windows_userprofile=""
+            fi
+            if [[ -z "$windows_userprofile" ]]; then
+              windows_userprofile="$(get_windows_userprofile | tr -d '\r')"
+              if [[ -n "$windows_userprofile" ]]; then
+                WINHOME="$(wslpath -u "$windows_userprofile")"
+                mkdir -p "$(dirname "$windows_profile_cache")"
+                print -r -- "$windows_userprofile" > "$windows_profile_cache"
+              fi
+            fi
+            if [[ -n "$windows_userprofile" && -d "$WINHOME" ]]; then
+              export WINHOME
+              export APPDATA="$WINHOME/AppData/Roaming"
+              export DESKTOP="$WINHOME/Desktop"
+              export DOWNLOADS="$WINHOME/Downloads"
+              if [[ -d "$WINHOME/.codex" ]]; then
+                export CODEX_HOME="$WINHOME/.codex"
+              fi
+            fi
+
+            if [[ -d "/mnt/g" ]]; then
+              export GDRIVE="/mnt/g/My Drive"
+              export GBACKUPS="/mnt/g/My Drive/Backups"
             fi
           fi
 
-          if [[ -d "/mnt/g" ]]; then
-            export GDRIVE="/mnt/g/My Drive"
-            export GBACKUPS="/mnt/g/My Drive/Backups"
-          fi
-        fi
+          unset -f get_windows_userprofile
+          unset windows_profile_cache windows_userprofile
 
-        unset -f get_windows_userprofile
-        unset windows_userprofile
-
-        if command -v mise >/dev/null 2>&1; then
-          eval "$(mise activate zsh)"
-        fi
-
-        setup_1password_ssh_agent() {
-          if [[ -n "$WSL_DISTRO_NAME" ]]; then
-            if command -v ssh.exe >/dev/null 2>&1; then
-              ssh() {
-                command ssh.exe -o StrictHostKeyChecking=accept-new "$@"
-              }
-              scp() {
-                command scp.exe -o StrictHostKeyChecking=accept-new "$@"
-              }
-              sftp() {
-                command sftp.exe -o StrictHostKeyChecking=accept-new "$@"
-              }
-              ssh-add() {
-                command ssh-add.exe "$@"
-              }
-              ssh-agent() {
-                command ssh-agent.exe "$@"
-              }
-              export GIT_SSH_COMMAND="ssh.exe -o StrictHostKeyChecking=accept-new"
+          setup_1password_ssh_agent() {
+            if [[ -n "$WSL_DISTRO_NAME" ]]; then
+              if command -v ssh.exe >/dev/null 2>&1; then
+                ssh() {
+                  command ssh.exe -o StrictHostKeyChecking=accept-new "$@"
+                }
+                scp() {
+                  command scp.exe -o StrictHostKeyChecking=accept-new "$@"
+                }
+                sftp() {
+                  command sftp.exe -o StrictHostKeyChecking=accept-new "$@"
+                }
+                ssh-add() {
+                  command ssh-add.exe "$@"
+                }
+                ssh-agent() {
+                  command ssh-agent.exe "$@"
+                }
+                export GIT_SSH_COMMAND="ssh.exe -o StrictHostKeyChecking=accept-new"
+              fi
+              unset SSH_AUTH_SOCK
+              return
             fi
-            unset SSH_AUTH_SOCK
-            return
-          fi
 
-          local sock="$HOME/.1password/agent.sock"
-          if [[ -S "$sock" ]]; then
-            export SSH_AUTH_SOCK="$sock"
-          fi
-        }
-        setup_1password_ssh_agent
+            local sock="$HOME/.1password/agent.sock"
+            if [[ -S "$sock" ]]; then
+              export SSH_AUTH_SOCK="$sock"
+            fi
+          }
+          setup_1password_ssh_agent
 
-        # Shell startup should not authenticate external services. Use explicit
-        # commands such as `op` or `gh auth login` when credentials need refreshing.
-      '';
+            # Shell startup should not authenticate external services. Use explicit
+            # commands such as `op` or `gh auth login` when credentials need refreshing.
+        ''
+      ];
     };
   };
 }

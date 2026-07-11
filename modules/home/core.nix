@@ -40,6 +40,7 @@
     };
 
     home.sessionPath = [
+      "$HOME/.local/share/mise/shims"
       "$HOME/.cache/.bun/bin"
       "$HOME/.bun/bin"
       "$HOME/.cargo/bin"
