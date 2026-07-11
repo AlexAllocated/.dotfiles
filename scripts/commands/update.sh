@@ -24,16 +24,17 @@ update_neovim_candidate() {
 	ln -s "$candidate/nvim" "$runtime/config/nvim"
 	printf 'Refreshing Neovim plugin pins in an isolated runtime...\n'
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
+		DOTFILES_NVIM_PIN_UPDATE=1 \
 		DOTFILES_NVIM_LOCKFILE="$candidate/nvim/lazy-lock.json" \
 		XDG_CONFIG_HOME="$runtime/config" \
 		XDG_DATA_HOME="$runtime/data" \
 		XDG_STATE_HOME="$runtime/state" \
 		XDG_CACHE_HOME="$runtime/cache" \
-		nvim --headless "+set nomore" "+Lazy! update" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa; then
+		nvim --headless "+set nomore" "+lua require(\"config.bootstrap\").update_plugin_pins()"; then
 		printf 'Neovim pin refresh failed.\n' >&2
 		return 1
 	fi
-	printf 'Neovim plugin pins and registries refreshed.\n'
+	printf 'Neovim plugin pins refreshed.\n'
 }
 
 validate_update_candidate() {
@@ -64,7 +65,7 @@ sync_live_neovim_runtime() (
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
 		DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/nvim/lazy-lock.json" \
 		XDG_CONFIG_HOME="$config_home" \
-		nvim --headless "+set nomore" "+Lazy! restore" "+MasonUpdate" "+TSUpdateSync" "+lua require(\"config.bootstrap\").wait_for_mason()" +qa; then
+		nvim --headless "+set nomore" "+lua require(\"config.bootstrap\").sync_runtime()"; then
 		printf 'Active Neovim runtime sync failed.\n' >&2
 		return 1
 	fi
