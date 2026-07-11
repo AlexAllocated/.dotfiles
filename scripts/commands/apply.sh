@@ -42,7 +42,7 @@ revalidate_and_reapply_profile() {
 	fi
 	work="$(mktemp -d)"
 	candidate="$work/repo"
-	trap 'rm -rf "$work"' EXIT
+	trap_remove_on_exit "$work"
 	stage_repo "$candidate"
 	validate_update_candidate "$candidate"
 	apply_profile "$profile" "$candidate"
@@ -63,7 +63,7 @@ apply_with_update() {
 		local work candidate
 		work="$(mktemp -d)"
 		candidate="$work/repo"
-		trap 'rm -rf "$work"' EXIT
+		trap_remove_on_exit "$work"
 		prepare_update_candidate "$candidate" "$work"
 		printf 'Applying %s from the validated staging checkout...\n' "$profile"
 		apply_profile "$profile" "$candidate"

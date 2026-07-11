@@ -30,6 +30,9 @@ update_neovim_candidate() {
 		XDG_DATA_HOME="$runtime/data" \
 		XDG_STATE_HOME="$runtime/state" \
 		XDG_CACHE_HOME="$runtime/cache" \
+		GIT_CONFIG_COUNT=1 \
+		GIT_CONFIG_KEY_0=advice.detachedHead \
+		GIT_CONFIG_VALUE_0=false \
 		nvim --headless "+set nomore" "+lua require(\"config.bootstrap\").update_plugin_pins()"; then
 		printf 'Neovim pin refresh failed.\n' >&2
 		return 1
@@ -59,12 +62,15 @@ sync_live_neovim_runtime() (
 	local config_home
 	command_exists nvim || return 0
 	config_home="$(mktemp -d)"
-	trap 'rm -rf "$config_home"' EXIT
+	trap_remove_on_exit "$config_home"
 	ln -s "$REPO_ROOT/nvim" "$config_home/nvim"
 	printf 'Applying accepted Neovim pins to the active runtime...\n'
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
 		DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/nvim/lazy-lock.json" \
 		XDG_CONFIG_HOME="$config_home" \
+		GIT_CONFIG_COUNT=1 \
+		GIT_CONFIG_KEY_0=advice.detachedHead \
+		GIT_CONFIG_VALUE_0=false \
 		nvim --headless "+set nomore" "+lua require(\"config.bootstrap\").sync_runtime()"; then
 		printf 'Active Neovim runtime sync failed.\n' >&2
 		return 1
@@ -89,7 +95,7 @@ run_update() {
 	local work candidate
 	work="$(mktemp -d)"
 	candidate="$work/repo"
-	trap 'rm -rf "$work"' EXIT
+	trap_remove_on_exit "$work"
 	prepare_update_candidate "$candidate" "$work"
 	accept_candidate_locks "$candidate"
 	sync_live_neovim_runtime
@@ -198,7 +204,7 @@ run_check() {
 	require_command nix
 	work="$(mktemp -d)"
 	candidate="$work/repo"
-	trap 'rm -rf "$work"' EXIT
+	trap_remove_on_exit "$work"
 	stage_repo "$candidate"
 	nix flake check "$candidate"
 	nix flake check --all-systems --no-build "$candidate"

@@ -26,6 +26,14 @@ if flake_ref_for_profile macos-managed >/dev/null 2>&1; then
 	exit 1
 fi
 
+cleanup_fixture="$(mktemp -d)"
+bash -c 'set -u; source "$1"; cleanup_path="$2"; register_cleanup() { local work="$cleanup_path"; trap_remove_on_exit "$work"; }; register_cleanup' _ \
+	"$repo_root/scripts/lib/common.sh" "$cleanup_fixture"
+[[ ! -e "$cleanup_fixture" ]] || {
+	printf 'captured cleanup trap did not remove %s\n' "$cleanup_fixture" >&2
+	exit 1
+}
+
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/source/modules/home"

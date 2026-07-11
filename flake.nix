@@ -55,7 +55,7 @@
 
       mkToolPkgs =
         system:
-        import nixpkgs-unstable {
+        import (if system == "x86_64-darwin" then nixpkgs else nixpkgs-unstable) {
           inherit system;
           config.allowUnfree = true;
         };

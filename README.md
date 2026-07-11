@@ -36,10 +36,12 @@ restored. New lockfiles are accepted only after Neovim automation and all-system
 Nix evaluation succeed. Neovim, Lazy, Mason, and Treesitter progress is streamed
 directly to the terminal. The isolated phase updates only Lazy plugin pins;
 Mason tools and Treesitter parsers are maintained once in the persistent runtime
-after validation. After applying, `updoot` commits every outstanding change and
-fetches again. Any late upstream changes are rebased, validated, and reapplied
-before the current branch is pushed. `dotctl update` refreshes pins without
-applying, committing, or pushing them.
+after validation. Intel Macs use the 26.05 package set because newer Nixpkgs
+releases no longer support `x86_64-darwin`; other architectures continue using
+unstable tool packages. After applying, `updoot` commits every outstanding
+change and fetches again. Any late upstream changes are rebased, validated, and
+reapplied before the current branch is pushed. `dotctl update` refreshes pins
+without applying, committing, or pushing them.
 
 ## Fast setup
 

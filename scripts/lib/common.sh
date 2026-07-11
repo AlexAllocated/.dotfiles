@@ -11,6 +11,15 @@ require_command() {
 	fi
 }
 
+trap_remove_on_exit() {
+	local path="$1"
+	local cleanup
+	printf -v cleanup 'rm -rf -- %q' "$path"
+	# Expand now so function-local paths remain available when EXIT fires.
+	# shellcheck disable=SC2064
+	trap "$cleanup" EXIT
+}
+
 detect_profile() {
 	if [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'nixos-wsl\n'
