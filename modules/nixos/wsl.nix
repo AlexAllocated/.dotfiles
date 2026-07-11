@@ -45,6 +45,7 @@ in
     # Let WSL inherit the Windows host name. NixOS-WSL currently has a WSL/user-session
     # startup bug when this distro starts while another WSL distro is already running.
     networking.hostName = "";
+    time.timeZone = "America/Denver";
 
     programs.zsh.enable = true;
     security.sudo.wheelNeedsPassword = false;
