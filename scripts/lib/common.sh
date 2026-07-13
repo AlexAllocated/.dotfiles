@@ -24,12 +24,13 @@ detect_profile() {
 	if [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'nixos-wsl\n'
 	elif [[ "$(uname -s)" == "Darwin" ]]; then
-		if ! command_exists nix; then
+		if [[ "$(uname -m)" != "arm64" ]]; then
+			printf 'Unsupported platform: only Apple Silicon macOS is supported.\n' >&2
+			return 2
+		elif ! command_exists nix; then
 			printf 'macos-managed\n'
-		elif [[ "$(uname -m)" == "arm64" ]]; then
-			printf 'macos\n'
 		else
-			printf 'macos-intel\n'
+			printf 'macos\n'
 		fi
 	else
 		printf 'linux\n'
@@ -43,9 +44,7 @@ flake_ref_for_profile() {
 		nixos-wsl) printf '%s#wsl\n' "$source_root" ;;
 		linux) printf '%s#linux\n' "$source_root" ;;
 		macos) printf '%s#macos-arm64\n' "$source_root" ;;
-		macos-intel) printf '%s#macos-x86_64\n' "$source_root" ;;
 		darwin-macos) printf '%s#macos-arm64\n' "$source_root" ;;
-		darwin-macos-intel) printf '%s#macos-x86_64\n' "$source_root" ;;
 		*)
 			printf 'Profile does not have a Nix flake output: %s\n' "$profile" >&2
 			return 2

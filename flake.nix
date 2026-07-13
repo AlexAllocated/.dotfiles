@@ -39,7 +39,6 @@
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
-        "x86_64-darwin"
       ];
       linuxSystems = [
         "x86_64-linux"
@@ -55,7 +54,7 @@
 
       mkToolPkgs =
         system:
-        import (if system == "x86_64-darwin" then nixpkgs else nixpkgs-unstable) {
+        import nixpkgs-unstable {
           inherit system;
           config.allowUnfree = true;
         };
@@ -230,12 +229,6 @@
         profile = "macos";
         homeDirectory = "/Users/${darwinUser}";
       };
-      macosIntelHomeConfiguration = mkHome {
-        user = darwinUser;
-        system = "x86_64-darwin";
-        profile = "macos-intel";
-        homeDirectory = "/Users/${darwinUser}";
-      };
     in
     {
       nixosConfigurations.wsl = nixpkgs.lib.nixosSystem {
@@ -277,16 +270,12 @@
       homeConfigurations = {
         linux = linuxHomeConfiguration;
         macos-arm64 = macosHomeConfiguration;
-        macos-x86_64 = macosIntelHomeConfiguration;
         macos = self.homeConfigurations.macos-arm64;
-        macos-intel = self.homeConfigurations.macos-x86_64;
       };
 
       darwinConfigurations = {
         macos-arm64 = mkDarwin "aarch64-darwin" "darwin-macos" darwinUser;
-        macos-x86_64 = mkDarwin "x86_64-darwin" "darwin-macos-intel" darwinUser;
         darwin-macos = self.darwinConfigurations.macos-arm64;
-        darwin-macos-intel = self.darwinConfigurations.macos-x86_64;
       };
 
       inherit homeModules;

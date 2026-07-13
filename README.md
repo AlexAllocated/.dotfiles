@@ -9,17 +9,17 @@ The final pre-Nix version is preserved by the `pre-nix` tag.
 
 ## Profiles
 
-| Profile                              | Configuration owner         | Intended use                                  |
-| ------------------------------------ | --------------------------- | --------------------------------------------- |
-| `nixos-wsl`                          | NixOS + Home Manager        | Primary Windows development environment       |
-| `linux`                              | Home Manager                | Ubuntu and other Linux distributions with Nix |
-| `macos-managed`                      | Homebrew + repository links | Macs where `/nix` cannot be installed         |
-| `macos`, `macos-intel`               | Home Manager                | Macs with Nix but without nix-darwin          |
-| `darwin-macos`, `darwin-macos-intel` | nix-darwin + Home Manager   | Personally managed Macs                       |
+| Profile         | Configuration owner         | Intended use                                  |
+| --------------- | --------------------------- | --------------------------------------------- |
+| `nixos-wsl`     | NixOS + Home Manager        | Primary Windows development environment       |
+| `linux`         | Home Manager                | Ubuntu and other Linux distributions with Nix |
+| `macos-managed` | Homebrew + repository links | Macs where `/nix` cannot be installed         |
+| `macos`         | Home Manager                | Apple Silicon Macs without nix-darwin         |
+| `darwin-macos`  | nix-darwin + Home Manager   | Personally managed Apple Silicon Macs         |
 
-Flake outputs use `wsl`, `linux`, `macos-arm64`, and `macos-x86_64`
-consistently inside their respective NixOS, Home Manager, and nix-darwin
-namespaces. The older names remain as compatibility aliases.
+Flake outputs use `wsl`, `linux`, and `macos-arm64` consistently inside their
+respective NixOS, Home Manager, and nix-darwin namespaces. The shorter macOS
+profile names remain as compatibility aliases.
 
 `dotctl` detects the normal profile automatically, so routine maintenance is:
 
@@ -36,12 +36,10 @@ restored. New lockfiles are accepted only after Neovim automation and all-system
 Nix evaluation succeed. Neovim, Lazy, Mason, and Treesitter progress is streamed
 directly to the terminal. The isolated phase updates only Lazy plugin pins;
 Mason tools and Treesitter parsers are maintained once in the persistent runtime
-after validation. Intel Macs use the 26.05 package set because newer Nixpkgs
-releases no longer support `x86_64-darwin`; other architectures continue using
-unstable tool packages. After applying, `updoot` commits every outstanding
-change and fetches again. Any late upstream changes are rebased, validated, and
-reapplied before the current branch is pushed. `dotctl update` refreshes pins
-without applying, committing, or pushing them.
+after validation. After applying, `updoot` commits every outstanding change and
+fetches again. Any late upstream changes are rebased, validated, and reapplied
+before the current branch is pushed. `dotctl update` refreshes pins without
+applying, committing, or pushing them.
 
 Interactive Lazy updates write to `nvim/lazy-lock.json` in a writable
 `DOTFILES_ROOT` or `~/.dotfiles` checkout. When the Neovim module is consumed
@@ -103,9 +101,8 @@ available for project-local runtime versions but does not own global tools.
 ./scripts/dotctl apply linux
 ```
 
-Use `macos` or `macos-intel` instead of `linux` for a Home Manager-only Mac.
-On a personal Mac using nix-darwin, apply `darwin-macos` or
-`darwin-macos-intel`.
+Use `macos` instead of `linux` for a Home Manager-only Apple Silicon Mac. On a
+personal Mac using nix-darwin, apply `darwin-macos`.
 
 ## Capabilities
 

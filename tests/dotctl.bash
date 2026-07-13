@@ -20,9 +20,31 @@ assert_equal() {
 
 assert_equal "$repo_root#linux" "$(flake_ref_for_profile linux)"
 assert_equal "$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
+assert_equal "$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
+assert_equal "$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
 assert_equal "/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
 if flake_ref_for_profile macos-managed >/dev/null 2>&1; then
 	printf 'macos-managed unexpectedly resolved to a flake output\n' >&2
+	exit 1
+fi
+for removed_profile in macos-intel darwin-macos-intel; do
+	if flake_ref_for_profile "$removed_profile" >/dev/null 2>&1; then
+		printf 'removed profile unexpectedly resolved: %s\n' "$removed_profile" >&2
+		exit 1
+	fi
+done
+
+if (
+	WSL_DISTRO_NAME=""
+	uname() {
+		case "$1" in
+			-s) printf 'Darwin\n' ;;
+			-m) printf 'x86_64\n' ;;
+		esac
+	}
+	detect_profile
+) >/dev/null 2>&1; then
+	printf 'Intel Darwin unexpectedly resolved to a supported profile\n' >&2
 	exit 1
 fi
 

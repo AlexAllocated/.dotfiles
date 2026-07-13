@@ -15,12 +15,12 @@ apply_profile() {
 			sudo nixos-rebuild boot --flake "$flake_ref"
 			printf 'NixOS-WSL generation installed. Restart with: wsl.exe -t NixOS\n'
 			;;
-		darwin-macos | darwin-macos-intel)
+		darwin-macos)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command darwin-rebuild
 			darwin-rebuild switch --flake "$flake_ref"
 			;;
-		linux | macos | macos-intel)
+		linux | macos)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command home-manager
 			home-manager switch -b hm-backup --flake "$flake_ref"

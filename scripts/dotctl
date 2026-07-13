@@ -44,9 +44,7 @@ Profiles:
   linux
   macos-managed
   macos
-  macos-intel
   darwin-macos
-  darwin-macos-intel
 EOF
 }
 
