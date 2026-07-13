@@ -76,7 +76,7 @@
   "rainbow_csv": { "branch": "master", "commit": "3dbbfd7d17536aebfb80f571255548495574c32b" },
   "refactoring.nvim": { "branch": "master", "commit": "64e10d782ae5b9653558482910213b8946651456" },
   "render-markdown.nvim": { "branch": "main", "commit": "f422cb5c6855f150e2ddcfaf44e7157b98b34f6a" },
-  "rustaceanvim": { "branch": "main", "commit": "313a4c8e5b21d612798b68922a3aaf8c3115dbca" },
+  "rustaceanvim": { "branch": "master", "commit": "313a4c8e5b21d612798b68922a3aaf8c3115dbca" },
   "screenkey.nvim": { "branch": "main", "commit": "740e238d1f143cb5f3a9d932f9c5142d3581b986" },
   "snacks.nvim": { "branch": "main", "commit": "882c996cf28183f4d63640de0b4c02ec886d01f2" },
   "tiny-devicons-auto-colors.nvim": { "branch": "main", "commit": "3b0c0174f4ed9120b6bea00d77e179ed5c46dcfb" },
