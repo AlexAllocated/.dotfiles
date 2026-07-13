@@ -8,6 +8,8 @@ REPO_ROOT="$repo_root"
 source "$repo_root/scripts/lib/common.sh"
 # shellcheck source=scripts/commands/update.sh
 source "$repo_root/scripts/commands/update.sh"
+# shellcheck source=scripts/commands/apply.sh
+source "$repo_root/scripts/commands/apply.sh"
 
 assert_equal() {
 	local expected="$1"
@@ -23,6 +25,19 @@ assert_equal "$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
 assert_equal "$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
 assert_equal "$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
 assert_equal "/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
+
+profile_apply="$({
+	require_command() { :; }
+	sudo() { :; }
+	apply_windows_packages() {
+		printf 'windows-packages:%s\n' "$1"
+	}
+	apply_profile nixos-wsl /tmp/staged-dotfiles
+})"
+[[ "$profile_apply" == *"windows-packages:/tmp/staged-dotfiles"* ]] || {
+	printf 'nixos-wsl profile did not reconcile Windows packages from its source checkout\n' >&2
+	exit 1
+}
 if flake_ref_for_profile macos-managed >/dev/null 2>&1; then
 	printf 'macos-managed unexpectedly resolved to a flake output\n' >&2
 	exit 1

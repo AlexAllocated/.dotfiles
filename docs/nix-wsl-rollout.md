@@ -20,12 +20,14 @@ Inside the new distro:
 ```sh
 git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.dotfiles
 cd ~/.dotfiles
-sudo nixos-rebuild boot --flake .#wsl
+./scripts/dotctl apply nixos-wsl
 wsl.exe -t NixOS
 dotctl doctor
 ```
 
 The NixOS-WSL profile declares `alex` as the default user and home directory.
+It also installs or upgrades the Windows applications in
+`platforms/windows/winget.json` through WinGet.
 
 ## Cutover
 
@@ -36,6 +38,10 @@ is not enabled:
 .\scripts\windows\apply-wsl-links.ps1 -DistroName NixOS
 wsl.exe --set-default NixOS
 ```
+
+The NixOS-WSL profile deploys the Windows-native Neovide config into Roaming
+AppData. That config enables Neovide's supported WSL transport, so launching
+Neovide from Windows runs the `nvim` managed by the default NixOS WSL distro.
 
 ## Shared Codex conversations
 

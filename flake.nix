@@ -92,6 +92,7 @@
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
             python3 -m py_compile scripts/codex/*.py
+            python3 -m json.tool platforms/windows/winget.json >/dev/null
             prettier --check README.md AGENTS.md docs .github
               touch $out
           '';

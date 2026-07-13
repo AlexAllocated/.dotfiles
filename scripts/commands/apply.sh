@@ -13,6 +13,7 @@ apply_profile() {
 			require_command sudo
 			require_command nixos-rebuild
 			sudo nixos-rebuild boot --flake "$flake_ref"
+			apply_windows_packages "$source_root"
 			printf 'NixOS-WSL generation installed. Restart with: wsl.exe -t NixOS\n'
 			;;
 		darwin-macos)

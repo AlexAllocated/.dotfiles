@@ -8,11 +8,14 @@ in
 
   config.home.file = {
     ".local/share/dotfiles/windows/NvimWSL.cs".source = sourceRoot + "/scripts/windows/NvimWSL.cs";
+    ".local/share/dotfiles/windows/apply-packages.ps1".source =
+      sourceRoot + "/scripts/windows/apply-packages.ps1";
     ".local/share/dotfiles/windows/apply-wsl-links.ps1".source =
       sourceRoot + "/scripts/windows/apply-wsl-links.ps1";
     ".local/share/dotfiles/windows/open-in-nvim.ps1".source =
       sourceRoot + "/scripts/windows/open-in-nvim.ps1";
     ".local/share/dotfiles/windows/open-in-nvim.sh".source =
       sourceRoot + "/scripts/windows/open-in-nvim.sh";
+    ".local/share/dotfiles/windows/winget.json".source = sourceRoot + "/platforms/windows/winget.json";
   };
 }

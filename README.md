@@ -41,6 +41,10 @@ change and fetches again. Any late upstream changes are rebased, validated, and
 reapplied before the current branch is pushed. `dotctl update` refreshes pins
 without applying, committing, or pushing them.
 
+On NixOS-WSL, apply and `updoot` also reconcile the latest Windows applications
+declared in `platforms/windows/winget.json` through WinGet. Neovide and WezTerm
+are currently managed there.
+
 Interactive Lazy updates write to `nvim/lazy-lock.json` in a writable
 `DOTFILES_ROOT` or `~/.dotfiles` checkout. When the Neovim module is consumed
 without a checkout, Lazy uses a writable lockfile under Neovim's state directory
@@ -73,7 +77,7 @@ installs it beside the existing distribution. Inside the new distribution:
 ```sh
 git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.dotfiles
 cd ~/.dotfiles
-sudo nixos-rebuild boot --flake .#wsl
+./scripts/dotctl apply nixos-wsl
 wsl.exe -t NixOS
 ```
 
@@ -191,6 +195,11 @@ backed up before replacement:
 ```powershell
 pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS
 ```
+
+This links the WezTerm Windows config into the WSL checkout. The NixOS-WSL
+profile deploys the tracked Neovide config without requiring elevated symlink
+creation. Neovide is installed Windows-native and starts Neovim in the default
+WSL distro; do not install the Linux Neovide package for this workflow.
 
 Shared Git behavior is tracked in `.gitconfig`; author identity stays in
 `~/.config/git/identity`. Optional machine-only Git overrides belong in

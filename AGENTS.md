@@ -8,12 +8,12 @@
 - `scripts/dotctl` is the small maintenance dispatcher. Shared helpers live under `scripts/lib/`, commands under `scripts/commands/`, and non-Nix platform profiles under `scripts/profiles/`.
 - The NixOS-WSL profile uses `alex` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
-- Reusable package capabilities are defined once in `lib/toolsets.nix`; the managed Mac manifest lives at `platforms/macos-managed/Brewfile`. Helper binaries land in `bin/`.
+- Reusable package capabilities are defined once in `lib/toolsets.nix`; host-native manifests live at `platforms/macos-managed/Brewfile` and `platforms/windows/winget.json`. Helper binaries land in `bin/`.
 
 ## Build, Test, and Development Commands
 
 - `dotctl check` runs the flake checks when Nix is available.
-- `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation from inside the `NixOS` distro; restart the distro afterward.
+- `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation and reconciles Windows host applications through WinGet; restart the distro afterward.
 - `dotctl apply linux` applies the generic Linux Home Manager profile.
 - `dotctl apply macos-managed` applies host-native macOS setup with Homebrew and symlinks, no Nix.
 - `dotctl apply --update` refreshes repo-managed pins, runs flake checks, reapplies the detected profile, then commits and pushes all dotfiles changes; `updoot` aliases to this in the Home Manager shell.

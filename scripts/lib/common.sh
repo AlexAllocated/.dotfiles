@@ -11,6 +11,50 @@ require_command() {
 	fi
 }
 
+apply_windows_packages() {
+	local source_root="${1:-$REPO_ROOT}"
+	local script manifest neovide_config script_windows manifest_windows roaming_windows roaming_linux neovide_target
+	[[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
+	require_command powershell.exe
+	require_command wslpath
+	script="$source_root/scripts/windows/apply-packages.ps1"
+	manifest="$source_root/platforms/windows/winget.json"
+	neovide_config="$source_root/neovide/config.toml"
+	[[ -f "$script" ]] || {
+		printf 'Windows package reconciler not found: %s\n' "$script" >&2
+		return 1
+	}
+	[[ -f "$manifest" ]] || {
+		printf 'WinGet manifest not found: %s\n' "$manifest" >&2
+		return 1
+	}
+	[[ -f "$neovide_config" ]] || {
+		printf 'Neovide config not found: %s\n' "$neovide_config" >&2
+		return 1
+	}
+	script_windows="$(wslpath -w "$script")"
+	manifest_windows="$(wslpath -w "$manifest")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$script_windows" \
+		-ManifestPath "$manifest_windows"
+
+	# Bypass packaged-app filesystem virtualization by writing through DrvFs.
+	roaming_windows="$(powershell.exe -NoLogo -NoProfile -Command \
+		'[Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData)' | tr -d '\r')"
+	[[ -n "$roaming_windows" ]] || {
+		printf 'Could not determine the Windows Roaming AppData directory.\n' >&2
+		return 1
+	}
+	roaming_linux="$(wslpath -u "$roaming_windows")"
+	neovide_target="$roaming_linux/neovide/config.toml"
+	mkdir -p "$(dirname "$neovide_target")"
+	if [[ ! -f "$neovide_target" ]] || ! cmp -s "$neovide_config" "$neovide_target"; then
+		cp "$neovide_config" "$neovide_target"
+		printf 'Updated Neovide config at %s.\n' "$roaming_windows\\neovide\\config.toml"
+	else
+		printf 'Neovide config is current.\n'
+	fi
+}
+
 trap_remove_on_exit() {
 	local path="$1"
 	local cleanup
