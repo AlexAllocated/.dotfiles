@@ -48,9 +48,42 @@ function M.wait_for_mason(timeout_ms)
 	return true
 end
 
+function M.update_mason_packages()
+	local ok, err = xpcall(function()
+		local registry = require("mason-registry")
+		local updates = 0
+		for _, package in ipairs(registry.get_installed_packages()) do
+			local installed = package:get_installed_version()
+			local latest = package:get_latest_version()
+			if installed ~= latest and not package:is_installing() and not package:is_uninstalling() then
+				if package:is_installable({ version = latest }) then
+					updates = updates + 1
+					vim.api.nvim_echo({
+						{
+							("Updating Mason package %s: %s -> %s"):format(package.name, installed or "unknown", latest),
+						},
+					}, true, {})
+					package:install({ version = latest })
+				end
+			end
+		end
+		if updates == 0 then
+			vim.api.nvim_echo({ { "Mason packages are up to date." } }, true, {})
+		end
+	end, debug.traceback)
+
+	if not ok then
+		vim.api.nvim_err_writeln(err)
+		return false
+	end
+	return true
+end
+
 function M.sync_runtime()
-	local commands_ok = run_automation({ "Lazy! restore", "MasonUpdate", "TSUpdateSync" })
-	vim.cmd(commands_ok and M.wait_for_mason() and "qa" or "cquit")
+	local plugins_ok = run_automation({ "Lazy! restore", "MasonUpdate" })
+	local mason_ok = plugins_ok and M.update_mason_packages()
+	local treesitter_ok = mason_ok and run_automation({ "TSUpdateSync" })
+	vim.cmd(treesitter_ok and M.wait_for_mason() and "qa" or "cquit")
 end
 
 return M
