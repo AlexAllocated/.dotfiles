@@ -23,8 +23,16 @@ brew_noninteractive() {
 	HOMEBREW_NO_ASK=1 HOMEBREW_NO_ENV_HINTS=1 brew "$@"
 }
 
-brew_bundle_supports_no_lock() {
-	brew bundle install --help 2>/dev/null | grep -q -- '--no-lock'
+brew_bundle_supports_option() {
+	local option="$1"
+	brew bundle install --help 2>/dev/null | grep -q -- "$option"
+}
+
+migrate_macos_formula_sources() {
+	if brew list --formula --full-name 2>/dev/null | grep -qx 'stripe/stripe-cli/stripe'; then
+		printf 'Migrating Stripe CLI from stripe/stripe-cli to homebrew/core...\n'
+		brew_noninteractive uninstall --formula stripe/stripe-cli/stripe
+	fi
 }
 
 apply_macos_managed_links() {
@@ -74,7 +82,11 @@ ensure_macos_packages() {
 	if [[ "$update" == "1" ]]; then
 		brew_noninteractive update
 	fi
-	if brew_bundle_supports_no_lock; then
+	migrate_macos_formula_sources
+	if brew_bundle_supports_option --jobs; then
+		bundle_args+=(--jobs=1)
+	fi
+	if brew_bundle_supports_option --no-lock; then
 		bundle_args+=(--no-lock)
 	fi
 	brew_noninteractive "${bundle_args[@]}"
