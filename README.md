@@ -43,6 +43,11 @@ change and fetches again. Any late upstream changes are rebased, validated, and
 reapplied before the current branch is pushed. `dotctl update` refreshes pins
 without applying, committing, or pushing them.
 
+Interactive Lazy updates write to `nvim/lazy-lock.json` in a writable
+`DOTFILES_ROOT` or `~/.dotfiles` checkout. When the Neovim module is consumed
+without a checkout, Lazy uses a writable lockfile under Neovim's state directory
+instead of the immutable Home Manager configuration.
+
 ## Fast setup
 
 Clone over HTTPS so first setup does not depend on an SSH agent:

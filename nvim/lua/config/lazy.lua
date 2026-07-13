@@ -14,8 +14,36 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+local function resolve_lockfile()
+	local configured = vim.env.DOTFILES_NVIM_LOCKFILE
+	if configured ~= nil and configured ~= "" then
+		return configured
+	end
+
+	local root = vim.env.DOTFILES_ROOT
+	if root == nil or root == "" then
+		root = vim.fs.joinpath(vim.fn.expand("~"), ".dotfiles")
+	end
+	local tracked = vim.fs.joinpath(root, "nvim", "lazy-lock.json")
+	if vim.fn.filewritable(tracked) == 1 then
+		return tracked
+	end
+
+	local generated = vim.fs.joinpath(vim.fn.stdpath("config"), "lazy-lock.json")
+	if vim.fn.filewritable(generated) == 1 then
+		return generated
+	end
+
+	local state = vim.fs.joinpath(vim.fn.stdpath("state"), "lazy-lock.json")
+	vim.fn.mkdir(vim.fs.dirname(state), "p")
+	if vim.fn.filereadable(state) == 0 and vim.fn.filereadable(generated) == 1 then
+		vim.fn.writefile(vim.fn.readfile(generated, "b"), state, "b")
+	end
+	return state
+end
+
 require("lazy").setup({
-	lockfile = vim.env.DOTFILES_NVIM_LOCKFILE ~= "" and vim.env.DOTFILES_NVIM_LOCKFILE or nil,
+	lockfile = resolve_lockfile(),
 	ui = {
 		border = "rounded",
 	},
