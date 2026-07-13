@@ -42,8 +42,8 @@ reapplied before the current branch is pushed. `dotctl update` refreshes pins
 without applying, committing, or pushing them.
 
 On NixOS-WSL, apply and `updoot` also reconcile the latest Windows applications
-declared in `platforms/windows/winget.json` through WinGet. Neovide and WezTerm
-are currently managed there.
+declared in `platforms/windows/winget.json` through WinGet. Neovide, WezTerm,
+1Password, and the Codex desktop app are managed there.
 
 Interactive Lazy updates write to `nvim/lazy-lock.json` in a writable
 `DOTFILES_ROOT` or `~/.dotfiles` checkout. When the Neovim module is consumed
@@ -93,9 +93,11 @@ cd ~/.dotfiles
 exec zsh -l
 ```
 
-The tracked `platforms/macos-managed/Brewfile` declares host software. Homebrew
-owns global tools and runtimes; Bun owns npm-registry CLIs such as Codex. Mise is
-available for project-local runtime versions but does not own global tools.
+The tracked `platforms/macos-managed/Brewfile` declares host software and
+`platforms/macos/Brewfile` declares shared GUI apps. Homebrew owns global tools,
+runtimes, Neovide, WezTerm, 1Password, and the Codex desktop app; Bun owns
+npm-registry CLIs such as Codex. Mise is available for project-local runtime
+versions but does not own global tools.
 
 ### Linux or macOS with Nix
 
@@ -106,7 +108,9 @@ available for project-local runtime versions but does not own global tools.
 ```
 
 Use `macos` instead of `linux` for a Home Manager-only Apple Silicon Mac. On a
-personal Mac using nix-darwin, apply `darwin-macos`.
+personal Mac using nix-darwin, apply `darwin-macos`. Native Linux installs
+Neovide, WezTerm, and 1Password through Nix. OpenAI currently publishes the
+Codex desktop app for Windows and macOS only; Linux uses the managed Codex CLI.
 
 ## Capabilities
 
@@ -141,10 +145,11 @@ Available modules:
 - `shell`: zsh, Powerlevel10k, navigation, and shell integrations
 - `git`: Git, Delta, and Lazygit without an embedded author identity
 - `nvim`: the complete Neovim configuration and runtime dependencies
+- `neovide`: native Neovide, BigBlueTerm Nerd Font, and shared GUI settings
 - `codex`: Codex, Bun, Node, and reusable sanitized configuration
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
-- `terminal`: WezTerm configuration
+- `terminal`: WezTerm and its configuration on native Linux/macOS
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition
 
@@ -189,17 +194,28 @@ Checks cover Nix formatting and evaluation, ShellCheck, Bash syntax, Lua syntax,
 Stylua, Python compilation, the public Home Manager module API, and container
 smoke tests in CI.
 
-Windows-side application links are applied separately and existing files are
-backed up before replacement:
+The NixOS-WSL profile also reconciles the Windows side of the workstation. It
+installs or updates WezTerm, Neovide, and the official ChatGPT/Codex desktop app
+through WinGet; installs the locked BigBlueTerm Nerd Font; deploys Neovide
+settings; maintains WSL-backed application links; and registers terminal
+Neovim and Neovide with Windows and Codex's **Open with** menu. Neovide is the
+Codex default.
+
+Existing Windows files are backed up before replacement. The link reconciler
+can still be run directly for troubleshooting:
 
 ```powershell
 pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS
 ```
 
-This links the WezTerm Windows config into the WSL checkout. The NixOS-WSL
-profile deploys the tracked Neovide config without requiring elevated symlink
-creation. Neovide is installed Windows-native and starts Neovim in the default
-WSL distro; do not install the Linux Neovide package for this workflow.
+Codex CLI and desktop share the Windows Codex home while keeping SQLite on WSL
+ext4. The profile maintains the path settings and portable desktop preferences;
+auth, conversations, runtime state, and machine-generated plugin metadata stay
+local. Migrating pre-existing separate conversation stores remains an explicit
+`dotctl codex-share migrate` operation because both clients must be closed.
+
+Neovide is installed Windows-native and starts Neovim in the default WSL
+distro; do not install the Linux Neovide package for this workflow.
 
 Shared Git behavior is tracked in `.gitconfig`; author identity stays in
 `~/.config/git/identity`. Optional machine-only Git overrides belong in

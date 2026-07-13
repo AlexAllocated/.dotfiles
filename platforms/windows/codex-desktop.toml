@@ -1,0 +1,6 @@
+[desktop]
+runCodexInWindowsSubsystemForLinux = true
+integratedTerminalShell = "wsl"
+
+[windows]
+sandbox = "elevated"

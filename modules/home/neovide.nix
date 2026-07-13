@@ -12,9 +12,12 @@ in
 {
   imports = [ ./core.nix ];
 
-  config = {
-    home.packages = lib.optionals nativeLinux [ pkgs.wezterm ];
-    xdg.configFile."wezterm".source = sourceRoot + "/wezterm";
-    home.file.".wezterm.lua".source = sourceRoot + "/.wezterm.lua";
+  config = lib.mkIf (cfg.profile != "nixos-wsl") {
+    home.packages = lib.optionals nativeLinux [
+      pkgs.neovide
+      pkgs.nerd-fonts.bigblue-terminal
+    ];
+
+    xdg.configFile."neovide/config.toml".source = sourceRoot + "/neovide/config.toml";
   };
 }

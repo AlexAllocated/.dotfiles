@@ -32,6 +32,52 @@ hide_rate_limit_model_nudge = true
 memories = true
 prevent_idle_sleep = true
 
+[desktop]
+conversationDetailMode = "STEPS_COMMANDS"
+ambient-suggestions-enabled = true
+show-context-window-usage = true
+followUpQueueMode = "steer"
+keepRemoteControlAwakeWhilePluggedIn = true
+browser-annotation-screenshots-mode = "necessary"
+appearanceLightCodeThemeId = "gruvbox"
+appearanceDarkCodeThemeId = "gruvbox"
+usePointerCursors = true
+enabled-reasoning-efforts = ["low", "medium", "high", "xhigh", "ultra", "max"]
+sansFontSize = 14
+codeFontSize = 12
+
+[desktop.appearanceLightChromeTheme]
+accent = "#458588"
+contrast = 45
+ink = "#3c3836"
+opaqueWindows = false
+surface = "#fbf1c7"
+
+[desktop.appearanceLightChromeTheme.fonts]
+code = "BigBlueTerm437 Nerd Font"
+ui = "BigBlueTerm437 Nerd Font"
+
+[desktop.appearanceLightChromeTheme.semanticColors]
+diffAdded = "#3c3836"
+diffRemoved = "#cc241d"
+skill = "#b16286"
+
+[desktop.appearanceDarkChromeTheme]
+accent = "#458588"
+contrast = 60
+ink = "#ebdbb2"
+opaqueWindows = false
+surface = "#282828"
+
+[desktop.appearanceDarkChromeTheme.fonts]
+code = "BigBlueTerm437 Nerd Font"
+ui = "Satoshi"
+
+[desktop.appearanceDarkChromeTheme.semanticColors]
+diffAdded = "#ebdbb2"
+diffRemoved = "#cc241d"
+skill = "#b16286"
+
 [plugins."cloudflare@openai-curated"]
 enabled = true
 
@@ -56,21 +102,6 @@ enabled = true
 [memories]
 use_memories = true
 generate_memories = true
-
-[projects."/home/alex/code"]
-trust_level = "trusted"
-
-[projects."/home/alex"]
-trust_level = "trusted"
-
-[projects."/home/alex/.dotfiles"]
-trust_level = "trusted"
-
-[projects."/Users/alexford/code"]
-trust_level = "trusted"
-
-[projects."/Users/alexford/.dotfiles"]
-trust_level = "trusted"
 
 [mcp_servers.linear]
 url = "https://mcp.linear.app/mcp"

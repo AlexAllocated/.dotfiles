@@ -239,39 +239,46 @@ function Build-NvimLauncher {
    return $launcherPath
 }
 
-function Register-NvimOpenWith {
-   param([string]$LauncherPath)
+function Register-TextEditorOpenWith {
+   param(
+      [string]$ProgId,
+      [string]$ExecutableName,
+      [string]$ExecutablePath,
+      [string]$Command,
+      [string]$IconPath,
+      [string]$Label,
+      [string]$Description,
+      [string]$ContextMenuName,
+      [string]$ContextMenuVerb
+   )
 
-   $progId = "NvimWSL.Text"
    $classes = "HKCU:\Software\Classes"
-   $progIdPath = Join-Path $classes $progId
-   $iconPath = [System.IO.Path]::ChangeExtension($LauncherPath, ".ico")
-   $command = '"{0}" "%1"' -f $LauncherPath
+   $progIdPath = Join-Path $classes $ProgId
 
-   Set-RegistryString $progIdPath "" "Neovim (WSL) text file"
-   Set-RegistryString (Join-Path $progIdPath "DefaultIcon") "" "$iconPath,0"
-   Set-RegistryString (Join-Path $progIdPath "Application") "ApplicationName" "Neovim (WSL)"
-   Set-RegistryString (Join-Path $progIdPath "Application") "ApplicationIcon" "$iconPath,0"
-   Set-RegistryString (Join-Path $progIdPath "shell\open\command") "" $command
+   Set-RegistryString $progIdPath "" "$Label text file"
+   Set-RegistryString (Join-Path $progIdPath "DefaultIcon") "" "$IconPath,0"
+   Set-RegistryString (Join-Path $progIdPath "Application") "ApplicationName" $Label
+   Set-RegistryString (Join-Path $progIdPath "Application") "ApplicationIcon" "$IconPath,0"
+   Set-RegistryString (Join-Path $progIdPath "shell\open\command") "" $Command
 
-   $applicationPath = Join-Path $classes "Applications\NvimWSL.exe"
-   Set-RegistryString $applicationPath "FriendlyAppName" "Neovim (WSL)"
-   Set-RegistryString $applicationPath "ApplicationName" "Neovim (WSL)"
-   Set-RegistryString $applicationPath "ApplicationDescription" "Open text files in Neovim inside NixOS WSL"
-   Set-RegistryString (Join-Path $applicationPath "DefaultIcon") "" "$iconPath,0"
-   Set-RegistryString (Join-Path $applicationPath "shell\open\command") "" $command
+   $applicationRegistryPath = Join-Path $classes "Applications\$ExecutableName"
+   Set-RegistryString $applicationRegistryPath "FriendlyAppName" $Label
+   Set-RegistryString $applicationRegistryPath "ApplicationName" $Label
+   Set-RegistryString $applicationRegistryPath "ApplicationDescription" $Description
+   Set-RegistryString (Join-Path $applicationRegistryPath "DefaultIcon") "" "$IconPath,0"
+   Set-RegistryString (Join-Path $applicationRegistryPath "shell\open\command") "" $Command
 
-   $appPathsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\NvimWSL.exe"
-   Set-RegistryString $appPathsPath "" $LauncherPath
-   Set-RegistryString $appPathsPath "Path" (Split-Path -Parent $LauncherPath)
+   $appPathsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\$ExecutableName"
+   Set-RegistryString $appPathsPath "" $ExecutablePath
+   Set-RegistryString $appPathsPath "Path" (Split-Path -Parent $ExecutablePath)
 
-   $contextMenu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\*\shell\NvimWSL")
+   $contextMenu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\*\shell\$ContextMenuName")
    try {
-      $contextMenu.SetValue("MUIVerb", "Edit with Neovim (WSL)")
-      $contextMenu.SetValue("Icon", "$iconPath,0")
+      $contextMenu.SetValue("MUIVerb", $ContextMenuVerb)
+      $contextMenu.SetValue("Icon", "$IconPath,0")
       $contextCommand = $contextMenu.CreateSubKey("command")
       try {
-         $contextCommand.SetValue("", $command)
+         $contextCommand.SetValue("", $Command)
       } finally {
          $contextCommand.Dispose()
       }
@@ -298,21 +305,21 @@ function Register-NvimOpenWith {
       $subKey = "Software\Classes\$extension\OpenWithProgids"
       $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($subKey)
       try {
-         $key.SetValue($progId, (New-Object byte[] 0), [Microsoft.Win32.RegistryValueKind]::None)
+         $key.SetValue($ProgId, (New-Object byte[] 0), [Microsoft.Win32.RegistryValueKind]::None)
       } finally {
          $key.Dispose()
       }
 
-      $openWithList = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\$extension\OpenWithList\NvimWSL.exe")
+      $openWithList = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\$extension\OpenWithList\$ExecutableName")
       $openWithList.Dispose()
-      Set-RegistryString (Join-Path $applicationPath "SupportedTypes") $extension ""
+      Set-RegistryString (Join-Path $applicationRegistryPath "SupportedTypes") $extension ""
    }
 
-   if (-not ([System.Management.Automation.PSTypeName]"NvimWSL.AssociationNotifier").Type) {
+   if (-not ([System.Management.Automation.PSTypeName]"Dotfiles.AssociationNotifier").Type) {
       Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
-namespace NvimWSL {
+namespace Dotfiles {
    public static class AssociationNotifier {
       [DllImport("shell32.dll")]
       public static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2);
@@ -320,10 +327,10 @@ namespace NvimWSL {
 }
 '@
    }
-   [NvimWSL.AssociationNotifier]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+   [Dotfiles.AssociationNotifier]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
    & "$env:SystemRoot\System32\ie4uinit.exe" -show
 
-   Write-Host "Registered Neovim (WSL) for $($textExtensions.Count) text-oriented file extensions."
+   Write-Host "Registered $Label for $($textExtensions.Count) text-oriented file extensions."
 }
 
 if (-not $LinuxHome) {
@@ -347,6 +354,41 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "open-in-nvim.ps1") -Destination
 $launcherPath = Build-NvimLauncher `
    (Join-Path $PSScriptRoot "NvimWSL.cs") `
    $launcherDirectory
-Register-NvimOpenWith $launcherPath
+$nvimCommand = '"{0}" "%1"' -f $launcherPath
+Register-TextEditorOpenWith `
+   -ProgId "NvimWSL.Text" `
+   -ExecutableName "NvimWSL.exe" `
+   -ExecutablePath $launcherPath `
+   -Command $nvimCommand `
+   -IconPath ([System.IO.Path]::ChangeExtension($launcherPath, ".ico")) `
+   -Label "Neovim (WSL)" `
+   -Description "Open text files in Neovim inside NixOS WSL" `
+   -ContextMenuName "NvimWSL" `
+   -ContextMenuVerb "Edit with Neovim (WSL)"
 
-Write-Host "Windows links and Neovim integration now point at $DistroName."
+$neovide = (Get-Command neovide.exe -ErrorAction SilentlyContinue).Source
+if (-not $neovide) {
+   $neovide = Join-Path $env:ProgramFiles "Neovide\neovide.exe"
+}
+if (-not (Test-Path -LiteralPath $neovide)) {
+   throw "Neovide was not found after Windows package reconciliation."
+}
+$neovideLauncherDirectory = Join-Path $env:LOCALAPPDATA "NeovideWSL"
+New-Item -ItemType Directory -Force -Path $neovideLauncherDirectory | Out-Null
+Copy-Item `
+   -LiteralPath (Join-Path $PSScriptRoot "open-in-neovide.ps1") `
+   -Destination (Join-Path $neovideLauncherDirectory "open-in-neovide.ps1") `
+   -Force
+$neovideCommand = '"{0}" --wsl "%1"' -f $neovide
+Register-TextEditorOpenWith `
+   -ProgId "NeovideWSL.Text" `
+   -ExecutableName "neovide.exe" `
+   -ExecutablePath $neovide `
+   -Command $neovideCommand `
+   -IconPath $neovide `
+   -Label "Neovide (WSL)" `
+   -Description "Open text files in Neovide using Neovim inside NixOS WSL" `
+   -ContextMenuName "NeovideWSL" `
+   -ContextMenuVerb "Edit with Neovide (WSL)"
+
+Write-Host "Windows links and editor integrations now point at $DistroName."

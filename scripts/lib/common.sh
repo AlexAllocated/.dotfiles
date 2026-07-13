@@ -19,7 +19,7 @@ apply_windows_packages() {
 	require_command wslpath
 	script="$source_root/scripts/windows/apply-packages.ps1"
 	manifest="$source_root/platforms/windows/winget.json"
-	neovide_config="$source_root/neovide/config.toml"
+	neovide_config="$source_root/neovide/windows-wsl.toml"
 	[[ -f "$script" ]] || {
 		printf 'Windows package reconciler not found: %s\n' "$script" >&2
 		return 1
@@ -53,6 +53,70 @@ apply_windows_packages() {
 	else
 		printf 'Neovide config is current.\n'
 	fi
+}
+
+apply_windows_integration() {
+	local source_root="${1:-$REPO_ROOT}"
+	local script font_installer configurator base_config desktop_config script_windows
+	local font_package font_directory_windows font_installer_windows
+	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
+	[[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
+	require_command nix
+	require_command powershell.exe
+	require_command python3
+	require_command wslpath
+
+	script="$source_root/scripts/windows/apply-wsl-links.ps1"
+	font_installer="$source_root/scripts/windows/install-user-fonts.ps1"
+	configurator="$source_root/scripts/windows/configure-codex.py"
+	base_config="$source_root/codex/config.toml"
+	desktop_config="$source_root/platforms/windows/codex-desktop.toml"
+	for required in "$script" "$font_installer" "$configurator" "$base_config" "$desktop_config"; do
+		[[ -f "$required" ]] || {
+			printf 'Windows integration file not found: %s\n' "$required" >&2
+			return 1
+		}
+	done
+
+	script_windows="$(wslpath -w "$script")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$script_windows" \
+		-DistroName "$WSL_DISTRO_NAME" -LinuxHome "$HOME"
+	font_package="$(nix build "path:$source_root#bigblue-font" --no-link --print-out-paths)"
+	font_directory_windows="$(wslpath -w "$font_package/share/fonts")"
+	font_installer_windows="$(wslpath -w "$font_installer")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$font_installer_windows" \
+		-FontDirectory "$font_directory_windows"
+
+	windows_home="$(powershell.exe -NoLogo -NoProfile -Command "\$env:USERPROFILE" | tr -d '\r')"
+	local_appdata="$(powershell.exe -NoLogo -NoProfile -Command "\$env:LOCALAPPDATA" | tr -d '\r')"
+	program_files="$(powershell.exe -NoLogo -NoProfile -Command "\$env:ProgramFiles" | tr -d '\r')"
+	system_root="$(powershell.exe -NoLogo -NoProfile -Command "\$env:SystemRoot" | tr -d '\r')"
+	if [[ -z "$windows_home" || -z "$local_appdata" || -z "$program_files" || -z "$system_root" ]]; then
+		printf 'Could not resolve the Windows profile paths required by the Codex integration.\n' >&2
+		return 1
+	fi
+	windows_home_linux="$(wslpath -u "$windows_home")"
+	local_appdata_linux="$(wslpath -u "$local_appdata")"
+	neovide_windows="$program_files\\Neovide\\neovide.exe"
+	[[ -f "$(wslpath -u "$neovide_windows")" ]] || {
+		printf 'Neovide executable not found after Windows package reconciliation: %s\n' "$neovide_windows" >&2
+		return 1
+	}
+	mkdir -p "$local_appdata_linux/NvimWSL" "$local_appdata_linux/NeovideWSL"
+	cp "$source_root/scripts/windows/open-in-nvim.ps1" "$local_appdata_linux/NvimWSL/open-in-nvim.ps1"
+	cp "$source_root/scripts/windows/open-in-neovide.ps1" "$local_appdata_linux/NeovideWSL/open-in-neovide.ps1"
+
+	mkdir -p "$HOME/.codex/sqlite"
+	python3 "$configurator" \
+		--config "$windows_home_linux/.codex/config.toml" \
+		--base-config "$base_config" \
+		--desktop-config "$desktop_config" \
+		--linux-home "$HOME" \
+		--neovim-script "$local_appdata\\NvimWSL\\open-in-nvim.ps1" \
+		--neovim-icon "$local_appdata\\NvimWSL\\NvimWSL.exe" \
+		--neovide-script "$local_appdata\\NeovideWSL\\open-in-neovide.ps1" \
+		--neovide-icon "$neovide_windows" \
+		--powershell "$system_root\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
 }
 
 trap_remove_on_exit() {

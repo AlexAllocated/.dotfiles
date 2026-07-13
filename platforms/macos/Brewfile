@@ -1,0 +1,5 @@
+cask "1password"
+cask "codex-app"
+cask "font-bigblue-terminal-nerd-font"
+cask "neovide"
+cask "wezterm"

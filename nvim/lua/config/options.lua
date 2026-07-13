@@ -3,19 +3,23 @@
 -- Add any additional options here
 
 if vim.g.neovide then
-	-- vim.o.font = "BigBlueTermPlus Nerd Font"
-	-- vim.g.neovide_floating_corner_radius = 1.0
-	-- vim.g.neovide_opacity = 0.8
-	-- vim.g.neovide_normal_opacity = 0.8
-	-- vim.g.neovide_hide_mouse_when_typing = true
-	-- vim.g.neovide_refresh_rate = 120
-	-- vim.g.neovide_remember_window_size = true
-	-- vim.g.neovide_cursor_antialiasing = true
-	-- vim.g.neovide_cursor_animate_in_insert_mode = true
-	-- vim.g.neovide_cursor_animate_command_line = true
-	--
-	-- vim.g.neovide_cursor_vfx_mode = "railgun"
-	-- vim.g.neovide_cursor_vfx_mode = {"", ""}
+	if vim.fn.has("wsl") == 1 then
+		if vim.fn.argc() == 0 then
+			vim.api.nvim_set_current_dir(vim.env.HOME)
+		end
+		vim.g.neovide_title_background_color = "#1d2021"
+		vim.g.neovide_title_text_color = "#ebdbb2"
+	end
+
+	vim.g.neovide_hide_mouse_when_typing = true
+	vim.g.neovide_remember_window_size = true
+	vim.g.neovide_corner_preference = "round"
+	vim.g.neovide_position_animation_length = 0.10
+	vim.g.neovide_scroll_animation_length = 0.20
+	vim.g.neovide_cursor_animation_length = 0.08
+	vim.g.neovide_cursor_short_animation_length = 0.03
+	vim.g.neovide_cursor_vfx_mode = "railgun"
+	vim.g.neovide_floating_corner_radius = 0.3
 end
 
 vim.g.root_spec = { ".git", "compose.yml", "cwd" }

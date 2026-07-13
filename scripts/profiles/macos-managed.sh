@@ -36,7 +36,7 @@ migrate_macos_formula_sources() {
 }
 
 apply_macos_managed_links() {
-	mkdir -p "$HOME/.codex/rules" "$HOME/.config" "$HOME/.local/bin"
+	mkdir -p "$HOME/.codex/rules" "$HOME/.config/neovide" "$HOME/.local/bin"
 	link_path "$HOME/.zprofile" "$REPO_ROOT/.zprofile"
 	link_path "$HOME/.zshrc" "$REPO_ROOT/.zshrc"
 	link_path "$HOME/.gitconfig" "$REPO_ROOT/.gitconfig"
@@ -44,6 +44,7 @@ apply_macos_managed_links() {
 	link_path "$HOME/.wezterm.lua" "$REPO_ROOT/.wezterm.lua"
 	link_path "$HOME/rustfmt.toml" "$REPO_ROOT/rustfmt.toml"
 	link_path "$HOME/.config/nvim" "$REPO_ROOT/nvim"
+	link_path "$HOME/.config/neovide/config.toml" "$REPO_ROOT/neovide/config.toml"
 	link_path "$HOME/.config/wezterm" "$REPO_ROOT/wezterm"
 	link_path "$HOME/.codex/config.toml" "$REPO_ROOT/codex/config.toml"
 	link_path "$HOME/.codex/rules/default.rules" "$REPO_ROOT/codex/rules/default.rules"
@@ -62,9 +63,10 @@ write_mise_config() {
 }
 
 update_brewfile_packages() {
+	local brewfile="$1"
 	local kind package
 	for kind in formula cask; do
-		brew bundle list --file "$REPO_ROOT/platforms/macos-managed/Brewfile" --"$kind" |
+		brew bundle list --file "$brewfile" --"$kind" |
 			while IFS= read -r package; do
 				[[ -n "$package" ]] || continue
 				if brew outdated --"$kind" "$package" 2>/dev/null | grep -q .; then
@@ -74,15 +76,9 @@ update_brewfile_packages() {
 	done
 }
 
-ensure_macos_packages() {
-	local update="${1:-0}"
-	local brewfile="$REPO_ROOT/platforms/macos-managed/Brewfile"
+install_brewfile() {
+	local brewfile="$1"
 	local bundle_args=(bundle install --file "$brewfile")
-	ensure_homebrew
-	if [[ "$update" == "1" ]]; then
-		brew_noninteractive update
-	fi
-	migrate_macos_formula_sources
 	if brew_bundle_supports_option --jobs; then
 		bundle_args+=(--jobs=1)
 	fi
@@ -90,8 +86,30 @@ ensure_macos_packages() {
 		bundle_args+=(--no-lock)
 	fi
 	brew_noninteractive "${bundle_args[@]}"
+}
+
+ensure_macos_desktop_apps() {
+	local source_root="${1:-$REPO_ROOT}"
+	local brewfile="$source_root/platforms/macos/Brewfile"
+	ensure_homebrew
+	install_brewfile "$brewfile"
+	load_homebrew_shellenv
+}
+
+ensure_macos_packages() {
+	local update="${1:-0}"
+	local brewfile="$REPO_ROOT/platforms/macos-managed/Brewfile"
+	local desktop_brewfile="$REPO_ROOT/platforms/macos/Brewfile"
+	ensure_homebrew
 	if [[ "$update" == "1" ]]; then
-		update_brewfile_packages
+		brew_noninteractive update
+	fi
+	migrate_macos_formula_sources
+	install_brewfile "$brewfile"
+	install_brewfile "$desktop_brewfile"
+	if [[ "$update" == "1" ]]; then
+		update_brewfile_packages "$brewfile"
+		update_brewfile_packages "$desktop_brewfile"
 	fi
 	load_homebrew_shellenv
 }

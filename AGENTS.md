@@ -7,7 +7,7 @@
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
 - `scripts/dotctl` is the small maintenance dispatcher. Shared helpers live under `scripts/lib/`, commands under `scripts/commands/`, and non-Nix platform profiles under `scripts/profiles/`.
 - The NixOS-WSL profile uses `alex` as the default Linux user.
-- Editor configs live in `nvim/` (LazyVim-based Lua modules) and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
+- Editor configs live in `nvim/` (LazyVim-based Lua modules), `neovide/` (native and Windows-WSL GUI profiles), and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Reusable package capabilities are defined once in `lib/toolsets.nix`; host-native manifests live at `platforms/macos-managed/Brewfile` and `platforms/windows/winget.json`. Helper binaries land in `bin/`.
 
 ## Build, Test, and Development Commands
@@ -38,7 +38,7 @@
 - For container image changes, run `nix build .#docker-pocket-knife` and, when practical, `nix build .#docker-linux`.
 - For Neovim config updates, run `nvim --headless "+Lazy! sync" +qa` to catch plugin errors.
 - WezTerm changes should be loaded with `wezterm start --config-file $PWD/.wezterm.lua` to verify profiles.
-- After modifying Windows link behavior, run `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS` and inspect the target links from Windows.
+- After modifying Windows integration behavior, run `dotctl apply nixos-wsl` when practical. For a link-only check, run `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS`, then inspect the links, editor registrations, and Codex handlers from Windows.
 
 ## Commit & Pull Request Guidelines
 
@@ -51,6 +51,7 @@
 
 - Never commit personal secrets or machine-specific IDs; use placeholders and document required env vars in `README.md`.
 - On `macos-managed`, declare host tools and language runtimes in `platforms/macos-managed/Brewfile`. npm-registry CLI tools that are not Homebrew-managed should be installed with Bun, not npm globals. Mise is project-local only.
+- Shared macOS GUI applications belong in `platforms/macos/Brewfile`; keep the nix-darwin cask list aligned with it.
 - Shell startup must not run interactive authentication. Keep 1Password, GitHub, and other credential refreshes behind explicit commands such as `op` or `gh auth login`.
 - Git aliases and shared behavior are tracked, but Git author identity is local in `~/.config/git/identity`; `dotctl apply` should prompt for it on new setups or accept `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 

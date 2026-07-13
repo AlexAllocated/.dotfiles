@@ -40,8 +40,12 @@
       "stripe-cli"
     ];
     casks = [
+      "1password"
       "1password-cli"
+      "codex-app"
+      "font-bigblue-terminal-nerd-font"
       "gcloud-cli"
+      "neovide"
       "wezterm"
     ];
   };

@@ -7,6 +7,7 @@
     ./shell.nix
     ./git.nix
     ./nvim.nix
+    ./neovide.nix
     ./codex.nix
     ./cloud.nix
     ./terminal.nix

@@ -91,8 +91,11 @@
             bash tests/dotctl.bash
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
-            python3 -m py_compile scripts/codex/*.py
+            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py
+            python3 scripts/windows/configure-codex.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
+            python3 -c 'import pathlib, tomllib; tomllib.loads(pathlib.Path("platforms/windows/codex-desktop.toml").read_text())'
+            find neovide -name '*.toml' -print0 | xargs -0 -n1 python3 -c 'import pathlib, sys, tomllib; tomllib.loads(pathlib.Path(sys.argv[1]).read_text())'
             prettier --check README.md AGENTS.md docs .github
               touch $out
           '';
@@ -148,6 +151,7 @@
         shell = ./modules/home/shell.nix;
         git = ./modules/home/git.nix;
         nvim = ./modules/home/nvim.nix;
+        neovide = ./modules/home/neovide.nix;
         codex = ./modules/home/codex.nix;
         cloud = ./modules/home/cloud.nix;
         terminal = ./modules/home/terminal.nix;
@@ -284,13 +288,13 @@
 
       packages = forLinuxSystems (
         pkgs: toolPkgs:
-        import ./modules/docker/images.nix {
-          inherit
-            pkgs
-            toolPkgs
-            ;
+        (import ./modules/docker/images.nix {
+          inherit pkgs toolPkgs;
           user = "dev";
           source = self.outPath;
+        })
+        // {
+          bigblue-font = pkgs.nerd-fonts.bigblue-terminal;
         }
       );
 

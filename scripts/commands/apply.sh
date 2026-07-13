@@ -14,6 +14,7 @@ apply_profile() {
 			require_command nixos-rebuild
 			sudo nixos-rebuild boot --flake "$flake_ref"
 			apply_windows_packages "$source_root"
+			apply_windows_integration "$REPO_ROOT"
 			printf 'NixOS-WSL generation installed. Restart with: wsl.exe -t NixOS\n'
 			;;
 		darwin-macos)
@@ -21,10 +22,16 @@ apply_profile() {
 			require_command darwin-rebuild
 			darwin-rebuild switch --flake "$flake_ref"
 			;;
-		linux | macos)
+		linux)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command home-manager
 			home-manager switch -b hm-backup --flake "$flake_ref"
+			;;
+		macos)
+			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
+			require_command home-manager
+			home-manager switch -b hm-backup --flake "$flake_ref"
+			ensure_macos_desktop_apps "$source_root"
 			;;
 		*)
 			printf 'Unknown profile: %s\n' "$profile" >&2

@@ -9,6 +9,16 @@ doctor_command() {
 	fi
 }
 
+doctor_windows_app() {
+	local name="$1"
+	local test_expression="$2"
+	if powershell.exe -NoLogo -NoProfile -Command "if ($test_expression) { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
+		printf '%-14s installed\n' "$name"
+	else
+		printf '%-14s missing\n' "$name"
+	fi
+}
+
 run_doctor() {
 	local profile identity name email
 	profile="$(detect_profile)"
@@ -23,9 +33,17 @@ run_doctor() {
 	else
 		printf 'nix: not found\n'
 	fi
-	for name in zsh git gh op ssh nvim bun node rustc cargo rust-analyzer go dotnet wezterm docker; do
+	for name in zsh git gh op ssh nvim codex bun node rustc cargo rust-analyzer go dotnet docker; do
 		doctor_command "$name"
 	done
+	if [[ -n "${WSL_DISTRO_NAME:-}" && -x "$(command -v powershell.exe 2>/dev/null)" ]]; then
+		doctor_windows_app neovide-win "Test-Path \"\$env:ProgramFiles\Neovide\neovide.exe\""
+		doctor_windows_app wezterm-win "Test-Path \"\$env:ProgramFiles\WezTerm\wezterm-gui.exe\""
+		doctor_windows_app codex-desktop 'Get-AppxPackage -Name OpenAI.Codex'
+	else
+		doctor_command neovide
+		doctor_command wezterm
+	fi
 	identity="$(git_identity_path)"
 	name="$(git_config_value user.name "$identity")"
 	email="$(git_config_value user.email "$identity")"
@@ -35,6 +53,11 @@ run_doctor() {
 		printf '%-14s missing (%s)\n' git-identity "$identity"
 	fi
 	if [[ "$(uname -s)" == "Darwin" ]]; then
+		if [[ -d "/Applications/Codex.app" || -d "$HOME/Applications/Codex.app" ]]; then
+			printf '%-14s installed\n' codex-desktop
+		else
+			printf '%-14s missing\n' codex-desktop
+		fi
 		if [[ -S "$(onepassword_agent_socket)" ]]; then
 			printf '%-14s %s\n' 1password-ssh "$(onepassword_agent_socket)"
 		else
