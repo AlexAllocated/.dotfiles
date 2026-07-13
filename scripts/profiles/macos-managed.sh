@@ -23,6 +23,10 @@ brew_noninteractive() {
 	HOMEBREW_NO_ASK=1 HOMEBREW_NO_ENV_HINTS=1 brew "$@"
 }
 
+brew_bundle_supports_no_lock() {
+	brew bundle install --help 2>/dev/null | grep -q -- '--no-lock'
+}
+
 apply_macos_managed_links() {
 	mkdir -p "$HOME/.codex/rules" "$HOME/.config" "$HOME/.local/bin"
 	link_path "$HOME/.zprofile" "$REPO_ROOT/.zprofile"
@@ -64,11 +68,16 @@ update_brewfile_packages() {
 
 ensure_macos_packages() {
 	local update="${1:-0}"
+	local brewfile="$REPO_ROOT/platforms/macos-managed/Brewfile"
+	local bundle_args=(bundle install --file "$brewfile")
 	ensure_homebrew
 	if [[ "$update" == "1" ]]; then
 		brew_noninteractive update
 	fi
-	brew_noninteractive bundle install --file "$REPO_ROOT/platforms/macos-managed/Brewfile" --no-lock
+	if brew_bundle_supports_no_lock; then
+		bundle_args+=(--no-lock)
+	fi
+	brew_noninteractive "${bundle_args[@]}"
 	if [[ "$update" == "1" ]]; then
 		update_brewfile_packages
 	fi

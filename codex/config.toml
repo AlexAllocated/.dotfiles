@@ -1,4 +1,4 @@
-model = "gpt-5.5"
+model = "gpt-5.6-sol"
 check_for_update_on_startup = false
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
@@ -16,6 +16,7 @@ status_line = ["model-with-reasoning", "current-dir", "context-remaining", "git-
 
 [tui.model_availability_nux]
 "gpt-5.5" = 4
+"gpt-5.6-sol" = 1
 
 [notice]
 hide_gpt5_1_migration_prompt = true
@@ -66,6 +67,9 @@ trust_level = "trusted"
 trust_level = "trusted"
 
 [projects."/Users/alexford/code"]
+trust_level = "trusted"
+
+[projects."/Users/alexford/.dotfiles"]
 trust_level = "trusted"
 
 [mcp_servers.linear]

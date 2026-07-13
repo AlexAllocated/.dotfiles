@@ -41,7 +41,7 @@
     ];
     casks = [
       "1password-cli"
-      "google-cloud-sdk"
+      "gcloud-cli"
       "wezterm"
     ];
   };
