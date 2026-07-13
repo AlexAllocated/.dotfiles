@@ -60,25 +60,28 @@
         };
 
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f (mkPkgs system));
+      forAllSystemsWithTools =
+        f: nixpkgs.lib.genAttrs systems (system: f (mkPkgs system) (mkToolPkgs system));
       forLinuxSystems =
         f: nixpkgs.lib.genAttrs linuxSystems (system: f (mkPkgs system) (mkToolPkgs system));
 
       mkQualityCheck =
-        pkgs:
+        pkgs: toolPkgs:
         pkgs.runCommand "dotfiles-quality"
           {
-            nativeBuildInputs = with pkgs; [
-              bash
-              git
-              lua
-              nixfmt
-              prettier
-              python3
-              rsync
-              shellcheck
-              shfmt
-              stylua
-            ];
+            nativeBuildInputs =
+              (with pkgs; [
+                bash
+                git
+                lua
+                nixfmt
+                python3
+                rsync
+                shellcheck
+                shfmt
+                stylua
+              ])
+              ++ [ toolPkgs.prettier ];
           }
           ''
               cp -R ${self} source
@@ -303,27 +306,28 @@
         default = mkDotctlApp pkgs;
       });
 
-      formatter = forAllSystems (
-        pkgs:
+      formatter = forAllSystemsWithTools (
+        pkgs: toolPkgs:
         pkgs.writeShellApplication {
           name = "dotfiles-format";
-          runtimeInputs = with pkgs; [
-            nixfmt
-            prettier
-            shfmt
-            stylua
-            treefmt
-          ];
+          runtimeInputs =
+            (with pkgs; [
+              nixfmt
+              shfmt
+              stylua
+              treefmt
+            ])
+            ++ [ toolPkgs.prettier ];
           text = ''
             exec treefmt "$@"
           '';
         }
       );
 
-      checks = forAllSystems (
-        pkgs:
+      checks = forAllSystemsWithTools (
+        pkgs: toolPkgs:
         {
-          quality = mkQualityCheck pkgs;
+          quality = mkQualityCheck pkgs toolPkgs;
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           home-module-api = mkModuleApiCheck pkgs pkgs.stdenv.hostPlatform.system;
@@ -333,18 +337,21 @@
         }
       );
 
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          packages = with pkgs; [
-            nixfmt
-            prettier
-            shellcheck
-            shfmt
-            stylua
-            treefmt
-          ];
-        };
-      });
+      devShells = forAllSystemsWithTools (
+        pkgs: toolPkgs: {
+          default = pkgs.mkShell {
+            packages =
+              (with pkgs; [
+                nixfmt
+                shellcheck
+                shfmt
+                stylua
+                treefmt
+              ])
+              ++ [ toolPkgs.prettier ];
+          };
+        }
+      );
 
       lib = {
         inherit homeModules;
