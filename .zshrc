@@ -6,11 +6,6 @@
 
 : "${NEOVIM_SRC_DIR:=$HOME/.cache/neovim}"
 
-function chpwd {
-	echo "\x1b]1337;SetUserVar=panetitle=$(echo -n "$(basename "$(pwd)")" | base64)\x07"
-}
-chpwd
-
 bindkey -v
 
 source_first_readable() {
@@ -45,6 +40,13 @@ else
 	zsh_syntax_highlighting=""
 fi
 [[ -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
+
+dotfiles_update_pane_title() {
+	if (( $+functions[__wezterm_set_user_var] )); then
+		__wezterm_set_user_var panetitle "${PWD:t}"
+	fi
+}
+precmd_functions+=(dotfiles_update_pane_title)
 
 unset -f source_first_readable
 unset brew_prefix p10k_theme zvm_plugin zsh_autosuggestions

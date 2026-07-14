@@ -119,16 +119,18 @@ in
 
           : "$NEOVIM_SRC_DIR"
 
-          function chpwd {
-            echo "\x1b]1337;SetUserVar=panetitle=$(echo -n $(basename $(pwd)) | base64)\x07"
-          }
-          chpwd
-
           bindkey -v
 
           [[ -f "${p10kTheme}" ]] && source "${p10kTheme}"
           [[ -f "${zshViMode}" ]] && source "${zshViMode}"
           [[ -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
+
+          dotfiles_update_pane_title() {
+            if (( $+functions[__wezterm_set_user_var] )); then
+              __wezterm_set_user_var panetitle "''${PWD:t}"
+            fi
+          }
+          precmd_functions+=(dotfiles_update_pane_title)
 
           prompt_customprefix() {
             :
