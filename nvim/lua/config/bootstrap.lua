@@ -79,10 +79,59 @@ function M.update_mason_packages()
 	return true
 end
 
+function M.repair_treesitter_query_links()
+	local lazy_ok, lazy_config = pcall(require, "lazy.core.config")
+	local plugin = lazy_ok and lazy_config.plugins["nvim-treesitter"] or nil
+	if not plugin then
+		vim.api.nvim_err_writeln("Could not locate nvim-treesitter while repairing query links")
+		return false
+	end
+
+	local source_root = vim.fs.joinpath(plugin.dir, "runtime", "queries")
+	local install_root = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "queries")
+	if not vim.uv.fs_stat(install_root) then
+		return true
+	end
+
+	local repaired = {}
+	for language, entry_type in vim.fs.dir(install_root) do
+		local installed = vim.fs.joinpath(install_root, language)
+		local source = vim.fs.joinpath(source_root, language)
+		if entry_type == "link" and not vim.uv.fs_stat(installed) and vim.uv.fs_stat(source) then
+			local removed, remove_error = vim.uv.fs_unlink(installed)
+			if not removed then
+				vim.api.nvim_err_writeln(
+					("Could not remove stale Tree-sitter query link %s: %s"):format(
+						installed,
+						remove_error or "unknown error"
+					)
+				)
+				return false
+			end
+
+			local linked, link_error = vim.uv.fs_symlink(source, installed, { dir = true })
+			if not linked then
+				vim.api.nvim_err_writeln(
+					("Could not repair Tree-sitter query link %s: %s"):format(installed, link_error or "unknown error")
+				)
+				return false
+			end
+			table.insert(repaired, language)
+		end
+	end
+
+	if #repaired > 0 then
+		table.sort(repaired)
+		vim.api.nvim_echo({ { ("Repaired Tree-sitter query links: %s"):format(table.concat(repaired, ", ")) } }, true, {})
+	end
+	return true
+end
+
 function M.sync_runtime()
 	local plugins_ok = run_automation({ "Lazy! restore", "MasonUpdate" })
 	local mason_ok = plugins_ok and M.update_mason_packages()
-	local treesitter_ok = mason_ok and run_automation({ "TSUpdateSync" })
+	local query_links_ok = mason_ok and M.repair_treesitter_query_links()
+	local treesitter_ok = query_links_ok and run_automation({ "TSUpdateSync" })
 	vim.cmd(treesitter_ok and M.wait_for_mason() and "qa" or "cquit")
 end
 

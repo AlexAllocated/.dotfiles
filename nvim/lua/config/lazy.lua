@@ -42,6 +42,44 @@ local function resolve_lockfile()
 	return state
 end
 
+local function resolve_lazyvim_json()
+	local configured = vim.env.DOTFILES_LAZYVIM_JSON
+	if configured ~= nil and configured ~= "" then
+		return configured
+	end
+
+	local configured_lockfile = vim.env.DOTFILES_NVIM_LOCKFILE
+	if configured_lockfile ~= nil and configured_lockfile ~= "" then
+		local alongside_lockfile = vim.fs.joinpath(vim.fs.dirname(configured_lockfile), "lazyvim.json")
+		if vim.fn.filewritable(alongside_lockfile) == 1 then
+			return alongside_lockfile
+		end
+	end
+
+	local root = vim.env.DOTFILES_ROOT
+	if root == nil or root == "" then
+		root = vim.fs.joinpath(vim.fn.expand("~"), ".dotfiles")
+	end
+	local tracked = vim.fs.joinpath(root, "nvim", "lazyvim.json")
+	if vim.fn.filewritable(tracked) == 1 then
+		return tracked
+	end
+
+	local generated = vim.fs.joinpath(vim.fn.stdpath("config"), "lazyvim.json")
+	if vim.fn.filewritable(generated) == 1 then
+		return generated
+	end
+
+	local state = vim.fs.joinpath(vim.fn.stdpath("state"), "lazyvim.json")
+	vim.fn.mkdir(vim.fs.dirname(state), "p")
+	if vim.fn.filereadable(state) == 0 and vim.fn.filereadable(generated) == 1 then
+		vim.fn.writefile(vim.fn.readfile(generated, "b"), state, "b")
+	end
+	return state
+end
+
+vim.g.lazyvim_json = resolve_lazyvim_json()
+
 require("lazy").setup({
 	lockfile = resolve_lockfile(),
 	ui = {
