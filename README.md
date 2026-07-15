@@ -99,6 +99,11 @@ runtimes, Neovide, WezTerm, 1Password, and the Codex desktop app; Bun owns
 npm-registry CLIs such as Codex. Mise is available for project-local runtime
 versions but does not own global tools.
 
+Applying this profile removes services, containers, and host runtime files left
+by the retired macOS Docker workshop. Its home and builder volumes are preserved
+by default; set `DOTFILES_PURGE_LEGACY_DOCKER_WORKSHOP=1` for one apply to remove
+those volumes and the old local workstation image too.
+
 ### Linux or macOS with Nix
 
 ```sh

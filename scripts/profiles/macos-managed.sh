@@ -33,6 +33,20 @@ migrate_macos_formula_sources() {
 		printf 'Migrating Stripe CLI from stripe/stripe-cli to homebrew/core...\n'
 		brew_noninteractive uninstall --formula stripe/stripe-cli/stripe
 	fi
+	if brew tap 2>/dev/null | grep -qx 'stripe/stripe-cli'; then
+		printf 'Removing the unused stripe/stripe-cli tap...\n'
+		brew_noninteractive untap stripe/stripe-cli
+	fi
+}
+
+migrate_macos_cask_ownership() {
+	local font_dir="$HOME/Library/Fonts"
+	if ! brew list --cask font-bigblue-terminal-nerd-font >/dev/null 2>&1 &&
+		[[ -d "$font_dir" ]] &&
+		find "$font_dir" -maxdepth 1 -type f -name 'BigBlueTerm*NerdFont*.ttf' -print -quit | grep -q .; then
+		printf 'Replacing unmanaged BigBlue Terminal font files with the Homebrew cask...\n'
+		brew_noninteractive install --cask --force font-bigblue-terminal-nerd-font
+	fi
 }
 
 apply_macos_managed_links() {
@@ -92,6 +106,7 @@ ensure_macos_desktop_apps() {
 	local source_root="${1:-$REPO_ROOT}"
 	local brewfile="$source_root/platforms/macos/Brewfile"
 	ensure_homebrew
+	migrate_macos_cask_ownership
 	install_brewfile "$brewfile"
 	load_homebrew_shellenv
 }
@@ -101,10 +116,11 @@ ensure_macos_packages() {
 	local brewfile="$REPO_ROOT/platforms/macos-managed/Brewfile"
 	local desktop_brewfile="$REPO_ROOT/platforms/macos/Brewfile"
 	ensure_homebrew
+	migrate_macos_formula_sources
 	if [[ "$update" == "1" ]]; then
 		brew_noninteractive update
 	fi
-	migrate_macos_formula_sources
+	migrate_macos_cask_ownership
 	install_brewfile "$brewfile"
 	install_brewfile "$desktop_brewfile"
 	if [[ "$update" == "1" ]]; then
@@ -141,6 +157,110 @@ link_1password_agent() {
 		backup_path "$target"
 	fi
 	ln -sfn "$source" "$target"
+}
+
+restore_macos_launchd_ssh_agent_socket() {
+	local agent_socket launch_socket service_target
+	agent_socket="$(onepassword_agent_socket)"
+	launch_socket="$(launchctl getenv SSH_AUTH_SOCK 2>/dev/null || true)"
+	service_target="gui/$(id -u)"
+	[[ -n "$launch_socket" && -L "$launch_socket" ]] || return 0
+	[[ "$(readlink "$launch_socket")" == "$agent_socket" ]] || return 0
+
+	if launchctl bootout "$service_target/com.openssh.ssh-agent" >/dev/null 2>&1; then
+		rm -f "$launch_socket"
+		if ! launchctl bootstrap "$service_target" /System/Library/LaunchAgents/com.openssh.ssh-agent.plist >/dev/null 2>&1; then
+			printf 'Could not restart the macOS SSH agent. Log out and back in to recreate %s.\n' "$launch_socket" >&2
+			return 1
+		fi
+		printf 'Restored the macOS launchd SSH agent socket.\n'
+		return 0
+	fi
+
+	rm -f "$launch_socket"
+	printf 'Removed the legacy launchd SSH-agent bridge. Log out and back in to recreate the standard macOS socket.\n'
+}
+
+cleanup_legacy_macos_docker_workshop() {
+	local state_dir service_target label plist path docker_bin container image_id image_source cleaned=0
+	state_dir="$HOME/.local/share/dotfiles"
+	service_target="gui/$(id -u)"
+
+	for label in \
+		com.alexallocated.dotfiles.hostd \
+		com.alexallocated.dotfiles.1password-ssh-auth-sock; do
+		plist="$HOME/Library/LaunchAgents/$label.plist"
+		if [[ -f "$plist" ]] || launchctl print "$service_target/$label" >/dev/null 2>&1; then
+			cleaned=1
+		fi
+		launchctl bootout "$service_target/$label" >/dev/null 2>&1 || true
+		launchctl bootout "$service_target" "$plist" >/dev/null 2>&1 || true
+		launchctl remove "$label" >/dev/null 2>&1 || true
+		rm -f "$plist"
+	done
+
+	restore_macos_launchd_ssh_agent_socket
+
+	for path in \
+		"$state_dir/hostd" \
+		"$state_dir/hostd-handler" \
+		"$state_dir/hostd-server" \
+		"$state_dir/hostd.out.log" \
+		"$state_dir/hostd.err.log" \
+		"$state_dir/1password-ssh-auth-sock" \
+		"$state_dir/1password-ssh-auth-sock.out.log" \
+		"$state_dir/1password-ssh-auth-sock.err.log"; do
+		[[ -e "$path" || -L "$path" ]] || continue
+		rm -rf "$path"
+		cleaned=1
+	done
+
+	if command_exists docker; then
+		docker_bin="$(command -v docker)"
+	elif [[ -x /Applications/Docker.app/Contents/Resources/bin/docker ]]; then
+		docker_bin=/Applications/Docker.app/Contents/Resources/bin/docker
+	else
+		docker_bin=""
+	fi
+	if [[ -n "$docker_bin" ]] && "$docker_bin" info >/dev/null 2>&1; then
+		for container in dotfiles-workshop dotfiles-nixos; do
+			if "$docker_bin" container inspect "$container" >/dev/null 2>&1; then
+				"$docker_bin" container rm -f "$container" >/dev/null
+				cleaned=1
+			fi
+		done
+		if "$docker_bin" image inspect dotfiles-workshop:local >/dev/null 2>&1; then
+			if "$docker_bin" image rm dotfiles-workshop:local >/dev/null 2>&1; then
+				cleaned=1
+			fi
+		fi
+		if [[ "${DOTFILES_PURGE_LEGACY_DOCKER_WORKSHOP:-0}" == "1" ]]; then
+			for path in dotfiles-workshop-home dotfiles-nixos-home dotfiles-nix-builder-store; do
+				if "$docker_bin" volume inspect "$path" >/dev/null 2>&1; then
+					"$docker_bin" volume rm "$path" >/dev/null
+					cleaned=1
+				fi
+			done
+			while IFS= read -r image_id; do
+				[[ -n "$image_id" ]] || continue
+				image_source="$("$docker_bin" image inspect --format \
+					'{{ index .Config.Labels "org.opencontainers.image.source" }}' "$image_id" 2>/dev/null || true)"
+				[[ "$image_source" == "https://github.com/AlexAllocated/.dotfiles" ]] || continue
+				if "$docker_bin" image rm "$image_id" >/dev/null 2>&1; then
+					cleaned=1
+				fi
+			done < <("$docker_bin" image ls --all --quiet --no-trunc | sort -u)
+			if "$docker_bin" image inspect nixos/nix:latest >/dev/null 2>&1; then
+				if "$docker_bin" image rm nixos/nix:latest >/dev/null 2>&1; then
+					cleaned=1
+				fi
+			fi
+		fi
+	fi
+
+	if ((cleaned)); then
+		printf 'Removed legacy macOS Docker workshop services and runtime state.\n'
+	fi
 }
 
 neovim_config_stamp() {
@@ -181,6 +301,7 @@ apply_macos_managed() {
 	}
 	ensure_git_identity
 	write_profile_marker macos-managed
+	cleanup_legacy_macos_docker_workshop
 	apply_macos_managed_links
 	write_mise_config
 	ensure_macos_packages "$update"

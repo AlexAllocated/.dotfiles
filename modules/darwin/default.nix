@@ -45,7 +45,7 @@
       "codex-app"
       "font-bigblue-terminal-nerd-font"
       "gcloud-cli"
-      "neovide"
+      "neovide-app"
       "wezterm"
     ];
   };
