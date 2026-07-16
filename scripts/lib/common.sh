@@ -57,7 +57,7 @@ apply_windows_packages() {
 
 apply_windows_integration() {
 	local source_root="${1:-$REPO_ROOT}"
-	local script font_installer configurator base_config desktop_config script_windows
+	local script font_installer configurator desktop_config script_windows
 	local font_package font_directory_windows font_installer_windows
 	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
 	[[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
@@ -69,9 +69,8 @@ apply_windows_integration() {
 	script="$source_root/scripts/windows/apply-wsl-links.ps1"
 	font_installer="$source_root/scripts/windows/install-user-fonts.ps1"
 	configurator="$source_root/scripts/windows/configure-codex.py"
-	base_config="$source_root/codex/config.toml"
 	desktop_config="$source_root/platforms/windows/codex-desktop.toml"
-	for required in "$script" "$font_installer" "$configurator" "$base_config" "$desktop_config"; do
+	for required in "$script" "$font_installer" "$configurator" "$desktop_config"; do
 		[[ -f "$required" ]] || {
 			printf 'Windows integration file not found: %s\n' "$required" >&2
 			return 1
@@ -109,7 +108,6 @@ apply_windows_integration() {
 	mkdir -p "$HOME/.codex/sqlite"
 	python3 "$configurator" \
 		--config "$windows_home_linux/.codex/config.toml" \
-		--base-config "$base_config" \
 		--desktop-config "$desktop_config" \
 		--linux-home "$HOME" \
 		--neovim-script "$local_appdata\\NvimWSL\\open-in-nvim.ps1" \

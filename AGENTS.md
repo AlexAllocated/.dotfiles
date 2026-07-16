@@ -53,6 +53,7 @@
 - On `macos-managed`, declare host tools and language runtimes in `platforms/macos-managed/Brewfile`. npm-registry CLI tools that are not Homebrew-managed should be installed with Bun, not npm globals. Mise is project-local only.
 - Shared macOS GUI applications belong in `platforms/macos/Brewfile`; keep the nix-darwin cask list aligned with it.
 - Shell startup must not run interactive authentication. Keep 1Password, GitHub, and other credential refreshes behind explicit commands such as `op` or `gh auth login`.
+- Codex user configuration is machine-local. The repo may install Codex and maintain required platform integration, but must not manage model preferences, plugins, MCP servers, rules, or other contents of `~/.codex/config.toml`.
 - Git aliases and shared behavior are tracked, but Git author identity is local in `~/.config/git/identity`; `dotctl apply` should prompt for it on new setups or accept `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 
 ## 1Password SSH Agent

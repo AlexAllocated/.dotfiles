@@ -64,7 +64,6 @@ let
 
   homeSkeleton = pkgs.runCommand "dotfiles-container-home" { } ''
     mkdir -p \
-      $out/home/${user}/.codex/rules \
       $out/home/${user}/.config \
       $out/home/${user}/.local/bin \
       $out/home/${user}/.dotfiles \
@@ -81,8 +80,6 @@ let
     ln -s /home/${user}/.dotfiles/nvim $out/home/${user}/.config/nvim
     ln -s /home/${user}/.dotfiles/wezterm $out/home/${user}/.config/wezterm
     ln -s /home/${user}/.dotfiles/.wezterm.lua $out/home/${user}/.wezterm.lua
-    ln -s /home/${user}/.dotfiles/codex/config.toml $out/home/${user}/.codex/config.toml
-    ln -s /home/${user}/.dotfiles/codex/rules/default.rules $out/home/${user}/.codex/rules/default.rules
     ln -s /home/${user}/.dotfiles/scripts/dotctl $out/home/${user}/.local/bin/dotctl
     ln -s /home/${user}/.dotfiles/.p10k.zsh $out/home/${user}/.p10k.zsh
     ln -s /home/${user}/.dotfiles/rustfmt.toml $out/home/${user}/rustfmt.toml

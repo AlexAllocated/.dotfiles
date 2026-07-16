@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ ... }:
 {
   imports = [
     ./core.nix
@@ -13,6 +13,4 @@
     ./terminal.nix
     ./windows.nix
   ];
-
-  dotfiles.codex.manageConfig = lib.mkDefault true;
 }

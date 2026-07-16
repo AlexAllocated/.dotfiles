@@ -266,7 +266,6 @@
               home.stateVersion = "26.05";
               dotfiles = {
                 profile = "nixos-wsl";
-                codex.manageConfig = false;
               };
             };
           }

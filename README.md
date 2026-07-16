@@ -151,7 +151,7 @@ Available modules:
 - `git`: Git, Delta, and Lazygit without an embedded author identity
 - `nvim`: the complete Neovim configuration and runtime dependencies
 - `neovide`: native Neovide, BigBlueTerm Nerd Font, and shared GUI settings
-- `codex`: Codex, Bun, Node, and reusable sanitized configuration
+- `codex`: Codex, Bun, and Node; user settings, plugins, MCP servers, and rules stay machine-local
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
 - `terminal`: WezTerm and its configuration on native Linux/macOS
@@ -214,9 +214,10 @@ pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS
 ```
 
 Codex CLI and desktop share the Windows Codex home while keeping SQLite on WSL
-ext4. The profile maintains the path settings and portable desktop preferences;
-auth, conversations, runtime state, and machine-generated plugin metadata stay
-local. Migrating pre-existing separate conversation stores remains an explicit
+ext4. The profile maintains only the required Windows/WSL routing and editor
+handler fields. Model preferences, TUI settings, plugins, MCP servers, rules,
+auth, conversations, and runtime state stay machine-local. Migrating
+pre-existing separate conversation stores remains an explicit
 `dotctl codex-share migrate` operation because both clients must be closed.
 
 Neovide is installed Windows-native and starts Neovim in the default WSL

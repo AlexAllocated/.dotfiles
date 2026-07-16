@@ -49,8 +49,40 @@ migrate_macos_cask_ownership() {
 	fi
 }
 
+detach_legacy_codex_links() {
+	local config_link="$HOME/.codex/config.toml"
+	local rules_link="$HOME/.codex/rules/default.rules"
+	local legacy_config="$REPO_ROOT/codex/config.toml"
+	local legacy_rules="$REPO_ROOT/codex/rules/default.rules"
+	local deletion_commit temporary
+
+	if [[ -L "$config_link" && "$(readlink "$config_link")" == "$legacy_config" ]]; then
+		temporary="$(mktemp)"
+		if [[ -r "$config_link" ]]; then
+			cp "$config_link" "$temporary"
+		else
+			deletion_commit="$(git -C "$REPO_ROOT" log -1 --format=%H --diff-filter=D -- codex/config.toml)"
+			[[ -n "$deletion_commit" ]] &&
+				git -C "$REPO_ROOT" show "$deletion_commit^:codex/config.toml" >"$temporary"
+		fi
+		rm "$config_link"
+		if [[ -s "$temporary" ]]; then
+			mv "$temporary" "$config_link"
+			chmod 600 "$config_link"
+			printf 'Detached Codex config from the dotfiles repo at %s.\n' "$config_link"
+		else
+			rm -f "$temporary"
+		fi
+	fi
+
+	if [[ -L "$rules_link" && "$(readlink "$rules_link")" == "$legacy_rules" ]]; then
+		rm "$rules_link"
+	fi
+}
+
 apply_macos_managed_links() {
-	mkdir -p "$HOME/.codex/rules" "$HOME/.config/neovide" "$HOME/.local/bin"
+	detach_legacy_codex_links
+	mkdir -p "$HOME/.config/neovide" "$HOME/.local/bin"
 	link_path "$HOME/.zprofile" "$REPO_ROOT/.zprofile"
 	link_path "$HOME/.zshrc" "$REPO_ROOT/.zshrc"
 	link_path "$HOME/.gitconfig" "$REPO_ROOT/.gitconfig"
@@ -60,8 +92,6 @@ apply_macos_managed_links() {
 	link_path "$HOME/.config/nvim" "$REPO_ROOT/nvim"
 	link_path "$HOME/.config/neovide/config.toml" "$REPO_ROOT/neovide/config.toml"
 	link_path "$HOME/.config/wezterm" "$REPO_ROOT/wezterm"
-	link_path "$HOME/.codex/config.toml" "$REPO_ROOT/codex/config.toml"
-	link_path "$HOME/.codex/rules/default.rules" "$REPO_ROOT/codex/rules/default.rules"
 	link_path "$HOME/.local/bin/dotctl" "$REPO_ROOT/scripts/dotctl"
 	if [[ -L "$HOME/.tool-versions" && "$(readlink "$HOME/.tool-versions")" == "$REPO_ROOT/.tool-versions" ]]; then
 		rm "$HOME/.tool-versions"

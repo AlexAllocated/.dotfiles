@@ -32,10 +32,8 @@ class TomlDocument:
             else:
                 self.sections[current].append(line)
 
-    def merge(self, managed: "TomlDocument", *, skip_projects: bool = False) -> None:
+    def merge(self, managed: "TomlDocument") -> None:
         for section, managed_lines in managed.sections.items():
-            if skip_projects and section and section.startswith("[projects."):
-                continue
             assignments = section_assignments(managed_lines, section)
             if not assignments:
                 continue
@@ -132,13 +130,9 @@ def configure(args: argparse.Namespace) -> bool:
         tomllib.loads(existing)
 
     document = TomlDocument(existing)
-    for path, skip_projects in (
-        (Path(args.base_config), True),
-        (Path(args.desktop_config), False),
-    ):
-        managed_text = path.read_text()
-        tomllib.loads(managed_text)
-        document.merge(TomlDocument(managed_text), skip_projects=skip_projects)
+    managed_text = Path(args.desktop_config).read_text()
+    tomllib.loads(managed_text)
+    document.merge(TomlDocument(managed_text))
     fragment = generated_fragment(args)
     tomllib.loads(fragment)
     document.merge(TomlDocument(fragment))
@@ -167,15 +161,20 @@ def configure(args: argparse.Namespace) -> bool:
 def self_test() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
-        base = root / "base.toml"
         desktop = root / "desktop.toml"
         config = root / "config.toml"
-        base.write_text('model = "managed"\n\n[features]\nmemories = true\n\n[projects."/skip"]\ntrust_level = "trusted"\n')
         desktop.write_text('[desktop]\nintegratedTerminalShell = "wsl"\n')
-        config.write_text('model = "old"\nauth_owned = true\n\n[features]\njs_repl = false\n\n[app_owned]\nvalue = 1\n')
+        config.write_text(
+            'model = "local"\n'
+            "\n"
+            '[plugins."linear@openai-curated"]\n'
+            "enabled = true\n"
+            "\n"
+            "[mcp_servers.linear]\n"
+            'url = "https://mcp.linear.app/mcp"\n'
+        )
         args = argparse.Namespace(
             config=str(config),
-            base_config=str(base),
             desktop_config=str(desktop),
             linux_home="/home/tester",
             neovim_script=r"C:\NvimWSL\open.ps1",
@@ -187,11 +186,9 @@ def self_test() -> None:
         )
         assert configure(args)
         parsed = tomllib.loads(config.read_text())
-        assert parsed["model"] == "managed"
-        assert parsed["auth_owned"] is True
-        assert parsed["features"] == {"js_repl": False, "memories": True}
-        assert parsed["app_owned"] == {"value": 1}
-        assert "projects" not in parsed
+        assert parsed["model"] == "local"
+        assert parsed["plugins"]["linear@openai-curated"]["enabled"] is True
+        assert parsed["mcp_servers"]["linear"]["url"] == "https://mcp.linear.app/mcp"
         assert parsed["sqlite_home"] == "/home/tester/.codex/sqlite"
         assert parsed["desktop"]["open-in-target-preferences"]["global"] == "custom:neovide-wsl"
         assert "neovim-wsl" in parsed["desktop"]["custom_file_handlers"]
@@ -200,9 +197,10 @@ def self_test() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Reconcile managed Codex desktop settings.")
+    parser = argparse.ArgumentParser(
+        description="Reconcile required Codex desktop platform integration."
+    )
     parser.add_argument("--config")
-    parser.add_argument("--base-config")
     parser.add_argument("--desktop-config")
     parser.add_argument("--linux-home")
     parser.add_argument("--neovim-script")
@@ -216,7 +214,6 @@ def parse_args() -> argparse.Namespace:
     if not args.self_test:
         required = [
             "config",
-            "base_config",
             "desktop_config",
             "linux_home",
             "neovim_script",
