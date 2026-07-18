@@ -375,6 +375,7 @@
                 mkdir staged
                 cp -a extracted/EFI extracted/boot staged/
                 cp "$iso_path" staged/nixos-chev-internal.iso
+                chmod u+w staged/EFI/BOOT
                 chmod u+w staged/EFI/BOOT/grub.cfg
                 sed -i '/^[[:space:]]*linux / s# init=# findiso=/nixos-chev-internal.iso init=#' staged/EFI/BOOT/grub.cfg
                 grep -F 'findiso=/nixos-chev-internal.iso' staged/EFI/BOOT/grub.cfg
