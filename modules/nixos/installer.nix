@@ -7,7 +7,14 @@
 {
   imports = [ ./migration-tools.nix ];
 
-  boot.zfs.forceImportRoot = false;
+  boot = {
+    # The internal installer stores the verified ISO as a regular file on its
+    # FAT32 ESP. The classic stage-1 initrd implements the generated GRUB
+    # findiso= path; the systemd initrd currently ignores that argument and
+    # attempts to mount the FAT volume itself as ISO9660.
+    initrd.systemd.enable = lib.mkForce false;
+    zfs.forceImportRoot = false;
+  };
 
   networking = {
     hostName = "chev-installer";

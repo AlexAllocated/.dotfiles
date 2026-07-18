@@ -331,11 +331,13 @@
               {
                 nativeBuildInputs = with pkgs; [
                   coreutils
+                  cpio
                   dosfstools
                   findutils
                   gnugrep
                   mtools
                   xorriso
+                  zstd
                 ];
               }
               ''
@@ -351,16 +353,40 @@
                 }
                 test -f extracted/EFI/BOOT/BOOTX64.EFI
 
-                payload_bytes="$(du -sb extracted | cut -f1)"
+                iso_bytes="$(stat --format '%s' "$iso_path")"
+                ((iso_bytes < 4294967295)) || {
+                  echo "ISO is too large to store as one FAT32 file: $iso_bytes bytes" >&2
+                  exit 1
+                }
+
+                initrd_path="$(find extracted/boot/nix/store -path '*/initrd' -type f -print -quit)"
+                test -n "$initrd_path"
+                mkdir initrd-tree
+                (cd initrd-tree && zstd -dc "../$initrd_path" | cpio -idm --quiet)
+                grep -F 'findiso=*' initrd-tree/init
+                grep -F 'isoPath=' initrd-tree/init
+
+                mkdir staged
+                cp -a extracted/EFI extracted/boot staged/
+                cp "$iso_path" staged/nixos-chev-internal.iso
+                chmod u+w staged/EFI/BOOT/grub.cfg
+                sed -i '/^[[:space:]]*linux / s# init=# findiso=/nixos-chev-internal.iso init=#' staged/EFI/BOOT/grub.cfg
+                grep -F 'findiso=/nixos-chev-internal.iso' staged/EFI/BOOT/grub.cfg
+
+                payload_bytes="$(du -sb staged | cut -f1)"
                 image_bytes=$((payload_bytes + payload_bytes / 4 + 128 * 1024 * 1024))
                 ((image_bytes >= 512 * 1024 * 1024)) || image_bytes=$((512 * 1024 * 1024))
                 truncate -s "$image_bytes" fat32.img
                 mkfs.fat -F 32 -n NIXOS_ISO fat32.img
-                mcopy -i fat32.img -s extracted/* ::
+                mcopy -i fat32.img -s staged/* ::
                 mlabel -i fat32.img -s :: | grep -F NIXOS_ISO
                 mkdir copied
                 mcopy -i fat32.img ::/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
-                cmp extracted/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
+                mcopy -i fat32.img ::/EFI/BOOT/grub.cfg copied/grub.cfg
+                mcopy -i fat32.img ::/nixos-chev-internal.iso copied/nixos-chev-internal.iso
+                cmp staged/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
+                cmp staged/EFI/BOOT/grub.cfg copied/grub.cfg
+                cmp staged/nixos-chev-internal.iso copied/nixos-chev-internal.iso
                 touch "$out"
               '';
         }

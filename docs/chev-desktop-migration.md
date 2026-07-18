@@ -24,15 +24,19 @@ Sunshine pairing secrets. No secret is embedded in the ISO or repository.
 nix build path:.#chev-installer-iso
 ls -lh result/iso/
 
-# Builds the ISO, verifies its NIXOS_ISO volume ID, rejects any file above
-# FAT32's 4 GiB-minus-one-byte per-file limit, copies the extracted tree into a FAT32
-# image, and compares its removable-media EFI loader byte-for-byte.
+# Builds the ISO, verifies its NIXOS_ISO volume ID and classic findiso-capable
+# initrd, stages the EFI/kernel files plus the unchanged ISO as a FAT32 file,
+# and compares the copied ISO, GRUB config, and EFI loader byte-for-byte.
 nix build path:.#chev-installer-fat32-check
 ```
 
-The image volume ID is `NIXOS_ISO`. The second derivation tests the common
-"extract/copy ISO contents to FAT32" USB layout. A read-only OVMF rehearsal can
-boot the built ISO without exposing any host disk:
+The image volume ID is `NIXOS_ISO`. The installer ISO deliberately uses the
+classic stage-1 initrd because it implements `findiso=`. The internal FAT32
+partition stores the unchanged ISO as `nixos-chev-internal.iso`, plus the
+extracted `EFI` and `boot` directories needed to start it. Its copied GRUB
+config adds a literal `findiso=/nixos-chev-internal.iso` argument to every
+Linux entry. A read-only OVMF rehearsal can boot the built ISO without exposing
+any host disk:
 
 ```sh
 iso="$(find result/iso -name '*.iso' -print -quit)"
@@ -48,8 +52,9 @@ rm -f "$vars"
 ```
 
 No host block device is passed to QEMU. Confirm Plasma appears, open a terminal,
-and run each operator command with `--help`. Then boot the resulting physical
-USB in firmware UEFI mode before using the real disk.
+and run each operator command with `--help`. Also copy the staged layout into a
+temporary FAT32 disk image and boot that image under OVMF before writing the
+physical internal-installer partition.
 
 The installer provides:
 
