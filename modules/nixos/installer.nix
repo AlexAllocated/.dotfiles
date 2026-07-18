@@ -62,7 +62,7 @@
     volumeID = "NIXOS_ISO";
   };
 
-  system.activationScripts.chevInstallerDesktop = ''
+  system.activationScripts.chevInstallerDesktop = lib.stringAfter [ "users" ] ''
     desktop=/home/nixos/Desktop
     install -d -m 0755 -o nixos -g users "$desktop"
 
