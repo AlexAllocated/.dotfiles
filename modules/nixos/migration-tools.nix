@@ -175,6 +175,7 @@ in
     ];
 
     environment.systemPackages = [
+      codexPackage
       resumeMigration
       rebootWindows
       recoverWindowsFallback
