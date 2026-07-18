@@ -24,8 +24,8 @@ Sunshine pairing secrets. No secret is embedded in the ISO or repository.
 nix build path:.#chev-installer-iso
 ls -lh result/iso/
 
-# Builds the ISO, verifies NIXOS_ISO label references, rejects any file at or
-# above FAT32's 4 GiB per-file limit, copies the extracted tree into a FAT32
+# Builds the ISO, verifies its NIXOS_ISO volume ID, rejects any file above
+# FAT32's 4 GiB-minus-one-byte per-file limit, copies the extracted tree into a FAT32
 # image, and compares its removable-media EFI loader byte-for-byte.
 nix build path:.#chev-installer-fat32-check
 ```

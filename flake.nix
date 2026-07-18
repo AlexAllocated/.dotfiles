@@ -350,7 +350,6 @@
                   exit 1
                 }
                 test -f extracted/EFI/BOOT/BOOTX64.EFI
-                grep -R -F -q NIXOS_ISO extracted
 
                 payload_bytes="$(du -sb extracted | cut -f1)"
                 image_bytes=$((payload_bytes + payload_bytes / 4 + 128 * 1024 * 1024))
