@@ -341,6 +341,8 @@
                 ];
               }
               ''
+                set -o pipefail
+
                 iso_path="$(find ${self.nixosConfigurations.chev-installer.config.system.build.isoImage}/iso -maxdepth 1 -type f -name '*.iso' -print -quit)"
                 test -n "$iso_path"
                 xorriso -indev "$iso_path" -pvd_info 2>&1 | grep -F "Volume Id    : NIXOS_ISO"
@@ -363,8 +365,12 @@
                 test -n "$initrd_path"
                 mkdir initrd-tree
                 (cd initrd-tree && zstd -dc "../$initrd_path" | cpio -idm --quiet)
-                grep -F 'findiso=*' initrd-tree/init
-                grep -F 'isoPath=' initrd-tree/init
+                init_link="$(readlink initrd-tree/init)"
+                [[ "$init_link" == /nix/store/* ]]
+                init_script="initrd-tree$init_link"
+                test -f "$init_script"
+                grep -F 'findiso=*' "$init_script"
+                grep -F 'isoPath=' "$init_script"
 
                 mkdir staged
                 cp -a extracted/EFI extracted/boot staged/
