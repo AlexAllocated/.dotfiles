@@ -88,13 +88,16 @@
               chmod -R u+w source
               cd source
               find . -name '*.nix' -print0 | xargs -0 nixfmt --check
-            shellcheck scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
-            bash -n scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
-            shfmt -d -i 0 -ci scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            shellcheck scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            bash -n scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            shfmt -d -i 0 -ci scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            for script in reboot-windows rescue-remote-on rescue-remote-off; do
+              bash "scripts/nixos/$script.sh" --help >/dev/null
+            done
             bash tests/dotctl.bash
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
-            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py
+            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py
             python3 scripts/windows/configure-codex.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
             python3 -c 'import pathlib, tomllib; tomllib.loads(pathlib.Path("platforms/windows/codex-desktop.toml").read_text())'
@@ -239,6 +242,25 @@
       };
     in
     {
+      nixosConfigurations.chev-desktop = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
+          profile = "nixos-desktop";
+        };
+        modules = [ ./hosts/chev-desktop ];
+      };
+
+      nixosConfigurations.chev-installer = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
+          profile = "chev-installer";
+        };
+        modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-graphical-base.nix"
+          ./modules/nixos/installer.nix
+        ];
+      };
+
       nixosConfigurations.wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
@@ -286,7 +308,11 @@
       };
 
       inherit homeModules;
-      nixosModules.wsl = ./modules/nixos/wsl.nix;
+      nixosModules = {
+        desktop = ./modules/nixos/desktop.nix;
+        migration-tools = ./modules/nixos/migration-tools.nix;
+        wsl = ./modules/nixos/wsl.nix;
+      };
 
       packages = forLinuxSystems (
         pkgs: toolPkgs:
@@ -297,6 +323,47 @@
         })
         // {
           bigblue-font = pkgs.nerd-fonts.bigblue-terminal;
+        }
+        // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          chev-installer-iso = self.nixosConfigurations.chev-installer.config.system.build.isoImage;
+          chev-installer-fat32-check =
+            pkgs.runCommand "chev-installer-fat32-check"
+              {
+                nativeBuildInputs = with pkgs; [
+                  coreutils
+                  dosfstools
+                  findutils
+                  gnugrep
+                  mtools
+                  xorriso
+                ];
+              }
+              ''
+                iso_path="$(find ${self.nixosConfigurations.chev-installer.config.system.build.isoImage}/iso -maxdepth 1 -type f -name '*.iso' -print -quit)"
+                test -n "$iso_path"
+                xorriso -indev "$iso_path" -pvd_info 2>&1 | grep -F "Volume Id    : NIXOS_ISO"
+                mkdir extracted
+                xorriso -osirrox on -indev "$iso_path" -extract / extracted
+                oversized="$(find extracted -type f -size +4294967295c -print -quit)"
+                test -z "$oversized" || {
+                  echo "ISO contains a file too large for FAT32: $oversized" >&2
+                  exit 1
+                }
+                test -f extracted/EFI/BOOT/BOOTX64.EFI
+                grep -R -F -q NIXOS_ISO extracted
+
+                payload_bytes="$(du -sb extracted | cut -f1)"
+                image_bytes=$((payload_bytes + payload_bytes / 4 + 128 * 1024 * 1024))
+                ((image_bytes >= 512 * 1024 * 1024)) || image_bytes=$((512 * 1024 * 1024))
+                truncate -s "$image_bytes" fat32.img
+                mkfs.fat -F 32 -n NIXOS_ISO fat32.img
+                mcopy -i fat32.img -s extracted/* ::
+                mlabel -i fat32.img -s :: | grep -F NIXOS_ISO
+                mkdir copied
+                mcopy -i fat32.img ::/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
+                cmp extracted/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
+                touch "$out"
+              '';
         }
       );
 

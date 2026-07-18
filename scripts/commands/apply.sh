@@ -5,6 +5,12 @@ apply_profile() {
 	local source_root="${2:-$REPO_ROOT}"
 	local flake_ref
 	case "$profile" in
+		chev-desktop)
+			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
+			require_command sudo
+			require_command nixos-rebuild
+			sudo nixos-rebuild switch --flake "$flake_ref"
+			;;
 		macos-managed)
 			apply_macos_managed 0
 			;;

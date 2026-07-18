@@ -11,6 +11,7 @@ The final pre-Nix version is preserved by the `pre-nix` tag.
 
 | Profile         | Configuration owner         | Intended use                                  |
 | --------------- | --------------------------- | --------------------------------------------- |
+| `chev-desktop`  | NixOS + Home Manager        | Native NVIDIA gaming and development desktop  |
 | `nixos-wsl`     | NixOS + Home Manager        | Primary Windows development environment       |
 | `linux`         | Home Manager                | Ubuntu and other Linux distributions with Nix |
 | `macos-managed` | Homebrew + repository links | Macs where `/nix` cannot be installed         |
@@ -84,6 +85,25 @@ wsl.exe -t NixOS
 After reopening NixOS, run `dotctl doctor`. See
 [`docs/nix-wsl-rollout.md`](docs/nix-wsl-rollout.md) for Windows links and the
 optional shared Codex conversation migration.
+
+### Native chev-desktop
+
+The native NixOS profile uses Plasma Wayland, the open NVIDIA kernel module,
+PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
+with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
+XBOOTLDR partition mounted at `/boot`.
+
+Build the local-first internal installer with:
+
+```sh
+nix build path:.#chev-installer-iso
+nix build path:.#chev-installer-fat32-check
+```
+
+The image embeds this flake plus the confirmation-gated installation and Codex
+handoff tools. See
+[`docs/chev-desktop-migration.md`](docs/chev-desktop-migration.md) for the
+storage contract, operator commands, and versioned capsule format.
 
 ### Managed macOS
 

@@ -127,9 +127,7 @@ trap_remove_on_exit() {
 }
 
 detect_profile() {
-	if [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
-		printf 'nixos-wsl\n'
-	elif [[ "$(uname -s)" == "Darwin" ]]; then
+	if [[ "$(uname -s)" == "Darwin" ]]; then
 		if [[ "$(uname -m)" != "arm64" ]]; then
 			printf 'Unsupported platform: only Apple Silicon macOS is supported.\n' >&2
 			return 2
@@ -138,6 +136,10 @@ detect_profile() {
 		else
 			printf 'macos\n'
 		fi
+	elif [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
+		printf 'nixos-wsl\n'
+	elif [[ -f /etc/NIXOS ]]; then
+		printf 'chev-desktop\n'
 	else
 		printf 'linux\n'
 	fi
@@ -148,6 +150,9 @@ flake_ref_for_profile() {
 	local source_root="${2:-$REPO_ROOT}"
 	case "$profile" in
 		nixos-wsl) printf '%s#wsl\n' "$source_root" ;;
+		# The native target includes a machine-generated, gitignored ESP PARTUUID.
+		# path: semantics deliberately include it in every rebuild.
+		chev-desktop) printf 'path:%s#chev-desktop\n' "$source_root" ;;
 		linux) printf '%s#linux\n' "$source_root" ;;
 		macos) printf '%s#macos-arm64\n' "$source_root" ;;
 		darwin-macos) printf '%s#macos-arm64\n' "$source_root" ;;

@@ -34,10 +34,16 @@ in
       else
         toolsets.agent;
 
-    home.sessionVariables = lib.optionalAttrs (cfg.profile == "nixos-wsl") {
-      # The Windows GUI owns config/auth/plugin state. Conversation payloads live
-      # in that shared home, while SQLite stays on WSL ext4 for reliable locking.
-      CODEX_SQLITE_HOME = "${config.home.homeDirectory}/.codex/sqlite";
-    };
+    home.sessionVariables =
+      lib.optionalAttrs
+        (builtins.elem cfg.profile [
+          "nixos-wsl"
+          "nixos-desktop"
+        ])
+        {
+          # Keep SQLite on the native Linux filesystem. WSL shares config/auth with
+          # Windows; the native desktop imports a private migration copy at install.
+          CODEX_SQLITE_HOME = "${config.home.homeDirectory}/.codex/sqlite";
+        };
   };
 }
