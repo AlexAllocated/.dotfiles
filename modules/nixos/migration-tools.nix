@@ -41,8 +41,25 @@ let
       openssl
       python3
       rsync
+      tmux
       util-linux
       codexPackage
+    ];
+  };
+
+  checkpointMigration = mkTool {
+    name = "checkpoint-migration";
+    script = "scripts/nixos/checkpoint-migration.sh";
+    environment = ''
+      export CHEV_DOTFILES_SOURCE=${lib.escapeShellArg source}
+    '';
+    runtimeInputs = with pkgs; [
+      coreutils
+      findutils
+      gawk
+      jq
+      python3
+      util-linux
     ];
   };
 
@@ -177,6 +194,8 @@ in
     environment.systemPackages = [
       codexPackage
       resumeMigration
+      checkpointMigration
+      pkgs.tmux
       rebootWindows
       recoverWindowsFallback
       exportMachineManifest
@@ -191,6 +210,24 @@ in
 
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.rescue.enable [ 7681 ];
 
+    systemd.sleep.settings.Sleep = lib.mkIf cfg.rescue.enable {
+      AllowSuspend = "no";
+      AllowHibernation = "no";
+      AllowHybridSleep = "no";
+      AllowSuspendThenHibernate = "no";
+    };
+
+    systemd.services.chev-recovery-sleep-inhibit = lib.mkIf cfg.rescue.enable {
+      description = "Keep the live migration recovery environment awake";
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.systemd}/bin/systemd-inhibit --what=sleep --who=chev-migration --why=Keep ttyd and Codex recovery sessions connected --mode=block ${pkgs.coreutils}/bin/sleep infinity";
+        Restart = "always";
+        RestartSec = 1;
+      };
+    };
+
     systemd.services.chev-ttyd-rescue = lib.mkIf cfg.rescue.enable {
       description = "Temporary ttyd migration rescue terminal";
       unitConfig.ConditionPathExists = "/run/chev-rescue/address";
@@ -198,14 +235,60 @@ in
         Type = "simple";
         User = cfg.rescue.user;
         Group = "users";
+        RuntimeDirectory = "chev-ttyd-rescue";
+        RuntimeDirectoryMode = "0750";
         Restart = "no";
+        ExecStartPre = pkgs.writeShellScript "chev-ttyd-rescue-index" ''
+          set -eu
+          runtime_directory="''${RUNTIME_DIRECTORY:?systemd did not provide RUNTIME_DIRECTORY}"
+          index_path="$runtime_directory/index.html"
+          temporary_index="$index_path.tmp"
+          generator_port=17681
+          generator_log="$runtime_directory/index-generator.log"
+
+          cleanup() {
+            if [ -n "''${generator_pid:-}" ]; then
+              ${pkgs.coreutils}/bin/kill "$generator_pid" 2>/dev/null || true
+              wait "$generator_pid" 2>/dev/null || true
+            fi
+            ${pkgs.coreutils}/bin/rm -f "$temporary_index"
+          }
+          trap cleanup EXIT INT TERM
+
+          ${pkgs.ttyd}/bin/ttyd \
+            --interface 127.0.0.1 \
+            --port "$generator_port" \
+            ${pkgs.coreutils}/bin/sleep infinity >"$generator_log" 2>&1 &
+          generator_pid=$!
+          for attempt in $(${pkgs.coreutils}/bin/seq 1 25); do
+            if ${pkgs.curl}/bin/curl --fail --silent --show-error --max-time 1 \
+              "http://127.0.0.1:$generator_port/" \
+              | ${pkgs.gnused}/bin/sed \
+                's#<meta charset="UTF-8">#<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">#' \
+                >"$temporary_index"; then
+              break
+            fi
+            ${pkgs.coreutils}/bin/sleep 0.1
+          done
+          [ -s "$temporary_index" ] || {
+            printf '%s\\n' 'Unable to generate the mobile ttyd index.' >&2
+            exit 1
+          }
+          ${pkgs.coreutils}/bin/mv -f "$temporary_index" "$index_path"
+        '';
         ExecStart = "${pkgs.writeShellScript "chev-ttyd-rescue" ''
           set -eu
           address="$(cat /run/chev-rescue/address)"
           exec ${pkgs.ttyd}/bin/ttyd \
             --writable \
+            --check-origin \
             --interface "$address" \
             --port 7681 \
+            --index "$RUNTIME_DIRECTORY/index.html" \
+            --client-option fontSize=18 \
+            --client-option scrollback=100000 \
+            --client-option cursorBlink=true \
+            --ping-interval 15 \
             ${pkgs.bashInteractive}/bin/bash --login
         ''}";
       };

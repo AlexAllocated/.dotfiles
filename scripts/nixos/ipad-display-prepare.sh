@@ -52,8 +52,11 @@ for status_file in /sys/class/drm/card*-*/status; do
 	[[ -f "$status_file" && "$(<"$status_file")" == "connected" ]] || continue
 	sysfs_connector="${status_file%/status}"
 	edid="$sysfs_connector/edid"
-	[[ -s "$edid" ]] || continue
+	# sysfs reports EDID attributes with a nominal size of zero even when a
+	# read returns the complete binary payload, so `-s` rejects valid displays.
+	[[ -r "$edid" ]] || continue
 	decoded="$(edid-decode "$edid" 2>/dev/null || true)"
+	[[ -n "$decoded" ]] || continue
 	if grep -Eiq 'Manufacturer:[[:space:]]*GSM|GSM774B' <<<"$decoded"; then
 		continue
 	fi
@@ -96,7 +99,11 @@ fi
 debug_connector=""
 for candidate in /sys/kernel/debug/dri/*/"$connector"; do
 	[[ -d "$candidate" ]] || continue
-	[[ -w "$candidate/edid_override" && -w "$candidate/trigger_hotplug" ]] || continue
+	[[ -w "$candidate/edid_override" ]] || continue
+	candidate="$(realpath -e -- "$candidate")"
+	if [[ "$candidate" == "$debug_connector" ]]; then
+		continue
+	fi
 	[[ -z "$debug_connector" ]] || {
 		printf 'More than one debugfs connector matched %s; refusing runtime override.\n' "$connector" >&2
 		exit 1
@@ -109,7 +116,27 @@ done
 }
 
 cat "$firmware" >"$debug_connector/edid_override"
-printf '1\n' >"$debug_connector/trigger_hotplug"
+if [[ -w "$debug_connector/trigger_hotplug" ]]; then
+	printf '1\n' >"$debug_connector/trigger_hotplug"
+elif [[ -w "${candidate_paths[$connector]}/status" ]]; then
+	# Current DRM exposes the standard writable connector status attribute
+	# instead. Writing `detect` re-runs fill_modes, which consumes the debugfs
+	# EDID override without requiring a reboot.
+	printf 'detect\n' >"${candidate_paths[$connector]}/status"
+	card_device="${candidate_paths[$connector]%-$connector}"
+	[[ -d "$card_device" ]] || {
+		printf 'Could not resolve the DRM card for %s.\n' "$connector" >&2
+		exit 1
+	}
+	# KWin listens for a DRM-card change event before refreshing its mode
+	# inventory. The connector modes are already updated at this point.
+	udevadm trigger --action=change "$card_device"
+	udevadm settle --timeout=5
+else
+	printf 'reset' >"$debug_connector/edid_override"
+	printf '%s\n' 'The EDID override was writable, but no live reprobe interface is available.' >&2
+	exit 1
+fi
 sleep 1
 mode_file="${candidate_paths[$connector]}/modes"
 grep -Fxq '2736x2048' "$mode_file" || {

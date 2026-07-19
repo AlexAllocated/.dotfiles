@@ -86,12 +86,12 @@ esac
 	exit 2
 }
 
-[[ -b "$disk" && "$(lsblk --noheadings --output TYPE "$disk" | xargs)" == "disk" ]] || {
+[[ -b "$disk" && "$(lsblk --noheadings --nodeps --output TYPE "$disk" | xargs)" == "disk" ]] || {
 	printf 'Not a whole-disk block device: %s\n' "$disk" >&2
 	exit 1
 }
 for partition in "$efi_device" "$boot_device" "$root_device"; do
-	[[ -b "$partition" && "$(lsblk --noheadings --output TYPE "$partition" | xargs)" == "part" ]] || {
+	[[ -b "$partition" && "$(lsblk --noheadings --nodeps --output TYPE "$partition" | xargs)" == "part" ]] || {
 		printf 'Not a partition block device: %s\n' "$partition" >&2
 		exit 1
 	}
@@ -107,7 +107,7 @@ trim() {
 }
 
 normalise_serial() {
-	tr '[:lower:]' '[:upper:]' | tr -d '._:-[:space:]'
+	tr '[:lower:]' '[:upper:]' | tr -d '._:[:space:]-'
 }
 
 normalise_model() {
@@ -144,9 +144,6 @@ partition_json() {
 		--argjson startSector "$start_sector" \
 		--argjson endSector "$end_sector" \
 		--argjson sectorCount "$sector_count" \
-		--arg microsoftLoaderSha256 "$windows_microsoft_loader_hash" \
-		--argjson fallbackPresent "$windows_fallback_present" \
-		--argjson fallbackSha256 "$(nullable_json_string "$windows_fallback_hash")" \
 		--argjson byteSize "$byte_size" \
 		--argjson fsType "$(nullable_json_string "$fs_type")" \
 		--argjson fsLabel "$(nullable_json_string "$fs_label")" \
@@ -183,6 +180,9 @@ capture_manifest() {
 		--argjson logicalSectorSize "$logical_sector_size" \
 		--argjson byteSize "$byte_size" \
 		--argjson sectorCount "$sector_count" \
+		--arg microsoftLoaderSha256 "$windows_microsoft_loader_hash" \
+		--argjson fallbackPresent "$windows_fallback_present" \
+		--argjson fallbackSha256 "$(nullable_json_string "$windows_fallback_hash")" \
 		--argjson windowsEsp "$(partition_json windows-esp "$efi_device" /efi)" \
 		--argjson xbootldr "$(partition_json xbootldr "$boot_device" /boot)" \
 		--argjson nixRoot "$(partition_json nix-root "$root_device" /)" \
@@ -252,7 +252,7 @@ validate_schema() {
 		and disjoint(.partitions.windowsEsp; .partitions.xbootldr)
 		and disjoint(.partitions.windowsEsp; .partitions.nixRoot)
 		and disjoint(.partitions.xbootldr; .partitions.nixRoot)
-		and ([.partitions.windowsEsp, .partitions.xbootldr, .partitions.nixRoot] | all(.;
+		and ([.partitions.windowsEsp, .partitions.xbootldr, .partitions.nixRoot] | all(.[];
 			(.role | type == "string")
 			and (.partuuid | type == "string" and length > 0)
 			and (.gptType | type == "string" and length > 0)

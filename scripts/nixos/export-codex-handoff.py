@@ -19,8 +19,9 @@ THREAD_ID = re.compile(
 )
 
 
-def find_codex_writers() -> list[str]:
+def find_codex_writers(codex_home: Path, allowed_thread: str | None) -> list[str]:
     writers: list[str] = []
+    allowed_writers = 0
     own_pid = os.getpid()
     for process in Path("/proc").iterdir():
         if not process.name.isdigit() or int(process.name) == own_pid:
@@ -29,11 +30,44 @@ def find_codex_writers() -> list[str]:
             arguments = (process / "cmdline").read_bytes().split(b"\0")
         except (FileNotFoundError, PermissionError, ProcessLookupError):
             continue
+        is_codex = False
         for argument in arguments[:3]:
             name = Path(os.fsdecode(argument)).name.lower()
-            if name in {"codex", "codex.exe", "codex.js"}:
-                writers.append(f"pid {process.name}: {os.fsdecode(arguments[0])}")
+            if name in {"codex", ".codex-wrapped", "codex.exe", "codex.js"}:
+                is_codex = True
                 break
+        if not is_codex:
+            continue
+        try:
+            environment_records = (process / "environ").read_bytes().split(b"\0")
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            writers.append(f"pid {process.name}: cannot inspect CODEX_HOME")
+            continue
+        environment = {}
+        for record in environment_records:
+            key, separator, value = record.partition(b"=")
+            if separator:
+                environment[os.fsdecode(key)] = os.fsdecode(value)
+        process_home = environment.get("CODEX_HOME")
+        if not process_home:
+            home = environment.get("HOME")
+            process_home = str(Path(home) / ".codex") if home else ""
+        try:
+            resolved_process_home = Path(process_home).resolve(strict=True)
+        except (FileNotFoundError, OSError):
+            writers.append(f"pid {process.name}: cannot resolve CODEX_HOME")
+            continue
+        if resolved_process_home != codex_home:
+            continue
+        decoded_arguments = [os.fsdecode(argument) for argument in arguments if argument]
+        if allowed_thread and allowed_thread in decoded_arguments:
+            allowed_writers += 1
+            if allowed_writers > 1:
+                writers.append(
+                    f"pid {process.name}: second writer for allowed thread {allowed_thread}"
+                )
+            continue
+        writers.append(f"pid {process.name}: {decoded_arguments[0]}")
     return writers
 
 
@@ -96,16 +130,15 @@ def main() -> int:
     if args.allow_live_thread and args.allow_live_thread.lower() != args.thread_id.lower():
         raise SystemExit("--allow-live-thread must name the exported thread ID")
 
-    writers = find_codex_writers()
-    if writers and not args.allow_live_thread:
-        details = "\n".join(f"  {writer}" for writer in writers)
-        raise SystemExit(
-            "Codex still has live WSL writers. Close every Codex session first:\n"
-            + details
-        )
-
     codex_home = args.codex_home.resolve(strict=True)
     sqlite_home = args.sqlite_home.resolve(strict=True)
+    writers = find_codex_writers(codex_home, args.allow_live_thread)
+    if writers:
+        details = "\n".join(f"  {writer}" for writer in writers)
+        raise SystemExit(
+            "Codex has unrelated writers targeting this CODEX_HOME:\n" + details
+        )
+
     destination = args.destination.resolve()
     if destination.exists() and any(destination.iterdir()):
         raise SystemExit(f"destination is not empty: {destination}")

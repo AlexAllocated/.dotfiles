@@ -17,8 +17,8 @@ let
       pkgs.gnugrep
     ];
     # edid-generator's generic template describes an analog input. The dummy
-    # adapter is HDMI, so make the input descriptor digital before generating
-    # and checksumming the final 128-byte EDID.
+    # adapter is digital, so make the input descriptor digital before
+    # generating and checksumming the final 128-byte EDID.
     postPatch = (oldAttrs.postPatch or "") + ''
       substituteInPlace edid.S \
         --replace-fail $'video_parms:\t.byte\t0x6d' $'video_parms:\t.byte\t0x80' \
@@ -52,6 +52,7 @@ let
       edid-decode
       gnugrep
       gnused
+      udev
     ]
   );
   ipadDisplayOn = mkIpadTool "ipad-display-on" ../../scripts/nixos/ipad-display-on.sh [
@@ -165,8 +166,11 @@ in
           configurationLimit = 10;
           xbootldrMountPoint = "/boot";
           extraInstallCommands = ''
-            fallback_backup=/efi/EFI/NixOS/windows-fallback-original.efi
-            fallback_absent=/efi/EFI/NixOS/windows-fallback-original.absent
+            # EFI filesystems are case-insensitive, so EFI/NixOS collides with
+            # the bootloader-managed EFI/nixos directory. Keep the Windows
+            # recovery record in a directory systemd-boot does not own.
+            fallback_backup=/efi/EFI/WindowsFallbackBackup/windows-fallback-original.efi
+            fallback_absent=/efi/EFI/WindowsFallbackBackup/windows-fallback-original.absent
             fallback_target=/efi/EFI/BOOT/BOOTX64.EFI
             if [[ -f "$fallback_backup" ]]; then
               install -D -m 0644 "$fallback_backup" "$fallback_target"

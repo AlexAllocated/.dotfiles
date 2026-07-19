@@ -59,7 +59,18 @@ physical internal-installer partition.
 The installer provides:
 
 - `resume-migration`: read-only discovery, hash verification, private capsule
-  import, Codex SQLite path normalization, and exact Codex 0.144.4 resume.
+  import, Codex SQLite path normalization, and exact Codex 0.144.4 resume. It
+  reuses the active private import by default; use `--fresh-import` only to
+  discard that live pointer and rebuild from persistent state. `--status`
+  validates and prints the active resume target without starting Codex. An
+  interactive resume runs in the private `migration` tmux socket, so a browser
+  or terminal disconnect only detaches the viewer; attach explicitly with
+  `tmux -L migration attach-session -t migration`.
+- `checkpoint-migration`: publishes an online SQLite backup and complete-line
+  rollout snapshot below `NixOS-Checkpoints` without changing the immutable
+  handoff capsule. Checkpoints are staged and atomically renamed into unique,
+  timestamped directories; a new import automatically applies the newest
+  checkpoint tied to its handoff-manifest hash.
 - `install-chev-desktop`: manifest-guarded formatting of only the two new
   partitions. It never partitions the disk, formats/relabels the ESP, or
   reboots.
@@ -69,7 +80,10 @@ The installer provides:
 - `rescue-remote-on` / `rescue-remote-off`: optional temporary ttyd on one
   detected private IPv4 address. It is disabled by default and has **no
   authentication or encryption**. Use it only on a trusted LAN and turn it off
-  immediately.
+  immediately. The rescue service prevents sleep, sends WebSocket keepalives,
+  uses a mobile viewport with larger text, and leaves tmux mouse reporting and
+  the terminal alternate screen disabled so normal touch scrolling reaches
+  scrollback.
 - `reboot-windows`: after the operator types `WINDOWS`, select the unique
   Windows entry through systemd-boot or UEFI `BootNext`, then reboot.
 - `recover-windows-fallback`: after an interrupted `bootctl`, validate the
@@ -226,7 +240,7 @@ the LG, and prints the connector assignment to add alongside the generated ESP
 PARTUUID in `hosts/chev-desktop/hardware-generated.nix`, for example:
 
 ```nix
-dotfiles.desktop.ipadDisplay.connector = "HDMI-A-1";
+dotfiles.desktop.ipadDisplay.connector = "DP-2";
 ```
 
 Run `dotctl apply`, reboot once for the connector-specific
@@ -237,6 +251,9 @@ ipad-display-on          # dummy as another Plasma display
 ipad-display-on --sole   # disable other currently enabled Plasma outputs
 ipad-display-off
 ```
+
+The workstation helpers use the same 175% Plasma scale on the LG and dummy
+outputs.
 
 If the dummy is the only enabled output, `ipad-display-off` refuses to leave
 Plasma with no display. Connect the LG (or another display) and restore it in
@@ -254,9 +271,10 @@ is a local teardown command, not a remote wake mechanism; after using it,
 restart Sunshine locally before relying on Moonlight again.
 
 `ipad-display-prepare --apply-now` can use the kernel's per-connector debugfs
-override and hotplug trigger when available; it still refuses any connector
-whose EDID is not FUN/EK1080. Request 2732x2048 in Moonlight: Sunshine captures
-the proven 2736x2048 host output and encodes the requested iPad client size.
+override and either its hotplug trigger or the standard DRM reprobe interface;
+it still refuses any connector whose EDID is not FUN/EK1080. Request 2732x2048
+in Moonlight: Sunshine captures the proven 2736x2048 host output and encodes
+the requested iPad client size.
 
 The pinned Sunshine build supports the Plasma Wayland `kwin` capture backend.
 Once the connector is configured, Nix also sets Sunshine `output_name` to that

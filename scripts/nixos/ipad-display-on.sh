@@ -47,7 +47,7 @@ done
 arguments=(
 	"output.$connector.enable"
 	"output.$connector.mode.2736x2048@60"
-	"output.$connector.scale.1"
+	"output.$connector.scale.1.75"
 )
 if ((sole)); then
 	while read -r other; do
@@ -57,4 +57,5 @@ fi
 
 kscreen-doctor "${arguments[@]}"
 printf 'Enabled %s at the Windows-matched 2736x2048@60 host timing.\n' "$connector"
+printf '%s\n' 'Applied the workstation UI scale of 175%.'
 printf '%s\n' 'Request 2732x2048 in Moonlight for the iPad Pro client stream.'

@@ -283,8 +283,10 @@ mount -o noatime,subvol=@swap "$root_device" "$target_root/swap"
 mount "$boot_device" "$target_root/boot"
 mount "$efi_device" "$target_root/efi"
 
-fallback_backup="$target_root/efi/EFI/NixOS/windows-fallback-original.efi"
-fallback_absent="$target_root/efi/EFI/NixOS/windows-fallback-original.absent"
+# Do not place these records under EFI/nixos: FAT is case-insensitive and the
+# NixOS bootloader owns and may replace that directory during installation.
+fallback_backup="$target_root/efi/EFI/WindowsFallbackBackup/windows-fallback-original.efi"
+fallback_absent="$target_root/efi/EFI/WindowsFallbackBackup/windows-fallback-original.absent"
 fallback_target="$target_root/efi/EFI/BOOT/BOOTX64.EFI"
 expected_fallback_present="$(jq -r '.windowsBoot.fallbackPresent' "$machine_manifest")"
 expected_fallback_hash="$(jq -r '.windowsBoot.fallbackSha256 // empty' "$machine_manifest")"
@@ -424,6 +426,27 @@ with sqlite3.connect(f"file:{source_database}?mode=ro", uri=True) as source:
 		).fetchall()
 		if len(rows) != 1:
 			raise SystemExit(f"expected one target state row, found {len(rows)}")
+		# The capsule intentionally carries only the authoritative migration
+		# rollout. Remove metadata for older threads whose rollout files are not
+		# present so the native Codex state is internally consistent.
+		tables = {
+			row[0]
+			for row in target.execute(
+				"SELECT name FROM sqlite_master WHERE type = 'table'"
+			)
+		}
+		if "thread_spawn_edges" in tables:
+			target.execute(
+				"DELETE FROM thread_spawn_edges "
+				"WHERE parent_thread_id != ? OR child_thread_id != ?",
+				(thread_id, thread_id),
+			)
+		if "thread_dynamic_tools" in tables:
+			target.execute(
+				"DELETE FROM thread_dynamic_tools WHERE thread_id != ?",
+				(thread_id,),
+			)
+		target.execute("DELETE FROM threads WHERE id != ?", (thread_id,))
 		target.execute(
 			"UPDATE threads SET rollout_path = ? WHERE id = ?",
 			(native_rollout_path, thread_id),
@@ -458,8 +481,29 @@ nixos-enter --root "$target_root" -c \
 nixos-enter --root "$target_root" -c \
 	'runuser --user alex -- env HOME=/home/alex CODEX_HOME=/home/alex/.codex CODEX_SQLITE_HOME=/home/alex/.codex/sqlite codex doctor --summary --no-color'
 
-printf '%s\n' 'Set the initial password for alex:'
-nixos-enter --root "$target_root" -c 'passwd alex'
+if [[ -n "${CHEV_INITIAL_PASSWORD_FILE:-}" ]]; then
+	password_file="$(realpath -e -- "$CHEV_INITIAL_PASSWORD_FILE" 2>/dev/null || true)"
+	[[ -n "$password_file" && -f "$password_file" && ! -L "$password_file" ]] || {
+		printf '%s\n' 'CHEV_INITIAL_PASSWORD_FILE must name a safe regular file.' >&2
+		exit 1
+	}
+	password_mode="$(stat -c '%a' "$password_file")"
+	[[ "$password_mode" == "600" ]] || {
+		printf 'CHEV_INITIAL_PASSWORD_FILE must have mode 0600, not %s.\n' "$password_mode" >&2
+		exit 1
+	}
+	IFS= read -r initial_password <"$password_file"
+	[[ ${#initial_password} -ge 20 && "$initial_password" != *:* ]] || {
+		printf '%s\n' 'Generated initial password failed the local length/format guard.' >&2
+		exit 1
+	}
+	printf 'alex:%s\n' "$initial_password" | nixos-enter --root "$target_root" -c chpasswd
+	initial_password=""
+	printf '%s\n' 'Installed the generated initial password for alex from the protected local file.'
+else
+	printf '%s\n' 'Set the initial password for alex:'
+	nixos-enter --root "$target_root" -c 'passwd alex'
+fi
 
 printf '\nNixOS is installed; unmounting the target filesystems at %s.\n' "$target_root"
 printf '%s\n' 'Do not wipe D: yet. Verify Windows Boot Manager and NixOS from firmware first.'
