@@ -173,9 +173,9 @@ in
             fallback_absent=/efi/EFI/WindowsFallbackBackup/windows-fallback-original.absent
             fallback_target=/efi/EFI/BOOT/BOOTX64.EFI
             if [[ -f "$fallback_backup" ]]; then
-              install -D -m 0644 "$fallback_backup" "$fallback_target"
+              ${pkgs.coreutils}/bin/install -D -m 0644 "$fallback_backup" "$fallback_target"
             elif [[ -f "$fallback_absent" ]]; then
-              rm -f -- "$fallback_target"
+              ${pkgs.coreutils}/bin/rm -f -- "$fallback_target"
             else
               echo "Missing the installer-created Windows fallback record; refusing to alter EFI fallback state." >&2
               exit 1
