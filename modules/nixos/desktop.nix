@@ -409,6 +409,7 @@ in
     };
 
     environment.systemPackages = with pkgs; [
+      age
       btrfs-progs
       ardour
       audacity
@@ -422,6 +423,7 @@ in
       ipadDisplayPrepare
       kdePackages.kcalc
       kdePackages.kdenlive
+      kdePackages.kdialog
       krita
       ksnip
       libva-utils
