@@ -33,6 +33,19 @@ in
 
     xdg.configFile."wezterm".source = sourceRoot + "/wezterm";
     home.file.".wezterm.lua".source = sourceRoot + "/.wezterm.lua";
+    home.file.".local/bin/tmux-cheatsheet" = {
+      executable = true;
+      text = ''
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        exec ${lib.getExe pkgs.bat} \
+          --style=plain \
+          --theme=gruvbox-dark \
+          --paging=always \
+          "${sourceRoot}/docs/tmux-cheatsheet.md"
+      '';
+    };
 
     xdg.dataFile."konsole/Alex-Gruvbox.profile" = lib.mkIf plasmaDesktop {
       source = sourceRoot + "/konsole/Alex-Gruvbox.profile";
@@ -53,9 +66,100 @@ in
       extraConfig = builtins.readFile (sourceRoot + "/tmux/tmux.conf");
     };
 
-    # Keep WezTerm as the portable default while making two native Linux
-    # terminals available for side-by-side evaluation. Their visuals and close
-    # protection intentionally mirror the established WezTerm configuration.
+    # Keep WezTerm as the portable default while making native Linux terminals
+    # available for side-by-side evaluation. Their visuals intentionally mirror
+    # the established WezTerm configuration.
+    programs.alacritty = lib.mkIf nativeLinux {
+      enable = true;
+      settings = {
+        general.live_config_reload = true;
+        window = {
+          decorations = "Full";
+          decorations_theme_variant = "Dark";
+          dynamic_padding = false;
+          dynamic_title = true;
+          opacity = 1.0;
+          padding = {
+            x = 0;
+            y = 5;
+          };
+        };
+        scrolling = {
+          history = 10000;
+          multiplier = 3;
+        };
+        font = {
+          size = 14.0;
+          normal = {
+            family = "BigBlueTerm437 Nerd Font";
+            style = "Regular";
+          };
+          bold = {
+            family = "BigBlueTerm437 Nerd Font";
+            style = "Regular";
+          };
+          italic = {
+            family = "BigBlueTerm437 Nerd Font";
+            style = "Regular";
+          };
+          bold_italic = {
+            family = "BigBlueTerm437 Nerd Font";
+            style = "Regular";
+          };
+        };
+        colors = {
+          draw_bold_text_with_bright_colors = true;
+          primary = {
+            background = "#1d2021";
+            foreground = "#ebdbb2";
+            bright_foreground = "#fbf1c7";
+            dim_foreground = "#a89984";
+          };
+          cursor = {
+            cursor = "#ebdbb2";
+            text = "#1d2021";
+          };
+          selection = {
+            background = "#504945";
+            text = "CellForeground";
+          };
+          normal = {
+            black = "#1d2021";
+            red = "#cc241d";
+            green = "#98971a";
+            yellow = "#d79921";
+            blue = "#458588";
+            magenta = "#b16286";
+            cyan = "#689d6a";
+            white = "#a89984";
+          };
+          bright = {
+            black = "#928374";
+            red = "#fb4934";
+            green = "#b8bb26";
+            yellow = "#fabd2f";
+            blue = "#83a598";
+            magenta = "#d3869b";
+            cyan = "#8ec07c";
+            white = "#ebdbb2";
+          };
+        };
+        cursor = {
+          style = {
+            shape = "Block";
+            blinking = "On";
+          };
+          blink_interval = 500;
+          blink_timeout = 0;
+          unfocused_hollow = true;
+        };
+        selection.save_to_clipboard = false;
+        terminal.osc52 = "OnlyCopy";
+        mouse.hide_when_typing = true;
+        bell.duration = 0;
+      };
+    };
+
     programs.ghostty = lib.mkIf nativeLinux {
       enable = true;
       systemd.enable = true;
