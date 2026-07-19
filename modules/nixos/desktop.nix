@@ -148,6 +148,7 @@ in
         "usb_storage"
         "xhci_pci"
       ];
+      kernelModules = [ "uhid" ];
       kernelParams = [
         "nvidia-drm.fbdev=1"
       ]
@@ -367,6 +368,22 @@ in
     systemd.user.services.sunshine.serviceConfig.ExecStartPre = lib.mkIf (
       cfg.ipadDisplay.connector != null
     ) "${ipadDisplayEnsure}/bin/ipad-display-ensure";
+    # NVIDIA's userspace driver libraries are exposed through this stable
+    # NixOS path. Sunshine loads CUDA/NVENC dynamically, so it must be present
+    # in the service's loader path rather than merely in the system closure.
+    systemd.user.services.sunshine.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+
+    # Sunshine's DualSense emulation uses UHID in addition to UInput. The
+    # upstream udev rules also grant access to the virtual devices Sunshine
+    # creates so their advanced controller features remain usable.
+    services.udev.extraRules = ''
+      KERNEL=="uhid", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess"
+      KERNEL=="hidraw*", ATTRS{name}=="Sunshine PS5 (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
+      SUBSYSTEMS=="input", ATTRS{name}=="Sunshine X-Box One (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
+      SUBSYSTEMS=="input", ATTRS{name}=="Sunshine gamepad (virtual) motion sensors*", GROUP="input", MODE="0660", TAG+="uaccess"
+      SUBSYSTEMS=="input", ATTRS{name}=="Sunshine Nintendo (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
+      SUBSYSTEMS=="input", ATTRS{name}=="Sunshine PS5 (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
+    '';
 
     security.rtkit.enable = true;
 
