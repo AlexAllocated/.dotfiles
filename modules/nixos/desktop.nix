@@ -18,6 +18,18 @@ let
     '';
     inherit (pkgs.obs-studio) meta passthru;
   };
+  discordNvidia = pkgs.symlinkJoin {
+    name = "discord-nvidia-${pkgs.discord.version}";
+    paths = [ pkgs.discord ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    # Discord probes CUDA/NVENC for hardware-accelerated screen sharing by
+    # dlopening the NVIDIA driver libraries at runtime.
+    postBuild = ''
+      wrapProgram $out/opt/Discord/Discord \
+        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
+    '';
+    inherit (pkgs.discord) meta passthru;
+  };
   ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {
     clean = true;
     modelines = ''
@@ -316,6 +328,8 @@ in
         wireplumber.enable = true;
       };
 
+      usbmuxd.enable = true;
+
       sunshine = {
         enable = true;
         autoStart = true;
@@ -410,6 +424,11 @@ in
     virtualisation.docker.enable = true;
 
     programs = {
+      _1password.enable = true;
+      _1password-gui = {
+        enable = true;
+        polkitPolicyOwners = [ "alex" ];
+      };
       zsh.enable = true;
       firefox.enable = true;
       gamemode.enable = true;
@@ -418,6 +437,7 @@ in
       obs-studio = {
         enable = true;
         package = obsStudio;
+        plugins = [ pkgs.obs-studio-plugins.droidcam-obs ];
       };
       steam = {
         enable = true;
@@ -455,6 +475,7 @@ in
       ardour
       audacity
       curl
+      discordNvidia
       flameshot
       gimp
       git
@@ -467,10 +488,12 @@ in
       kdePackages.kdialog
       krita
       ksnip
+      libimobiledevice
       libva-utils
       mangohud
       nvtopPackages.nvidia
       pciutils
+      pulseaudio
       usbutils
       vim
       vulkan-tools
