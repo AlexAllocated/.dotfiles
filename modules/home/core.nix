@@ -28,7 +28,17 @@
 
   config = {
     programs.home-manager.enable = true;
-    xdg.enable = true;
+    xdg = {
+      enable = true;
+      mimeApps = lib.mkIf (profile == "nixos-desktop") {
+        enable = true;
+        defaultApplications = {
+          "text/html" = [ "firefox.desktop" ];
+          "x-scheme-handler/http" = [ "firefox.desktop" ];
+          "x-scheme-handler/https" = [ "firefox.desktop" ];
+        };
+      };
+    };
 
     home.sessionVariables = {
       HOMEBREW_NO_ENV_HINTS = "1";

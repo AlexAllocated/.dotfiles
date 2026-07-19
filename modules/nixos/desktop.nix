@@ -374,6 +374,7 @@ in
 
     programs = {
       zsh.enable = true;
+      firefox.enable = true;
       gamemode.enable = true;
       gamescope.enable = true;
       nix-ld.enable = true;
@@ -424,6 +425,7 @@ in
       krita
       ksnip
       libva-utils
+      mangohud
       nvtopPackages.nvidia
       obs-studio
       pciutils
@@ -431,6 +433,7 @@ in
       vim
       vulkan-tools
       wget
+      wl-clipboard
     ];
 
     assertions = [
