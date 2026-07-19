@@ -73,6 +73,10 @@ if wezterm.target_triple:match("windows") then
 	end
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
+	-- KWin supplies the native titlebar on Plasma; drawing WezTerm's integrated
+	-- controls as well would produce a second set of window buttons.
+elseif wezterm.target_triple:match("linux") then
+	config.window_decorations = "RESIZE"
 elseif wezterm.target_triple:match("darwin") then
 	local home = os.getenv("HOME") or "."
 	config.default_prog = { "/bin/zsh", "-l" }

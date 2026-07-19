@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+run_neovim_automation() {
+	if command_exists mise; then
+		mise exec -- nvim "$@"
+	else
+		nvim "$@"
+	fi
+}
+
 stage_repo() {
 	local destination="$1"
 	require_command rsync
@@ -33,7 +41,7 @@ update_neovim_candidate() {
 		GIT_CONFIG_COUNT=1 \
 		GIT_CONFIG_KEY_0=advice.detachedHead \
 		GIT_CONFIG_VALUE_0=false \
-		nvim --headless "+set nomore" "+lua require(\"config.bootstrap\").update_plugin_pins()"; then
+		run_neovim_automation --headless "+set nomore" "+lua require(\"config.bootstrap\").update_plugin_pins()"; then
 		printf 'Neovim pin refresh failed.\n' >&2
 		return 1
 	fi
@@ -71,7 +79,7 @@ sync_live_neovim_runtime() (
 		GIT_CONFIG_COUNT=1 \
 		GIT_CONFIG_KEY_0=advice.detachedHead \
 		GIT_CONFIG_VALUE_0=false \
-		nvim --headless "+set nomore" "+lua require(\"config.bootstrap\").sync_runtime()"; then
+		run_neovim_automation --headless "+set nomore" "+lua require(\"config.bootstrap\").sync_runtime()"; then
 		printf 'Active Neovim runtime sync failed.\n' >&2
 		return 1
 	fi
