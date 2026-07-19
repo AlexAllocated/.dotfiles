@@ -27,7 +27,13 @@
     migrationTools = {
       enable = true;
       source = self.outPath;
-      rescue.enable = false;
+      rescue = {
+        enable = true;
+        user = user;
+        autoStart = true;
+        durableTmux = true;
+        preventSleep = false;
+      };
     };
   };
 
@@ -70,6 +76,17 @@
       // lib.optionalAttrs (config.dotfiles.desktop.ipadDisplay.connector != null) {
         ${config.dotfiles.desktop.ipadDisplay.connector}.enable = false;
       };
+
+      # Plasma stores dragged launchers as filesystem URLs, which can embed
+      # generation-specific Nix store paths. Keep the desired order as stable
+      # desktop IDs so rebuilds and rollbacks cannot strand the taskbar icons.
+      dotfiles.plasma.taskbarLaunchers = [
+        "Alacritty.desktop"
+        "com.mitchellh.ghostty.desktop"
+        "kitty.desktop"
+        "org.kde.konsole.desktop"
+        "org.wezfurlong.wezterm.desktop"
+      ];
     };
   };
 

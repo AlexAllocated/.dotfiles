@@ -35,18 +35,18 @@ fi
 mode_present=0
 for mode_file in /sys/class/drm/card*-"$connector"/modes; do
 	[[ -f "$mode_file" ]] || continue
-	if grep -Fxq '2736x2048' "$mode_file"; then
+	if grep -Fxq '2732x2048' "$mode_file"; then
 		mode_present=1
 	fi
 done
 ((mode_present)) || {
-	printf '%s\n' '2736x2048 is not present in DRM. Run ipad-display-prepare and complete its rebuild/reboot instruction.' >&2
+	printf '%s\n' '2732x2048 is not present in DRM. Run ipad-display-prepare and complete its rebuild/reboot instruction.' >&2
 	exit 1
 }
 
 arguments=(
 	"output.$connector.enable"
-	"output.$connector.mode.2736x2048@60"
+	"output.$connector.mode.2732x2048@60"
 	"output.$connector.scale.1.75"
 )
 if ((sole)); then
@@ -56,6 +56,6 @@ if ((sole)); then
 fi
 
 kscreen-doctor "${arguments[@]}"
-printf 'Enabled %s at the Windows-matched 2736x2048@60 host timing.\n' "$connector"
+printf 'Enabled %s at the iPad-native 2732x2048@60 host timing.\n' "$connector"
 printf '%s\n' 'Applied the workstation UI scale of 175%.'
-printf '%s\n' 'Request 2732x2048 in Moonlight for the iPad Pro client stream.'
+printf '%s\n' 'Request 2732x2048 in Moonlight for a scaling-free iPad Pro stream.'

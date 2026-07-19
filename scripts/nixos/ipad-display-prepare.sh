@@ -139,11 +139,11 @@ else
 fi
 sleep 1
 mode_file="${candidate_paths[$connector]}/modes"
-grep -Fxq '2736x2048' "$mode_file" || {
-	printf '%s\n' 'Hotplug completed but 2736x2048 is not advertised; use the persistent config and reboot.' >&2
+grep -Fxq '2732x2048' "$mode_file" || {
+	printf '%s\n' 'Hotplug completed but 2732x2048 is not advertised; use the persistent config and reboot.' >&2
 	exit 1
 }
 install -d -m 0755 /run/chev-ipad-display
 printf '%s\n' "$connector" >/run/chev-ipad-display/connector
 chmod 0644 /run/chev-ipad-display/connector
-printf '%s\n' 'Temporary 2736x2048 EDID override is active. Run ipad-display-on as alex.'
+printf '%s\n' 'Temporary 2732x2048 EDID override is active. Run ipad-display-on as alex.'

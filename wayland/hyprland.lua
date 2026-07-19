@@ -49,7 +49,7 @@ hl.layer_rule({
 })
 
 hl.on("hyprland.start", function()
-	hl.exec_cmd("noctalia-shell")
+	hl.exec_cmd(start_noctalia_shell)
 	hl.exec_cmd(start_polkit_agent)
 end)
 
@@ -64,7 +64,10 @@ hl.bind("SUPER + B", hl.dsp.exec_cmd("firefox"))
 hl.bind("SUPER + Q", hl.dsp.window.close())
 hl.bind("SUPER + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind("SUPER + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }))
-hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd("hyprctl dispatch exit"))
+-- Hyprland 0.55 parses `hyprctl dispatch` arguments as Lua. UWSM owns this
+-- session, so ask UWSM to stop it instead of using the removed legacy exit
+-- dispatcher syntax.
+hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(stop_hyprland_session))
 
 local directions = { H = "l", J = "d", K = "u", L = "r" }
 for key, direction in pairs(directions) do

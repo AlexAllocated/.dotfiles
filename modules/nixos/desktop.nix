@@ -35,7 +35,7 @@ let
   ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {
     clean = true;
     modelines = ''
-      Modeline "ipad2736" 366.11 2736 2784 2816 2896 2048 2051 2061 2107 +hsync -vsync ratio=4:3
+      Modeline "ipad2732" 365.61 2732 2780 2812 2892 2048 2051 2061 2107 +hsync -vsync ratio=4:3
     '';
     doCheck = true;
     nativeCheckInputs = (oldAttrs.nativeCheckInputs or [ ]) ++ [
@@ -55,7 +55,7 @@ let
       for file in *.bin; do
         edid-decode --check "$file" > "$file.decode"
         grep -Fq 'Digital display' "$file.decode"
-        grep -Eq 'DTD 1:[[:space:]]+2736x2048' "$file.decode"
+        grep -Eq 'DTD 1:[[:space:]]+2732x2048' "$file.decode"
         ! grep -Eq '688x516|Warnings:' "$file.decode"
       done
     '';
@@ -67,7 +67,7 @@ let
       inherit name runtimeInputs;
       text = ''
         export CHEV_IPAD_CONNECTOR=${lib.escapeShellArg ipadConnector}
-        export CHEV_IPAD_EDID=${ipadEdidFirmware}/lib/firmware/edid/ipad2736.bin
+        export CHEV_IPAD_EDID=${ipadEdidFirmware}/lib/firmware/edid/ipad2732.bin
         exec ${pkgs.bash}/bin/bash ${script} "$@"
       '';
     };
@@ -195,7 +195,7 @@ in
       ]
       ++ lib.optional (
         cfg.ipadDisplay.connector != null
-      ) "drm.edid_firmware=${cfg.ipadDisplay.connector}:edid/ipad2736.bin";
+      ) "drm.edid_firmware=${cfg.ipadDisplay.connector}:edid/ipad2732.bin";
       supportedFilesystems = [ "ntfs" ];
       loader = {
         timeout = 8;
@@ -354,7 +354,12 @@ in
         settings = {
           sunshine_name = "CHEV-DESKTOP";
           capture = "kwin";
-          encoder = "nvenc";
+          # This Sunshine build has CUDA interop disabled. Its hybrid NVENC
+          # path can probe successfully but fails every BGR0-to-NV12 frame
+          # conversion at the iPad's custom 4:3 mode. Vulkan encoding is still
+          # hardware accelerated on the RTX 3090 Ti and is the path already
+          # proven by sustained 2732/2736x2048 Moonlight sessions.
+          encoder = "vulkan";
           file_state = "sunshine_state.json";
           credentials_file = "sunshine_state.json";
           cert = "credentials/cacert.pem";
@@ -418,11 +423,6 @@ in
     # Plasma-specific. Do not let an experimental compositor session churn
     # through KScreen retries and Sunshine's restart limit.
     systemd.user.services.sunshine.unitConfig.ConditionEnvironment = "XDG_CURRENT_DESKTOP=KDE";
-    # NVIDIA's userspace driver libraries are exposed through this stable
-    # NixOS path. Sunshine loads CUDA/NVENC dynamically, so it must be present
-    # in the service's loader path rather than merely in the system closure.
-    systemd.user.services.sunshine.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
-
     # Sunshine's DualSense emulation uses UHID in addition to UInput. The
     # upstream udev rules also grant access to the virtual devices Sunshine
     # creates so their advanced controller features remain usable.

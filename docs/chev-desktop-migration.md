@@ -81,9 +81,14 @@ The installer provides:
   detected private IPv4 address. It is disabled by default and has **no
   authentication or encryption**. Use it only on a trusted LAN and turn it off
   immediately. The rescue service prevents sleep, sends WebSocket keepalives,
-  uses a mobile viewport with larger text, and leaves tmux mouse reporting and
-  the terminal alternate screen disabled so normal touch scrolling reaches
-  scrollback.
+  uses a mobile viewport with larger text and an embedded BigBlueTerm Nerd Font.
+  The native `chev-desktop` profile temporarily starts the same unauthenticated
+  service at boot on port 7681 and attaches every browser to the dedicated
+  `recovery` tmux session. Its tmux server is a separate system service, so a
+  browser or ttyd restart cannot kill the shell or Codex process. Mouse reporting
+  and the terminal alternate screen are disabled for that session so normal
+  touch scrolling reaches browser scrollback. Attach locally with
+  `tmux -S /run/chev-ttyd-rescue-tmux/tmux.sock attach -t recovery`.
 - `reboot-windows`: after the operator types `WINDOWS`, select the unique
   Windows entry through systemd-boot or UEFI `BootNext`, then reboot.
 - `recover-windows-fallback`: after an interrupted `bootctl`, validate the
@@ -226,8 +231,8 @@ requires `RESTORE WINDOWS FALLBACK`. It writes or removes only
 
 The dummy adapter is `FUN7F52` / `EK1080T4KHR`; the LG is `GSM774B`. Its stock
 EDID advertises common 1080p/1440p/4K modes but not the custom iPad mode.
-Windows/NVIDIA actually rounded the requested 2732 width to this proven host
-timing: 2736x2048 at approximately 60 Hz (366.11 MHz, totals 2896x2107).
+NixOS supplies the iPad Pro panel's exact 2732x2048 size at approximately 60 Hz
+(365.61 MHz, totals 2892x2107), avoiding a host-side resize before encoding.
 
 NixOS declaratively generates that EDID. On the first native boot:
 
@@ -244,7 +249,7 @@ dotfiles.desktop.ipadDisplay.connector = "DP-2";
 ```
 
 Run `dotctl apply`, reboot once for the connector-specific
-`drm.edid_firmware=...:edid/ipad2736.bin` setting, then use:
+`drm.edid_firmware=...:edid/ipad2732.bin` setting, then use:
 
 ```sh
 ipad-display-on          # dummy as another Plasma display
@@ -252,8 +257,8 @@ ipad-display-on --sole   # disable other currently enabled Plasma outputs
 ipad-display-off
 ```
 
-The workstation helpers use the same 175% Plasma scale on the LG and dummy
-outputs.
+The workstation helper applies 175% scale to the iPad dummy without changing
+the LG's independently stored 100% scale.
 
 If the dummy is the only enabled output, `ipad-display-off` refuses to leave
 Plasma with no display. Connect the LG (or another display) and restore it in
@@ -273,8 +278,8 @@ restart Sunshine locally before relying on Moonlight again.
 `ipad-display-prepare --apply-now` can use the kernel's per-connector debugfs
 override and either its hotplug trigger or the standard DRM reprobe interface;
 it still refuses any connector whose EDID is not FUN/EK1080. Request 2732x2048
-in Moonlight: Sunshine captures the proven 2736x2048 host output and encodes
-the requested iPad client size.
+in Moonlight so Sunshine's host capture and encoded client frame remain the
+same native iPad size.
 
 The pinned Sunshine build supports the Plasma Wayland `kwin` capture backend.
 Once the connector is configured, Nix also sets Sunshine `output_name` to that
