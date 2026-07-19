@@ -80,8 +80,9 @@ The installer provides:
 - `rescue-remote-on` / `rescue-remote-off`: optional temporary ttyd on one
   detected private IPv4 address. It is disabled by default and has **no
   authentication or encryption**. Use it only on a trusted LAN and turn it off
-  immediately. The rescue service prevents sleep, sends WebSocket keepalives,
-  uses a mobile viewport with larger text and an embedded BigBlueTerm Nerd Font.
+  immediately. The installer rescue profile prevents sleep, sends WebSocket
+  keepalives, uses a mobile viewport with larger text and an embedded
+  BigBlueTerm Nerd Font.
   The native `chev-desktop` profile temporarily starts the same unauthenticated
   service at boot on port 7681 and attaches every browser to the dedicated
   `recovery` tmux session. Its tmux server is a separate system service, so a
