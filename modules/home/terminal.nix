@@ -59,6 +59,58 @@ in
       '';
     };
 
+    xdg.dataFile."applications/com.mitchellh.ghostty.desktop" = lib.mkIf nativeLinux {
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Name=Ghostty
+        Type=Application
+        Comment=A terminal emulator
+        TryExec=${lib.getExe pkgs.ghostty}
+        Exec=${lib.getExe pkgs.ghostty} --gtk-single-instance=true
+        Icon=${pkgs.ghostty}/share/icons/hicolor/256x256/apps/com.mitchellh.ghostty.png
+        Categories=System;TerminalEmulator;
+        Keywords=terminal;tty;pty;
+        StartupNotify=true
+        StartupWMClass=com.mitchellh.ghostty
+        Terminal=false
+        Actions=new-window;
+        X-GNOME-UsesNotifications=true
+        X-TerminalArgExec=-e
+        X-TerminalArgTitle=--title=
+        X-TerminalArgAppId=--class=
+        X-TerminalArgDir=--working-directory=
+        X-TerminalArgHold=--wait-after-command
+        DBusActivatable=true
+        X-KDE-Shortcuts=Ctrl+Alt+T
+
+        [Desktop Action new-window]
+        Name=New Window
+        Exec=${lib.getExe pkgs.ghostty} --gtk-single-instance=true
+      '';
+    };
+
+    xdg.dataFile."applications/kitty.desktop" = lib.mkIf nativeLinux {
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=kitty
+        GenericName=Terminal emulator
+        Comment=Fast, feature-rich, GPU based terminal
+        TryExec=${lib.getExe pkgs.kitty}
+        StartupNotify=true
+        Exec=${lib.getExe pkgs.kitty}
+        Icon=${pkgs.kitty}/share/icons/hicolor/scalable/apps/kitty.svg
+        Categories=System;TerminalEmulator;
+        X-TerminalArgExec=--
+        X-TerminalArgTitle=--title
+        X-TerminalArgAppId=--class
+        X-TerminalArgDir=--working-directory
+        X-TerminalArgHold=--hold
+      '';
+    };
+
     xdg.configFile."wezterm".source = sourceRoot + "/wezterm";
     home.file.".wezterm.lua".source = sourceRoot + "/.wezterm.lua";
     home.file.".local/bin/tmux-cheatsheet" = {

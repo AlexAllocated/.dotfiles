@@ -91,6 +91,21 @@ let
     name = "ipad-display-ensure";
     runtimeInputs = [ pkgs.coreutils ];
     text = ''
+      connector=${lib.escapeShellArg ipadConnector}
+      connected=0
+      for status_file in /sys/class/drm/card*-"$connector"/status; do
+        [[ -r "$status_file" ]] || continue
+        if [[ "$(<"$status_file")" == "connected" ]]; then
+          connected=1
+          break
+        fi
+      done
+
+      if ((connected == 0)); then
+        printf 'The iPad dummy connector %s is disconnected; skipping Sunshine autostart.\n' "$connector"
+        exit 1
+      fi
+
       for attempt in $(${pkgs.coreutils}/bin/seq 1 30); do
         if ${ipadDisplayOn}/bin/ipad-display-on; then
           exit 0
@@ -98,7 +113,7 @@ let
         printf 'KScreen is not ready for the iPad dummy (attempt %s/30); retrying.\n' "$attempt" >&2
         sleep 1
       done
-      printf '%s\n' 'Could not enable the iPad dummy before Sunshine encoder probing; Sunshine will not start.' >&2
+      printf '%s\n' 'Could not enable the connected iPad dummy before Sunshine encoder probing; skipping Sunshine autostart.' >&2
       exit 1
     '';
   };
@@ -391,9 +406,12 @@ in
     };
 
     # Sunshine probes displays and encoders before it runs an application's
-    # prep command. Ensure the dummy is active first so a headless/sole iPad
-    # session remains recoverable after reboot even while the LG is off.
-    systemd.user.services.sunshine.serviceConfig.ExecStartPre = lib.mkIf (
+    # prep command. Ensure a connected dummy is active first so a headless/sole
+    # iPad session remains recoverable after reboot even while the LG is off.
+    # ExecCondition cleanly skips autostart when the dummy is absent or cannot
+    # be prepared; an ExecStartPre failure would enter a restart loop and can
+    # block Plasma from stopping graphical-session.target during logout.
+    systemd.user.services.sunshine.serviceConfig.ExecCondition = lib.mkIf (
       cfg.ipadDisplay.connector != null
     ) "${ipadDisplayEnsure}/bin/ipad-display-ensure";
     # The current capture backend and dummy-display preparation are both
