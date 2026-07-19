@@ -74,6 +74,7 @@ rec {
       gnumake
       gnugrep
       go
+      gnupg
       lua
       mise
       ninja

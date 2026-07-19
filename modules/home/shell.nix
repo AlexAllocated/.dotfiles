@@ -48,6 +48,7 @@ in
 
     xdg.configFile."mise/config.toml".text = ''
       [settings]
+      all_compile = false
       python.compile = false
     '';
 
