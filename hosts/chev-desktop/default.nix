@@ -1,4 +1,5 @@
 {
+  config,
   inputs,
   lib,
   pkgs,
@@ -12,11 +13,13 @@
   imports = [
     inputs.home-manager.nixosModules.home-manager
     ../../modules/nixos/desktop.nix
+    ../../modules/nixos/compositors.nix
     ../../modules/nixos/migration-tools.nix
   ]
   ++ lib.optional (builtins.pathExists ./hardware-generated.nix) ./hardware-generated.nix;
 
   dotfiles = {
+    compositors.nvidiaVramWorkaround = true;
     desktop = {
       inherit user;
       userDescription = "Alex";
@@ -27,6 +30,10 @@
       rescue.enable = false;
     };
   };
+
+  # Plasma is the proven local and Sunshine recovery desktop. Installing
+  # optional sessions must never change the unattended boot target.
+  services.displayManager.defaultSession = "plasma";
 
   home-manager = {
     useGlobalPkgs = true;
@@ -49,6 +56,20 @@
         stateVersion = "26.05";
       };
       dotfiles.profile = profile;
+      dotfiles.compositors.outputs = {
+        DP-1 = {
+          mode = "3440x1440@160";
+          scale = 1;
+          position = {
+            x = 0;
+            y = 0;
+          };
+          focusAtStartup = true;
+        };
+      }
+      // lib.optionalAttrs (config.dotfiles.desktop.ipadDisplay.connector != null) {
+        ${config.dotfiles.desktop.ipadDisplay.connector}.enable = false;
+      };
     };
   };
 

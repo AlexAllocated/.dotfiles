@@ -11,6 +11,7 @@
     ./codex.nix
     ./cloud.nix
     ./terminal.nix
+    ./compositors.nix
     ./windows.nix
   ];
 }

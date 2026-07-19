@@ -93,6 +93,22 @@ PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
 with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
 XBOOTLDR partition mounted at `/boot`.
 
+Plasma remains the default and remote-recovery desktop. SDDM also offers niri
+and both plain and UWSM-managed Hyprland sessions; choose **Hyprland (UWSM)**
+for normal testing. The optional sessions share Noctalia for their bar,
+launcher, notifications, and session controls. Common bindings are
+`Super+Return` for WezTerm, `Super+Space` for the launcher,
+`Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
+menu. `Ctrl+Alt+Delete` exits either experimental session if the shell fails.
+Their initial monitor policy keeps the iPad dummy disabled.
+First-run Noctalia settings select Gruvbox Dark and hide lock, suspend, and
+hibernate until the workstation password has been intentionally set and
+tested.
+
+Sunshine is deliberately still Plasma-only: its proven capture backend and
+iPad preparation use KWin and KScreen. Add compositor-aware capture and display
+helpers before relying on Moonlight from a Hyprland or niri session.
+
 Build the local-first internal installer with:
 
 ```sh
@@ -175,10 +191,13 @@ Available modules:
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
 - `terminal`: WezTerm and its configuration on native Linux/macOS
+- `compositors`: optional Hyprland/niri configs, shared Noctalia shell, and portable output policy
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition
 
-`nixosModules.wsl` exposes the host module with neutral defaults; set
+`nixosModules.compositors` enables the two optional display-manager sessions
+while preserving the caller's desktop policy. `nixosModules.wsl` exposes the
+WSL host module with neutral defaults; set
 `dotfiles.wsl.user` and `dotfiles.wsl.userDescription` in the consuming NixOS
 configuration.
 

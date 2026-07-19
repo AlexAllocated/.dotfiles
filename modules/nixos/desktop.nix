@@ -396,6 +396,10 @@ in
     systemd.user.services.sunshine.serviceConfig.ExecStartPre = lib.mkIf (
       cfg.ipadDisplay.connector != null
     ) "${ipadDisplayEnsure}/bin/ipad-display-ensure";
+    # The current capture backend and dummy-display preparation are both
+    # Plasma-specific. Do not let an experimental compositor session churn
+    # through KScreen retries and Sunshine's restart limit.
+    systemd.user.services.sunshine.unitConfig.ConditionEnvironment = "XDG_CURRENT_DESKTOP=KDE";
     # NVIDIA's userspace driver libraries are exposed through this stable
     # NixOS path. Sunshine loads CUDA/NVENC dynamically, so it must be present
     # in the service's loader path rather than merely in the system closure.

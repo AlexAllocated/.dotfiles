@@ -161,6 +161,7 @@
         codex = ./modules/home/codex.nix;
         cloud = ./modules/home/cloud.nix;
         terminal = ./modules/home/terminal.nix;
+        compositors = ./modules/home/compositors.nix;
         windows = ./modules/home/windows.nix;
         default = ./modules/home/default.nix;
       };
@@ -309,6 +310,7 @@
 
       inherit homeModules;
       nixosModules = {
+        compositors = ./modules/nixos/compositors.nix;
         desktop = ./modules/nixos/desktop.nix;
         migration-tools = ./modules/nixos/migration-tools.nix;
         wsl = ./modules/nixos/wsl.nix;
