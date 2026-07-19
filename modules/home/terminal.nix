@@ -31,6 +31,34 @@ in
       };
     };
 
+    # Home Manager's package path joins the Plasma application search path on
+    # the next NixOS system switch. Publish Alacritty's canonical desktop ID in
+    # the user data directory too, so it is discoverable immediately after a
+    # user-only activation during migration. The matching ID cleanly shadows
+    # the packaged entry instead of creating a duplicate later.
+    xdg.dataFile."applications/Alacritty.desktop" = lib.mkIf nativeLinux {
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        TryExec=${lib.getExe pkgs.alacritty}
+        Exec=${lib.getExe pkgs.alacritty}
+        Icon=${pkgs.alacritty}/share/icons/hicolor/scalable/apps/Alacritty.svg
+        Terminal=false
+        Categories=System;TerminalEmulator;
+
+        Name=Alacritty
+        GenericName=Terminal
+        Comment=A fast, cross-platform, OpenGL terminal emulator
+        StartupNotify=true
+        StartupWMClass=Alacritty
+        Actions=New;
+
+        [Desktop Action New]
+        Name=New Terminal
+        Exec=${lib.getExe pkgs.alacritty}
+      '';
+    };
+
     xdg.configFile."wezterm".source = sourceRoot + "/wezterm";
     home.file.".wezterm.lua".source = sourceRoot + "/.wezterm.lua";
     home.file.".local/bin/tmux-cheatsheet" = {
