@@ -23,10 +23,12 @@ let
     paths = [ pkgs.discord ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     # Discord probes CUDA/NVENC for hardware-accelerated screen sharing by
-    # dlopening the NVIDIA driver libraries at runtime.
+    # dlopening the NVIDIA driver libraries at runtime. Plasma auto-login has
+    # no PAM password with which to unlock KWallet, so avoid its setup prompt.
     postBuild = ''
       wrapProgram $out/opt/Discord/Discord \
-        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
+        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib \
+        --add-flags --password-store=basic
     '';
     inherit (pkgs.discord) meta passthru;
   };
@@ -430,7 +432,14 @@ in
         polkitPolicyOwners = [ "alex" ];
       };
       zsh.enable = true;
-      firefox.enable = true;
+      firefox = {
+        enable = true;
+        policies.ExtensionSettings."{d634138d-c276-4fc8-924b-40a0ea21d284}" = {
+          installation_mode = "normal_installed";
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/1password-x-password-manager/latest.xpi";
+          default_area = "navbar";
+        };
+      };
       gamemode.enable = true;
       gamescope.enable = true;
       nix-ld.enable = true;

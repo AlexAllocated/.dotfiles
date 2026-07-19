@@ -79,11 +79,13 @@ rec {
       mise
       ninja
       pkg-config
+      pnpm
       python3
       rust-analyzer
       rustc
       shellcheck
       stylua
+      uv
     ])
     ++ optionalPkgs pkgs [
       "docker-client"
@@ -98,6 +100,7 @@ rec {
   cloud =
     (with pkgs; [
       gh
+      (google-cloud-sdk.withExtraComponents [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
       k9s
       kubernetes-helm
       kubectl
@@ -105,7 +108,6 @@ rec {
     ++ optionalPkgs pkgs [
       "_1password-cli"
       "azure-cli"
-      "google-cloud-sdk"
       "stripe-cli"
     ];
 

@@ -50,6 +50,9 @@ in
       [settings]
       all_compile = false
       python.compile = false
+
+      [tools]
+      rust = { version = "stable", components = ["rust-analyzer", "rust-src"] }
     '';
 
     programs.bat.enable = true;
