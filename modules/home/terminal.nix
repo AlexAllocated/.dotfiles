@@ -44,5 +44,52 @@ in
           "org.wezfurlong.wezterm.desktop"
       ''
     );
+
+    # WezTerm renders its window controls inside the tab bar. KWin can still
+    # add server-side decorations on Wayland, so suppress its outer titlebar
+    # for this application only.
+    home.activation.weztermPlasmaIntegratedChrome = lib.mkIf plasmaDesktop (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        rules_file="''${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc"
+        rule_id="wezterm-integrated-chrome"
+        rules="$(${lib.getExe' pkgs.kdePackages.kconfig "kreadconfig6"} \
+          --file "$rules_file" \
+          --group General \
+          --key rules \
+          --default "")"
+
+        case ",$rules," in
+          *,"$rule_id",*) ;;
+          *)
+            rules="''${rules:+$rules,}$rule_id"
+            ;;
+        esac
+
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group General --key rules "$rules"
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key Description \
+          "Let WezTerm render its integrated window controls"
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key Enabled --type bool true
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key wmclass \
+          "org.wezfurlong.wezterm"
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key wmclasscomplete \
+          --type bool false
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key wmclassmatch 1
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key types 1
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key noborder --type bool true
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file "$rules_file" --group "$rule_id" --key noborderrule 2
+
+        ${lib.getExe' pkgs.systemd "busctl"} --user call \
+          org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true
+      ''
+    );
   };
 }

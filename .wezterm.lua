@@ -54,7 +54,7 @@ config.use_fancy_tab_bar = true
 config.webgpu_power_preference = "HighPerformance"
 -- config.webgpu_preferred_adapter = wezterm.gui.enumerate_gpus()[2]
 -- config.window_background_opacity = 1
--- config.window_close_confirmation = "NeverPrompt"
+config.window_close_confirmation = "AlwaysPrompt"
 config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
 -- config.window_padding = { left = 10, right = 10, top = 25, bottom = 10 }
 config.window_padding = { left = 0, right = 0, top = 10, bottom = 0 }
@@ -73,10 +73,11 @@ if wezterm.target_triple:match("windows") then
 	end
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
-	-- KWin supplies the native titlebar on Plasma; drawing WezTerm's integrated
-	-- controls as well would produce a second set of window buttons.
 elseif wezterm.target_triple:match("linux") then
-	config.window_decorations = "RESIZE"
+	-- KWin can force an extra client-side titlebar on native Wayland even when
+	-- WezTerm uses integrated controls. XWayland lets the scoped KWin rule
+	-- suppress that outer frame reliably.
+	config.enable_wayland = false
 elseif wezterm.target_triple:match("darwin") then
 	local home = os.getenv("HOME") or "."
 	config.default_prog = { "/bin/zsh", "-l" }
