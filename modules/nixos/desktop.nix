@@ -6,6 +6,18 @@
 }:
 let
   cfg = config.dotfiles.desktop;
+  obsStudio = pkgs.symlinkJoin {
+    name = "obs-studio-nvidia-${pkgs.obs-studio.version}";
+    paths = [ pkgs.obs-studio ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    # OBS patches its plugins with NixOS's runtime GPU-driver path, but its
+    # separate NVENC capability probe also dlopens libnvidia-encode.so.1.
+    postBuild = ''
+      wrapProgram $out/bin/obs-nvenc-test \
+        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
+    '';
+    inherit (pkgs.obs-studio) meta passthru;
+  };
   ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {
     clean = true;
     modelines = ''
@@ -386,6 +398,14 @@ in
     '';
 
     security.rtkit.enable = true;
+    security.pam.loginLimits = [
+      {
+        domain = "@audio";
+        type = "-";
+        item = "memlock";
+        value = "unlimited";
+      }
+    ];
 
     virtualisation.docker.enable = true;
 
@@ -395,6 +415,10 @@ in
       gamemode.enable = true;
       gamescope.enable = true;
       nix-ld.enable = true;
+      obs-studio = {
+        enable = true;
+        package = obsStudio;
+      };
       steam = {
         enable = true;
         localNetworkGameTransfers.openFirewall = true;
@@ -446,7 +470,6 @@ in
       libva-utils
       mangohud
       nvtopPackages.nvidia
-      obs-studio
       pciutils
       usbutils
       vim
