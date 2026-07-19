@@ -352,7 +352,7 @@ in
         autoStart = true;
         openFirewall = true;
         # Compile CUDA interop into Sunshine without enabling CUDA globally.
-        # Vulkan remains selected until NVENC passes a guarded streaming test.
+        # The resulting NVENC path is verified at the exact iPad mode.
         package = pkgs.sunshine.override {
           cudaSupport = true;
           cudaPackages = pkgs.cudaPackages_12_9;
@@ -360,10 +360,9 @@ in
         settings = {
           sunshine_name = "CHEV-DESKTOP";
           capture = "kwin";
-          # Vulkan is the proven default at the exact iPad mode. The package
-          # includes CUDA interop so NVENC can later be tested without the
-          # broken CPU BGR0-to-NV12 fallback.
-          encoder = "vulkan";
+          # CUDA interop avoids the broken CPU BGR0-to-NV12 fallback and lets
+          # the RTX 3090 Ti encode the exact iPad mode through NVENC.
+          encoder = "nvenc";
           file_state = "sunshine_state.json";
           credentials_file = "sunshine_state.json";
           cert = "credentials/cacert.pem";
