@@ -34,6 +34,25 @@ in
     xdg.configFile."wezterm".source = sourceRoot + "/wezterm";
     home.file.".wezterm.lua".source = sourceRoot + "/.wezterm.lua";
 
+    xdg.dataFile."konsole/Alex-Gruvbox.profile" = lib.mkIf plasmaDesktop {
+      source = sourceRoot + "/konsole/Alex-Gruvbox.profile";
+    };
+    xdg.dataFile."konsole/AlexGruvboxDarkHard.colorscheme" = lib.mkIf plasmaDesktop {
+      source = sourceRoot + "/konsole/AlexGruvboxDarkHard.colorscheme";
+    };
+
+    # Tmux owns durable panes, windows, and sessions while the GUI terminal is
+    # free to stay small and replaceable. Its stock C-b bindings intentionally
+    # match upstream documentation and tutorials.
+    programs.tmux = {
+      enable = true;
+      mouse = true;
+      terminal = "tmux-256color";
+      historyLimit = 50000;
+      focusEvents = true;
+      extraConfig = builtins.readFile (sourceRoot + "/tmux/tmux.conf");
+    };
+
     # Keep WezTerm as the portable default while making two native Linux
     # terminals available for side-by-side evaluation. Their visuals and close
     # protection intentionally mirror the established WezTerm configuration.
@@ -64,13 +83,13 @@ in
         "window-padding-balance" = false;
         "window-padding-x" = 0;
         "window-padding-y" = "10,0";
-        "window-show-tab-bar" = "always";
+        "window-show-tab-bar" = "auto";
 
-        # Ghostty owns one integrated tab/title bar; KWin must not wrap it in a
-        # second server-side title bar like the initial WezTerm setup did.
+        # Ghostty owns one draggable client-side titlebar. Its separate tab bar
+        # appears only after a second tab, so KWin must not add another frame.
         "window-decoration" = "client";
         "gtk-titlebar" = true;
-        "gtk-titlebar-style" = "tabs";
+        "gtk-titlebar-style" = "native";
         "gtk-tabs-location" = "top";
         "gtk-single-instance" = true;
       };
@@ -100,7 +119,7 @@ in
         scrollbar = "scrolled";
         strip_trailing_spaces = "smart";
         tab_bar_edge = "top";
-        tab_bar_min_tabs = 1;
+        tab_bar_min_tabs = 2;
         tab_bar_style = "powerline";
         tab_powerline_style = "round";
         update_check_interval = 0;
@@ -120,6 +139,19 @@ in
           --group General \
           --key TerminalService \
           "org.wezfurlong.wezterm.desktop"
+      ''
+    );
+
+    # Konsole's built-in profile is immutable. Add a managed profile instead,
+    # and change only the default-profile key so any user-created profiles are
+    # preserved alongside it.
+    home.activation.konsoleDefaultProfile = lib.mkIf plasmaDesktop (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+          --file konsolerc \
+          --group "Desktop Entry" \
+          --key DefaultProfile \
+          "Alex-Gruvbox.profile"
       ''
     );
 

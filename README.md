@@ -96,6 +96,9 @@ XBOOTLDR partition mounted at `/boot`.
 WezTerm remains the default terminal. Ghostty and Kitty are also installed with
 matching BigBlueTerm, Gruvbox Dark Hard, scrollback, and close-confirmation
 settings so they can be evaluated side by side without changing that default.
+Konsole gets a non-destructive managed profile with the same font and palette.
+Tmux is available everywhere with its stock `Ctrl+B` bindings, plus portable
+true color, clipboard forwarding, mouse scrolling, and extended scrollback.
 
 Plasma remains the default and remote-recovery desktop. SDDM also offers niri
 and both plain and UWSM-managed Hyprland sessions; choose **Hyprland (UWSM)**
@@ -194,7 +197,7 @@ Available modules:
 - `codex`: Codex, Bun, and Node; user settings, plugins, MCP servers, and rules stay machine-local
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
-- `terminal`: portable WezTerm default plus native Linux Ghostty/Kitty trials
+- `terminal`: WezTerm, Ghostty, Kitty, Konsole styling, and portable tmux
 - `compositors`: optional Hyprland/niri configs, shared Noctalia shell, and portable output policy
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition
