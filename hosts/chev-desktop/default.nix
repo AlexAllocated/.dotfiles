@@ -1,6 +1,7 @@
 {
   inputs,
   lib,
+  pkgs,
   profile,
   self,
   toolPkgs,
@@ -48,6 +49,27 @@
         stateVersion = "26.05";
       };
       dotfiles.profile = profile;
+    };
+  };
+
+  systemd.tmpfiles.rules = [
+    "d /data/games 0755 ${user} users -"
+    "d /data/preserved 0755 ${user} users -"
+  ];
+
+  # Games are large and frequently patched. New files below this directory
+  # inherit No_COW, avoiding needless copy-on-write fragmentation.
+  systemd.services.linux-data-games-nocow = {
+    description = "Keep the Linux games directory No_COW";
+    requires = [ "data.mount" ];
+    after = [
+      "data.mount"
+      "systemd-tmpfiles-setup.service"
+    ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.e2fsprogs}/bin/chattr +C /data/games";
     };
   };
 }
