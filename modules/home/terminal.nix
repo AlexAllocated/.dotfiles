@@ -9,12 +9,16 @@ let
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
   nativeLinux = pkgs.stdenv.hostPlatform.isLinux && cfg.profile != "nixos-wsl";
   plasmaDesktop = cfg.profile == "nixos-desktop";
+  terminalFont = pkgs.nerd-fonts.bigblue-terminal;
 in
 {
   imports = [ ./core.nix ];
 
   config = {
-    home.packages = lib.optionals nativeLinux [ pkgs.wezterm ];
+    home.packages = lib.optionals nativeLinux [
+      pkgs.wezterm
+      terminalFont
+    ];
     home.sessionVariables = lib.mkIf nativeLinux {
       TERMINAL = "wezterm";
     };
@@ -29,6 +33,80 @@ in
 
     xdg.configFile."wezterm".source = sourceRoot + "/wezterm";
     home.file.".wezterm.lua".source = sourceRoot + "/.wezterm.lua";
+
+    # Keep WezTerm as the portable default while making two native Linux
+    # terminals available for side-by-side evaluation. Their visuals and close
+    # protection intentionally mirror the established WezTerm configuration.
+    programs.ghostty = lib.mkIf nativeLinux {
+      enable = true;
+      systemd.enable = true;
+      settings = {
+        "font-family" = "BigBlueTerm437 Nerd Font";
+        "font-size" = 14;
+        theme = "Gruvbox Dark Hard";
+
+        "background-opacity" = 1.0;
+        "bold-is-bright" = true;
+        "clipboard-paste-bracketed-safe" = true;
+        "clipboard-paste-protection" = true;
+        "clipboard-read" = "ask";
+        "clipboard-trim-trailing-spaces" = true;
+        "clipboard-write" = "allow";
+        "confirm-close-surface" = "always";
+        "copy-on-select" = false;
+        "cursor-style" = "block";
+        "cursor-style-blink" = true;
+        "mouse-hide-while-typing" = true;
+        "right-click-action" = "copy-or-paste";
+        "scrollback-limit" = 10000000;
+        scrollbar = "never";
+        "shell-integration-features" = "no-cursor";
+        "window-padding-balance" = false;
+        "window-padding-x" = 0;
+        "window-padding-y" = "10,0";
+        "window-show-tab-bar" = "always";
+
+        # Ghostty owns one integrated tab/title bar; KWin must not wrap it in a
+        # second server-side title bar like the initial WezTerm setup did.
+        "window-decoration" = "client";
+        "gtk-titlebar" = true;
+        "gtk-titlebar-style" = "tabs";
+        "gtk-tabs-location" = "top";
+        "gtk-single-instance" = true;
+      };
+    };
+
+    programs.kitty = lib.mkIf nativeLinux {
+      enable = true;
+      font = {
+        name = "BigBlueTerm437 Nerd Font";
+        package = terminalFont;
+        size = 14;
+      };
+      themeFile = "gruvbox-dark-hard";
+      shellIntegration.mode = "no-cursor";
+      settings = {
+        background_opacity = 1.0;
+        clipboard_control = "write-clipboard write-primary read-clipboard-ask read-primary-ask";
+        confirm_os_window_close = 1;
+        copy_on_select = false;
+        cursor_blink_interval = 0.5;
+        cursor_shape = "block";
+        enable_audio_bell = false;
+        mouse_hide_wait = -1;
+        paste_actions = "quote-urls-at-prompt,confirm";
+        remember_window_size = true;
+        scrollback_lines = 10000;
+        scrollbar = "scrolled";
+        strip_trailing_spaces = "smart";
+        tab_bar_edge = "top";
+        tab_bar_min_tabs = 1;
+        tab_bar_style = "powerline";
+        tab_powerline_style = "round";
+        update_check_interval = 0;
+        window_padding_width = "10 0 0";
+      };
+    };
 
     home.activation.weztermPlasmaDefault = lib.mkIf plasmaDesktop (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''

@@ -119,7 +119,9 @@ in
         '')
         ''
             [[ -r "$HOME/.zprofile" ]] && source "$HOME/.zprofile"
-            [[ -r "${sourceRoot}/wezterm-shell-integration.sh" ]] && source "${sourceRoot}/wezterm-shell-integration.sh"
+            if [[ "''${TERM_PROGRAM:-}" == WezTerm && -n "''${WEZTERM_PANE:-}" && -r "${sourceRoot}/wezterm-shell-integration.sh" ]]; then
+              source "${sourceRoot}/wezterm-shell-integration.sh"
+            fi
 
           : "$NEOVIM_SRC_DIR"
 

@@ -93,6 +93,10 @@ PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
 with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
 XBOOTLDR partition mounted at `/boot`.
 
+WezTerm remains the default terminal. Ghostty and Kitty are also installed with
+matching BigBlueTerm, Gruvbox Dark Hard, scrollback, and close-confirmation
+settings so they can be evaluated side by side without changing that default.
+
 Plasma remains the default and remote-recovery desktop. SDDM also offers niri
 and both plain and UWSM-managed Hyprland sessions; choose **Hyprland (UWSM)**
 for normal testing. The optional sessions share Noctalia for their bar,
@@ -190,7 +194,7 @@ Available modules:
 - `codex`: Codex, Bun, and Node; user settings, plugins, MCP servers, and rules stay machine-local
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
-- `terminal`: WezTerm and its configuration on native Linux/macOS
+- `terminal`: portable WezTerm default plus native Linux Ghostty/Kitty trials
 - `compositors`: optional Hyprland/niri configs, shared Noctalia shell, and portable output policy
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition
