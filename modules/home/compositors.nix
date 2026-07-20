@@ -285,11 +285,13 @@ let
         "bind=Alt,space,spawn,rofi -show drun"
         "bind=Alt,Return,spawn,foot"
         "bind=SUPER,n,switch_layout"
+        "bind=SUPER,m,quit"
       ]
       [
         "bind=Alt,space,spawn,dotfiles-shell-action launcher"
         "bind=Alt,Return,spawn,alacritty"
         "bind=SUPER,n,spawn,${lib.getExe mangoCycleLayout}"
+        "bind=SUPER,m,minimized,"
       ]
       (builtins.readFile "${inputs.mango}/assets/config.conf");
 
@@ -310,7 +312,7 @@ let
     bind=SUPER,q,killclient,
     bind=SUPER,v,togglefloating,
     bind=SUPER,f,togglefullscreen,
-    bind=CTRL+ALT,Delete,quit
+    bind=CTRL+ALT,Delete,spawn,desktop-switch --restart
 
     bind=SUPER,h,focusdir,left
     bind=SUPER,j,focusdir,down

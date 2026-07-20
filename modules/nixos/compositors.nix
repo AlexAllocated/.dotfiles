@@ -310,7 +310,8 @@ let
       }
 
       recycle_user_manager() {
-        manager_pid="$(systemctl show "user@$(id -u).service" --property MainPID --value 2>/dev/null || true)"
+        manager_unit="user@$(id -u).service"
+        manager_pid="$(systemctl show "$manager_unit" --property MainPID --value 2>/dev/null || true)"
         [[ "$manager_pid" =~ ^[0-9]+$ && "$manager_pid" != 0 ]] || manager_pid=""
 
         # SDDM relogs immediately, while this account intentionally lingers so
@@ -318,12 +319,27 @@ let
         # returning to SDDM so the next desktop cannot inherit stale display,
         # compositor, DBus activation, or failed-unit state from the last one.
         systemctl --user exit >/dev/null 2>&1 || true
-        if [[ -n "$manager_pid" ]]; then
-          for ((attempt = 0; attempt < 100; attempt++)); do
-            [[ ! -d "/proc/$manager_pid" ]] && break
-            sleep 0.05
-          done
+
+        for ((attempt = 0; attempt < 100; attempt++)); do
+          manager_state="$(systemctl is-active "$manager_unit" 2>/dev/null || true)"
+          [[ "$manager_state" == inactive || "$manager_state" == failed ]] && return
+          sleep 0.05
+        done
+
+        # Electron applications can consume the full 90-second stop timeout.
+        # A new SDDM session must not reuse a manager that is already shutting
+        # down, so finish the old manager after a short graceful window.
+        if [[ -n "$manager_pid" && -d "/proc/$manager_pid" ]]; then
+          kill -KILL "$manager_pid" 2>/dev/null || true
         fi
+        for ((attempt = 0; attempt < 200; attempt++)); do
+          manager_state="$(systemctl is-active "$manager_unit" 2>/dev/null || true)"
+          [[ "$manager_state" == inactive || "$manager_state" == failed ]] && return
+          sleep 0.05
+        done
+
+        printf 'Timed out waiting for %s to stop; delaying SDDM relogin was unsuccessful.\n' \
+          "$manager_unit" >&2
       }
 
       # ShellCheck does not recognize invocation through the EXIT trap.

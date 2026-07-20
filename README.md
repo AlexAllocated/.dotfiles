@@ -107,7 +107,9 @@ for normal testing. The optional sessions share Noctalia for their bar,
 launcher, notifications, and session controls. Common bindings are
 `Super+Return` for Alacritty, `Super+Space` for the launcher,
 `Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
-menu. `Ctrl+Alt+Delete` exits either experimental session if the shell fails.
+menu. `Ctrl+Alt+Delete` safely restarts the current experimental session if the
+shell fails. Mango remaps its upstream `Super+M` quit binding to minimize the
+focused window instead.
 Their initial monitor policy keeps the iPad dummy disabled.
 First-run Noctalia settings select Gruvbox Dark and hide lock, suspend, and
 hibernate until the workstation password has been intentionally set and
