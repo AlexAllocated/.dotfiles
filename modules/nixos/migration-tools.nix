@@ -262,13 +262,19 @@ in
     systemd.services.chev-ttyd-rescue-tmux = lib.mkIf (cfg.rescue.enable && cfg.rescue.durableTmux) {
       description = "Durable tmux server for ttyd recovery access";
       wantedBy = lib.optionals cfg.rescue.autoStart [ "multi-user.target" ];
+      path = [
+        pkgs.bash
+        pkgs.coreutils
+        pkgs.tmux
+      ];
       serviceConfig = {
-        Type = "oneshot";
+        Type = "simple";
         User = cfg.rescue.user;
         Group = "users";
-        RemainAfterExit = true;
         RuntimeDirectory = "chev-ttyd-rescue-tmux";
         RuntimeDirectoryMode = "0750";
+        Restart = "always";
+        RestartSec = 1;
         ExecStart = pkgs.writeShellScript "chev-ttyd-rescue-tmux-start" ''
           set -eu
           tmux=${pkgs.tmux}/bin/tmux
@@ -276,16 +282,33 @@ in
           session=recovery
           home=/home/${cfg.rescue.user}
 
-          if ! "$tmux" -S "$socket" has-session -t "=$session" 2>/dev/null; then
-            "$tmux" -S "$socket" -f /dev/null new-session -d -s "$session" -c "$home"
-          fi
-          if [ -r "$home/.config/tmux/tmux.conf" ]; then
-            "$tmux" -S "$socket" source-file "$home/.config/tmux/tmux.conf"
-          fi
-          "$tmux" -S "$socket" set-option -g mouse off
-          "$tmux" -S "$socket" set-option -g alternate-screen off
-          "$tmux" -S "$socket" set-option -g history-limit 100000
-          "$tmux" -S "$socket" rename-window -t "=$session:0" rescue
+          cleanup() {
+            "$tmux" -S "$socket" kill-server 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          trap 'exit 0' INT TERM
+
+          # Keep supervising the named session. A user may intentionally kill
+          # a tmux server while experimenting; the recovery endpoint must not
+          # remain healthy-looking while its attach target is gone.
+          while :; do
+            if ! "$tmux" -S "$socket" has-session -t "=$session" 2>/dev/null; then
+              "$tmux" -S "$socket" -f /dev/null new-session -d -s "$session" -c "$home"
+              if [ -r "$home/.config/tmux/tmux.conf" ]; then
+                if ! "$tmux" -S "$socket" source-file "$home/.config/tmux/tmux.conf"; then
+                  printf '%s\n' 'The personal tmux config did not load cleanly; continuing with recovery-safe defaults.' >&2
+                fi
+              fi
+              "$tmux" -S "$socket" set-option -g mouse off
+              "$tmux" -S "$socket" set-option -g alternate-screen off
+              "$tmux" -S "$socket" set-option -g history-limit 100000
+              "$tmux" -S "$socket" rename-window -t "=$session:0" rescue
+            fi
+
+            while "$tmux" -S "$socket" has-session -t "=$session" 2>/dev/null; do
+              ${pkgs.coreutils}/bin/sleep 1
+            done
+          done
         '';
         ExecStop = "${pkgs.tmux}/bin/tmux -S /run/chev-ttyd-rescue-tmux/tmux.sock kill-server";
       };

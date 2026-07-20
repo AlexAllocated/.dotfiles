@@ -1,6 +1,8 @@
 # tmux cheat sheet
 
 tmux keeps shells and programs alive independently of the terminal window.
+Run `tmux-cheatsheet` anywhere to open this document in a scrollable viewer.
+Its tracked source is `~/.dotfiles/docs/tmux-cheatsheet.md`.
 
 ```text
 server
@@ -15,6 +17,26 @@ server
 Almost every tmux shortcut starts with the prefix: press `Ctrl+B`, release it,
 then press the listed key. `C-b ?` opens tmux's complete live key reference;
 press `q` to close it.
+
+## When you feel lost
+
+| Situation                           | Key or command                     |
+| ----------------------------------- | ---------------------------------- |
+| Show every available shortcut       | `C-b ?`                            |
+| Show sessions and choose one        | `C-b s`                            |
+| Show windows and choose one         | `C-b w`                            |
+| Flash pane numbers and choose one   | `C-b q`, then its displayed number |
+| Scroll through earlier output       | `C-b [`                            |
+| Leave scrolling or a chooser        | `q` or `Escape`                    |
+| Leave tmux running and return later | `C-b d`                            |
+
+## Reading the Gruvbox statusline
+
+- The left segment is the current **session** name.
+- The middle segments are **windows**; the bright yellow one is active.
+- A `*Z` beside a window means its current pane is zoomed with `C-b z`.
+- The right segments show the date, time, and host name. The host is especially
+  useful when tmux is running over SSH.
 
 ## Starting and returning
 

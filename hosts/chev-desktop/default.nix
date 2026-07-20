@@ -12,6 +12,9 @@
 {
   imports = [
     inputs.home-manager.nixosModules.home-manager
+    inputs.dms.nixosModules.dank-material-shell
+    inputs.mango.nixosModules.mango
+    inputs.noctalia.nixosModules.default
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/compositors.nix
     ../../modules/nixos/migration-tools.nix
@@ -19,10 +22,14 @@
   ++ lib.optional (builtins.pathExists ./hardware-generated.nix) ./hardware-generated.nix;
 
   dotfiles = {
-    compositors.nvidiaVramWorkaround = true;
+    compositors = {
+      inherit user;
+      nvidiaVramWorkaround = true;
+    };
     desktop = {
       inherit user;
       userDescription = "Alex";
+      sunshine.mode = "kms";
     };
     migrationTools = {
       enable = true;
@@ -37,9 +44,9 @@
     };
   };
 
-  # Plasma is the proven local and Sunshine recovery desktop. Installing
-  # optional sessions must never change the unattended boot target.
-  services.displayManager.defaultSession = "plasma";
+  # The dispatcher remembers Alex's chosen desktop across logins and boots.
+  # It defaults—and automatically falls back—to the proven Plasma session.
+  services.displayManager.defaultSession = "dotfiles-desktop";
 
   home-manager = {
     useGlobalPkgs = true;
@@ -74,7 +81,17 @@
         };
       }
       // lib.optionalAttrs (config.dotfiles.desktop.ipadDisplay.connector != null) {
-        ${config.dotfiles.desktop.ipadDisplay.connector}.enable = false;
+        ${config.dotfiles.desktop.ipadDisplay.connector} = {
+          enable = true;
+          mode = "2732x2048@60";
+          scale = 1.75;
+          # Keep the invisible remote desktop beside, rather than on top of,
+          # the LG and leave startup focus on the physical monitor.
+          position = {
+            x = 3440;
+            y = 0;
+          };
+        };
       };
 
       # Plasma stores dragged launchers as filesystem URLs, which can embed
@@ -82,9 +99,6 @@
       # desktop IDs so rebuilds and rollbacks cannot strand the taskbar icons.
       dotfiles.plasma.taskbarLaunchers = [
         "Alacritty.desktop"
-        "com.mitchellh.ghostty.desktop"
-        "kitty.desktop"
-        "org.kde.konsole.desktop"
         "org.wezfurlong.wezterm.desktop"
       ];
     };

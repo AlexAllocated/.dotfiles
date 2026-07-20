@@ -119,6 +119,13 @@ in
         '')
         ''
             [[ -r "$HOME/.zprofile" ]] && source "$HOME/.zprofile"
+            # Ctrl-S is easy to hit accidentally and makes a terminal appear
+            # completely frozen until Ctrl-Q is pressed. Modern interactive
+            # shells do not need software flow control, so keep it disabled.
+            if [[ -t 0 ]]; then
+              ${lib.getExe' pkgs.coreutils "stty"} -ixon start undef stop undef 2>/dev/null || true
+            fi
+
             if [[ "''${TERM_PROGRAM:-}" == WezTerm && -n "''${WEZTERM_PANE:-}" && -r "${sourceRoot}/wezterm-shell-integration.sh" ]]; then
               source "${sourceRoot}/wezterm-shell-integration.sh"
             fi

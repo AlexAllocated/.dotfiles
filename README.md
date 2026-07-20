@@ -93,11 +93,9 @@ PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
 with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
 XBOOTLDR partition mounted at `/boot`.
 
-WezTerm remains the default terminal. Ghostty, Kitty, and Alacritty are also
-installed with matching BigBlueTerm, Gruvbox Dark Hard, and scrollback settings
-so they can be evaluated side by side without changing that default. Ghostty
-and Kitty retain close confirmation; Alacritty stays deliberately minimal as a
-tmux-first option.
+Alacritty is the default terminal and WezTerm remains installed as the
+feature-rich alternative. Both use the BigBlueTerm Nerd Font and Gruvbox Dark
+palette. Alacritty stays deliberately minimal as a tmux-first option.
 Konsole gets a non-destructive managed profile with the same font and palette.
 Tmux is available everywhere with its stock `Ctrl+B` bindings, plus portable
 true color, clipboard forwarding, mouse scrolling, and extended scrollback.
@@ -107,7 +105,7 @@ Plasma remains the default and remote-recovery desktop. SDDM also offers niri
 and both plain and UWSM-managed Hyprland sessions; choose **Hyprland (UWSM)**
 for normal testing. The optional sessions share Noctalia for their bar,
 launcher, notifications, and session controls. Common bindings are
-`Super+Return` for WezTerm, `Super+Space` for the launcher,
+`Super+Return` for Alacritty, `Super+Space` for the launcher,
 `Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
 menu. `Ctrl+Alt+Delete` exits either experimental session if the shell fails.
 Their initial monitor policy keeps the iPad dummy disabled.
@@ -200,7 +198,7 @@ Available modules:
 - `codex`: Codex, Bun, and Node; user settings, plugins, MCP servers, and rules stay machine-local
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
-- `terminal`: WezTerm, Ghostty, Kitty, Alacritty, Konsole styling, and portable tmux
+- `terminal`: Alacritty, WezTerm, Konsole styling, and portable tmux
 - `compositors`: optional Hyprland/niri configs, shared Noctalia shell, and portable output policy
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition

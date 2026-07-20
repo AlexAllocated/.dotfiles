@@ -20,12 +20,12 @@ assert_equal() {
 	}
 }
 
-assert_equal "$repo_root#linux" "$(flake_ref_for_profile linux)"
-assert_equal "$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
+assert_equal "path:$repo_root#linux" "$(flake_ref_for_profile linux)"
+assert_equal "path:$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
-assert_equal "$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
-assert_equal "$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
-assert_equal "/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
+assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
+assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
+assert_equal "path:/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
 
 profile_apply="$({

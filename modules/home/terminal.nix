@@ -20,14 +20,14 @@ in
       terminalFont
     ];
     home.sessionVariables = lib.mkIf nativeLinux {
-      TERMINAL = "wezterm";
+      TERMINAL = "alacritty";
     };
 
     xdg.terminal-exec = lib.mkIf nativeLinux {
       enable = true;
       settings = {
-        default = [ "org.wezfurlong.wezterm.desktop" ];
-        KDE = [ "org.wezfurlong.wezterm.desktop" ];
+        default = [ "Alacritty.desktop" ];
+        KDE = [ "Alacritty.desktop" ];
       };
     };
 
@@ -56,58 +56,6 @@ in
         [Desktop Action New]
         Name=New Terminal
         Exec=${lib.getExe pkgs.alacritty}
-      '';
-    };
-
-    xdg.dataFile."applications/com.mitchellh.ghostty.desktop" = lib.mkIf nativeLinux {
-      text = ''
-        [Desktop Entry]
-        Version=1.0
-        Name=Ghostty
-        Type=Application
-        Comment=A terminal emulator
-        TryExec=${lib.getExe pkgs.ghostty}
-        Exec=${lib.getExe pkgs.ghostty} --gtk-single-instance=true
-        Icon=${pkgs.ghostty}/share/icons/hicolor/256x256/apps/com.mitchellh.ghostty.png
-        Categories=System;TerminalEmulator;
-        Keywords=terminal;tty;pty;
-        StartupNotify=true
-        StartupWMClass=com.mitchellh.ghostty
-        Terminal=false
-        Actions=new-window;
-        X-GNOME-UsesNotifications=true
-        X-TerminalArgExec=-e
-        X-TerminalArgTitle=--title=
-        X-TerminalArgAppId=--class=
-        X-TerminalArgDir=--working-directory=
-        X-TerminalArgHold=--wait-after-command
-        DBusActivatable=true
-        X-KDE-Shortcuts=Ctrl+Alt+T
-
-        [Desktop Action new-window]
-        Name=New Window
-        Exec=${lib.getExe pkgs.ghostty} --gtk-single-instance=true
-      '';
-    };
-
-    xdg.dataFile."applications/kitty.desktop" = lib.mkIf nativeLinux {
-      text = ''
-        [Desktop Entry]
-        Version=1.0
-        Type=Application
-        Name=kitty
-        GenericName=Terminal emulator
-        Comment=Fast, feature-rich, GPU based terminal
-        TryExec=${lib.getExe pkgs.kitty}
-        StartupNotify=true
-        Exec=${lib.getExe pkgs.kitty}
-        Icon=${pkgs.kitty}/share/icons/hicolor/scalable/apps/kitty.svg
-        Categories=System;TerminalEmulator;
-        X-TerminalArgExec=--
-        X-TerminalArgTitle=--title
-        X-TerminalArgAppId=--class
-        X-TerminalArgDir=--working-directory
-        X-TerminalArgHold=--hold
       '';
     };
 
@@ -143,12 +91,26 @@ in
       terminal = "tmux-256color";
       historyLimit = 50000;
       focusEvents = true;
+      plugins = [
+        {
+          plugin = pkgs.tmuxPlugins.gruvbox;
+          extraConfig = ''
+            # Keep the statusline legible and consistent across every terminal
+            # instead of depending on each terminal's 16-color palette.
+            set -g @tmux-gruvbox 'dark256'
+            set -g @tmux-gruvbox-statusbar-alpha 'false'
+            set -g @tmux-gruvbox-left-status-a '#S'
+            set -g @tmux-gruvbox-right-status-x '%a %b %d'
+            set -g @tmux-gruvbox-right-status-y '%H:%M'
+            set -g @tmux-gruvbox-right-status-z '#h'
+          '';
+        }
+      ];
       extraConfig = builtins.readFile (sourceRoot + "/tmux/tmux.conf");
     };
 
-    # Keep WezTerm as the portable default while making native Linux terminals
-    # available for side-by-side evaluation. Their visuals intentionally mirror
-    # the established WezTerm configuration.
+    # Alacritty is the native Linux default. WezTerm remains installed as the
+    # portable, feature-rich alternative.
     programs.alacritty = lib.mkIf nativeLinux {
       enable = true;
       settings = {
@@ -158,7 +120,9 @@ in
           decorations_theme_variant = "Dark";
           dynamic_padding = false;
           dynamic_title = true;
-          opacity = 1.0;
+          # Let a little of the desktop show through without sacrificing the
+          # contrast of the Gruvbox Dark background.
+          opacity = 0.9;
           padding = {
             x = 0;
             y = 5;
@@ -240,89 +204,18 @@ in
       };
     };
 
-    programs.ghostty = lib.mkIf nativeLinux {
-      enable = true;
-      systemd.enable = true;
-      settings = {
-        "font-family" = "BigBlueTerm437 Nerd Font";
-        "font-size" = 14;
-        theme = "Gruvbox Dark Hard";
-
-        "background-opacity" = 1.0;
-        "bold-is-bright" = true;
-        "clipboard-paste-bracketed-safe" = true;
-        "clipboard-paste-protection" = true;
-        "clipboard-read" = "ask";
-        "clipboard-trim-trailing-spaces" = true;
-        "clipboard-write" = "allow";
-        "confirm-close-surface" = "always";
-        "copy-on-select" = false;
-        "cursor-style" = "block";
-        "cursor-style-blink" = true;
-        "mouse-hide-while-typing" = true;
-        "right-click-action" = "copy-or-paste";
-        "scrollback-limit" = 10000000;
-        scrollbar = "never";
-        "shell-integration-features" = "no-cursor";
-        "window-padding-balance" = false;
-        "window-padding-x" = 0;
-        "window-padding-y" = "10,0";
-        "window-show-tab-bar" = "auto";
-
-        # Ghostty owns one draggable client-side titlebar. Its separate tab bar
-        # appears only after a second tab, so KWin must not add another frame.
-        "window-decoration" = "client";
-        "gtk-titlebar" = true;
-        "gtk-titlebar-style" = "native";
-        "gtk-tabs-location" = "top";
-        "gtk-single-instance" = true;
-      };
-    };
-
-    programs.kitty = lib.mkIf nativeLinux {
-      enable = true;
-      font = {
-        name = "BigBlueTerm437 Nerd Font";
-        package = terminalFont;
-        size = 14;
-      };
-      themeFile = "gruvbox-dark-hard";
-      shellIntegration.mode = "no-cursor";
-      settings = {
-        background_opacity = 1.0;
-        clipboard_control = "write-clipboard write-primary read-clipboard-ask read-primary-ask";
-        confirm_os_window_close = 1;
-        copy_on_select = false;
-        cursor_blink_interval = 0.5;
-        cursor_shape = "block";
-        enable_audio_bell = false;
-        mouse_hide_wait = -1;
-        paste_actions = "quote-urls-at-prompt,confirm";
-        remember_window_size = true;
-        scrollback_lines = 10000;
-        scrollbar = "scrolled";
-        strip_trailing_spaces = "smart";
-        tab_bar_edge = "top";
-        tab_bar_min_tabs = 2;
-        tab_bar_style = "powerline";
-        tab_powerline_style = "round";
-        update_check_interval = 0;
-        window_padding_width = "10 0 0";
-      };
-    };
-
-    home.activation.weztermPlasmaDefault = lib.mkIf plasmaDesktop (
+    home.activation.alacrittyPlasmaDefault = lib.mkIf plasmaDesktop (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
           --file kdeglobals \
           --group General \
           --key TerminalApplication \
-          "wezterm start --cwd ."
+          "alacritty --working-directory ."
         run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
           --file kdeglobals \
           --group General \
           --key TerminalService \
-          "org.wezfurlong.wezterm.desktop"
+          "Alacritty.desktop"
       ''
     );
 
@@ -339,10 +232,10 @@ in
       ''
     );
 
-    # WezTerm renders its window controls inside the tab bar. KWin can still
-    # add server-side decorations on Wayland, so suppress its outer titlebar
-    # for this application only.
-    home.activation.weztermPlasmaIntegratedChrome = lib.mkIf plasmaDesktop (
+    # Remove the former no-border rule now that Plasma owns WezTerm's titlebar
+    # and resize frame. Leaving the rule behind would make one-tab windows
+    # chromeless and remove their edge-resize hitboxes.
+    home.activation.weztermPlasmaDecorationCleanup = lib.mkIf plasmaDesktop (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         rules_file="''${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc"
         rule_id="wezterm-integrated-chrome"
@@ -352,34 +245,25 @@ in
           --key rules \
           --default "")"
 
-        case ",$rules," in
-          *,"$rule_id",*) ;;
-          *)
-            rules="''${rules:+$rules,}$rule_id"
-            ;;
-        esac
+        filtered_rules=""
+        old_ifs="$IFS"
+        IFS=,
+        for rule in $rules; do
+          if [ "$rule" != "$rule_id" ]; then
+            filtered_rules="''${filtered_rules:+$filtered_rules,}$rule"
+          fi
+        done
+        IFS="$old_ifs"
 
         run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group General --key rules "$rules"
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key Description \
-          "Let WezTerm render its integrated window controls"
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key Enabled --type bool true
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key wmclass \
-          "org.wezfurlong.wezterm"
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key wmclasscomplete \
-          --type bool false
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key wmclassmatch 1
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key types 1
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key noborder --type bool true
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group "$rule_id" --key noborderrule 2
+          --file "$rules_file" --group General --key rules "$filtered_rules"
+
+        for key in \
+          Description Enabled noborder noborderrule types \
+          wmclass wmclasscomplete wmclassmatch; do
+          run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
+            --file "$rules_file" --group "$rule_id" --key "$key" --delete ""
+        done
 
         ${lib.getExe' pkgs.systemd "busctl"} --user call \
           org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true

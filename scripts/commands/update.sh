@@ -52,7 +52,7 @@ validate_update_candidate() {
 	local candidate="$1"
 	if command_exists nix; then
 		printf 'Evaluating every supported Nix system before accepting updated pins...\n'
-		nix flake check --all-systems --no-build "$candidate"
+		nix flake check --all-systems --no-build "path:$candidate"
 	fi
 }
 
@@ -92,7 +92,7 @@ prepare_update_candidate() {
 	stage_repo "$candidate"
 	if command_exists nix; then
 		printf 'Refreshing flake inputs in a staging checkout...\n'
-		nix flake update --flake "$candidate"
+		nix flake update --flake "path:$candidate"
 	fi
 	update_neovim_candidate "$candidate" "$work"
 	validate_update_candidate "$candidate"
@@ -214,8 +214,8 @@ run_check() {
 	candidate="$work/repo"
 	trap_remove_on_exit "$work"
 	stage_repo "$candidate"
-	nix flake check "$candidate"
-	nix flake check --all-systems --no-build "$candidate"
+	nix flake check "path:$candidate"
+	nix flake check --all-systems --no-build "path:$candidate"
 	trap - EXIT
 	rm -rf "$work"
 }

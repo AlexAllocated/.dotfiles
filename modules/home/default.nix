@@ -11,6 +11,7 @@
     ./codex.nix
     ./cloud.nix
     ./terminal.nix
+    ./wallpaper.nix
     ./plasma.nix
     ./compositors.nix
     ./windows.nix

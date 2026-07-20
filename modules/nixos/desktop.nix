@@ -6,6 +6,13 @@
 }:
 let
   cfg = config.dotfiles.desktop;
+  sunshineKms = cfg.sunshine.mode == "kms";
+  sunshineConfig =
+    (pkgs.formats.keyValue { }).generate "sunshine.conf"
+      config.services.sunshine.settings;
+  sunshineKmsConfig = (pkgs.formats.keyValue { }).generate "sunshine-kms.conf" (
+    builtins.removeAttrs config.services.sunshine.settings [ "output_name" ]
+  );
   obsStudio = pkgs.symlinkJoin {
     name = "obs-studio-nvidia-${pkgs.obs-studio.version}";
     paths = [ pkgs.obs-studio ];
@@ -122,6 +129,240 @@ let
     pkgs.jq
     pkgs.kdePackages.libkscreen
   ];
+  ipadDisplaySessionOn = pkgs.writeShellApplication {
+    name = "ipad-display-session-on";
+    runtimeInputs = [
+      pkgs.cosmic-randr
+      pkgs.coreutils
+      pkgs.gnused
+      pkgs.hyprland
+      pkgs.niri
+      pkgs.systemd
+    ];
+    text = ''
+      connector=${lib.escapeShellArg ipadConnector}
+
+      manager_variable() {
+        systemctl --user show-environment \
+          | sed -n "s/^$1=//p" \
+          | head -n 1
+      }
+
+      for attempt in $(seq 1 30); do
+        desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
+        case "$desktop" in
+          KDE)
+            if ${ipadDisplayOn}/bin/ipad-display-on; then
+              exit 0
+            fi
+            ;;
+          niri)
+            if niri msg output "$connector" on \
+              && niri msg output "$connector" mode 2732x2048@60.001 \
+              && niri msg output "$connector" scale 1.75 \
+              && niri msg output "$connector" position set 3440 0; then
+              exit 0
+            fi
+            ;;
+          Hyprland)
+            if hyprctl keyword monitor "$connector,2732x2048@60,3440x0,1.75"; then
+              exit 0
+            fi
+            ;;
+          COSMIC)
+            if cosmic-randr enable "$connector" \
+              && cosmic-randr mode "$connector" 2732 2048 \
+                --refresh 60.001 --pos-x 3440 --pos-y 0 --scale 1.75; then
+              exit 0
+            fi
+            ;;
+          Mango | mango)
+            # Mango consumes the generated monitorrule before its autostart
+            # script runs. Confirm it succeeded rather than applying a second,
+            # compositor-specific mutation here.
+            for enabled_file in /sys/class/drm/card*-"$connector"/enabled; do
+              [[ -r "$enabled_file" && "$(<"$enabled_file")" == enabled ]] && exit 0
+            done
+            ;;
+          *)
+            # Unknown shells may still inherit an already active output from
+            # SDDM. That is sufficient for KMS capture and avoids guessing at
+            # an unsupported compositor's control protocol.
+            for enabled_file in /sys/class/drm/card*-"$connector"/enabled; do
+              [[ -r "$enabled_file" && "$(<"$enabled_file")" == enabled ]] && exit 0
+            done
+            ;;
+        esac
+
+        printf 'Graphical output control is not ready (%s, attempt %s/30); retrying.\n' \
+          "''${desktop:-unknown}" "$attempt" >&2
+        sleep 1
+      done
+
+      printf 'Could not enable the persistent Sunshine output %s in this graphical session.\n' "$connector" >&2
+      exit 1
+    '';
+  };
+  sunshineSessionRun = pkgs.writeShellApplication {
+    name = "sunshine-session-run";
+    runtimeInputs = [ pkgs.systemd ];
+    text = ''
+      if (($# == 0)); then
+        printf '%s\n' 'Usage: sunshine-session-run COMMAND [ARG...]' >&2
+        exit 64
+      fi
+
+      # Sunshine is a system service so it survives compositor and greeter
+      # handoffs. Launch graphical applications through Alex's lingering user
+      # manager, which always contains the active session's imported Wayland
+      # and desktop environment.
+      unit="sunshine-app-$PPID-$(date +%s%N)"
+      exec systemd-run --user --quiet --collect --service-type=exec \
+        --unit="$unit" -- "$@"
+    '';
+  };
+  sunshineKmsLauncher = pkgs.writeShellApplication {
+    name = "sunshine-kms-launch";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.drm_info
+      pkgs.gnugrep
+      pkgs.jq
+      pkgs.systemd
+    ];
+    text = ''
+      configured=${lib.escapeShellArg ipadConnector}
+      fallback=${lib.escapeShellArg cfg.sunshine.fallbackConnector}
+      runtime_config="''${RUNTIME_DIRECTORY:?systemd did not provide RUNTIME_DIRECTORY}/sunshine.conf"
+
+      connector_directory() {
+        local connector="$1"
+        local directory
+        for directory in /sys/class/drm/card*-"$connector"; do
+          [[ -d "$directory" ]] || continue
+          printf '%s\n' "$directory"
+          return 0
+        done
+        return 1
+      }
+
+      connector_state() {
+        local connector="$1"
+        local directory
+        directory="$(connector_directory "$connector")" || return 1
+        [[ -r "$directory/enabled" && -r "$directory/status" ]] || return 1
+        [[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]]
+      }
+
+      kms_display_id() {
+        local connector="$1"
+        local directory card device connector_id
+        directory="$(connector_directory "$connector")" || return 1
+        card="$(basename "$(dirname "$(readlink -f "$directory")")")"
+        device="/dev/dri/$card"
+        connector_id="$(<"$directory/connector_id")"
+
+        # Sunshine numbers active non-cursor DRM planes, not connectors. Map
+        # the stable connector through its CRTC to the exact ID Sunshine will
+        # use for the current compositor's plane topology.
+        drm_info -j "$device" | jq -er \
+          --arg device "$device" \
+          --argjson connector "$connector_id" '
+            .[$device] as $card
+            | ($card.connectors[]
+                | select(.id == $connector)
+                | .properties.CRTC_ID.value) as $crtc
+            | select($crtc != null and $crtc != 0)
+            | [$card.planes[]
+                | select(.fb_id != 0 and .properties.type.value != 2)
+                | .crtc_id]
+            | to_entries
+            | [.[] | select(.value == $crtc) | .key]
+            | last
+          '
+      }
+
+      active_session() {
+        loginctl show-seat seat0 --property ActiveSession --value 2>/dev/null || true
+      }
+
+      import_graphical_environment() {
+        unset WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE
+        while IFS= read -r entry; do
+          case "$entry" in
+            WAYLAND_DISPLAY=* | DISPLAY=* | XDG_CURRENT_DESKTOP=* | XDG_SESSION_DESKTOP=* | XDG_SESSION_TYPE=*)
+              export "''${entry?}"
+              ;;
+          esac
+        done < <(systemctl --user show-environment)
+
+        if [[ -n "''${WAYLAND_DISPLAY:-}" && ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]; then
+          unset WAYLAND_DISPLAY
+        fi
+      }
+
+      selected=""
+      # Give the display manager or newly starting compositor time to apply
+      # the declarative iPad output policy. If the dummy is unplugged or never
+      # comes up, retain local recovery by falling back to the LG.
+      if [[ -n "$configured" ]]; then
+        for _ in $(seq 1 30); do
+          if connector_state "$configured"; then
+            selected="$configured"
+            break
+          fi
+          sleep 1
+        done
+      fi
+
+      if [[ -z "$selected" && -n "$fallback" ]] && connector_state "$fallback"; then
+        selected="$fallback"
+      fi
+      if [[ -z "$selected" ]]; then
+        for directory in /sys/class/drm/card*-*; do
+          [[ -r "$directory/enabled" && "$(<"$directory/enabled")" == enabled ]] || continue
+          [[ -r "$directory/status" && "$(<"$directory/status")" == connected ]] || continue
+          selected="''${directory##*/}"
+          selected="''${selected#card*-}"
+          break
+        done
+      fi
+      [[ -n "$selected" ]] || {
+        printf '%s\n' 'No connected, enabled DRM output is available for Sunshine.' >&2
+        exit 1
+      }
+
+      display_id="$(kms_display_id "$selected")" || {
+        printf 'Could not map DRM connector %s to Sunshine\x27s numeric KMS display ID.\n' "$selected" >&2
+        exit 1
+      }
+
+      import_graphical_environment
+      install -m 0600 -- ${sunshineKmsConfig} "$runtime_config"
+      printf '\noutput_name = %s\n' "$display_id" >>"$runtime_config"
+      printf 'Starting persistent KMS Sunshine on %s (KMS display %s).\n' "$selected" "$display_id"
+
+      session="$(active_session)"
+      ${lib.getExe config.services.sunshine.package} "$runtime_config" &
+      sunshine_pid=$!
+      cleanup() {
+        kill "$sunshine_pid" 2>/dev/null || true
+        wait "$sunshine_pid" 2>/dev/null || true
+      }
+      trap cleanup EXIT INT TERM
+
+      while kill -0 "$sunshine_pid" 2>/dev/null; do
+        sleep 2
+        current_session="$(active_session)"
+        if [[ "$current_session" != "$session" ]]; then
+          printf 'Active seat session changed from %s to %s; refreshing KMS topology.\n' \
+            "''${session:-none}" "''${current_session:-none}"
+          exit 75
+        fi
+      done
+      wait "$sunshine_pid"
+    '';
+  };
 in
 {
   options.dotfiles.desktop = {
@@ -149,6 +390,23 @@ in
       example = "HDMI-A-1";
       description = "DRM connector verified as the FUN/EK1080 dummy adapter; never the LG display.";
     };
+
+    sunshine = {
+      mode = lib.mkOption {
+        type = lib.types.enum [
+          "plasma"
+          "kms"
+        ];
+        default = "plasma";
+        description = "Run Sunshine per Plasma session or persistently below every graphical session with KMS capture.";
+      };
+
+      fallbackConnector = lib.mkOption {
+        type = lib.types.strMatching "^[A-Za-z0-9._-]+$";
+        default = "DP-1";
+        description = "Local DRM output captured when the configured iPad dummy is unavailable.";
+      };
+    };
   };
 
   config = {
@@ -171,6 +429,16 @@ in
       automatic = true;
       dates = "weekly";
       options = "--delete-older-than 30d";
+    };
+
+    # This workstation is either running or shut down. Never allow desktop
+    # idleness, a power-management daemon, or a manual suspend request to put
+    # it into a partially reachable sleep state.
+    systemd.sleep.settings.Sleep = {
+      AllowSuspend = "no";
+      AllowHibernation = "no";
+      AllowHybridSleep = "no";
+      AllowSuspendThenHibernate = "no";
     };
 
     networking = {
@@ -349,26 +617,30 @@ in
 
       sunshine = {
         enable = true;
-        autoStart = true;
+        autoStart = !sunshineKms;
         openFirewall = true;
-        # Compile CUDA interop into Sunshine without enabling CUDA globally.
-        # The resulting NVENC path is verified at the exact iPad mode.
+        # Keep CUDA interop available as a fallback without enabling CUDA
+        # globally. Vulkan Video is the default below because it stays off the
+        # CUDA conversion path that starves when a game saturates this GPU.
         package = pkgs.sunshine.override {
           cudaSupport = true;
           cudaPackages = pkgs.cudaPackages_12_9;
         };
         settings = {
           sunshine_name = "CHEV-DESKTOP";
-          capture = "kwin";
-          # CUDA interop avoids the broken CPU BGR0-to-NV12 fallback and lets
-          # the RTX 3090 Ti encode the exact iPad mode through NVENC.
-          encoder = "nvenc";
+          capture = if sunshineKms then "kms" else "kwin";
+          # Vulkan Video is hardware accelerated on the RTX 3090 Ti and has
+          # already sustained the exact 2732x2048 iPad mode. Unlike NVENC's
+          # Linux CUDA interop path, it does not stall Sunshine's PipeWire
+          # consumer when a demanding game saturates the general GPU cores.
+          encoder = "vulkan";
           file_state = "sunshine_state.json";
           credentials_file = "sunshine_state.json";
           cert = "credentials/cacert.pem";
           pkey = "credentials/cakey.pem";
+          system_tray = !sunshineKms;
         }
-        // lib.optionalAttrs (cfg.ipadDisplay.connector != null) {
+        // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
           output_name = cfg.ipadDisplay.connector;
         };
         applications.apps = [
@@ -376,7 +648,7 @@ in
             {
               name = "Desktop";
             }
-            // lib.optionalAttrs (cfg.ipadDisplay.connector != null) {
+            // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
               prep-cmd = [
                 {
                   do = "${ipadDisplayOn}/bin/ipad-display-on";
@@ -387,10 +659,14 @@ in
           (
             {
               name = "Steam Big Picture";
-              cmd = "${pkgs.steam}/bin/steam steam://open/bigpicture";
+              cmd =
+                if sunshineKms then
+                  "${sunshineSessionRun}/bin/sunshine-session-run ${pkgs.steam}/bin/steam steam://open/bigpicture"
+                else
+                  "${pkgs.steam}/bin/steam steam://open/bigpicture";
               auto-detach = "true";
             }
-            // lib.optionalAttrs (cfg.ipadDisplay.connector != null) {
+            // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
               prep-cmd = [
                 {
                   do = "${ipadDisplayOn}/bin/ipad-display-on";
@@ -420,12 +696,120 @@ in
     # be prepared; an ExecStartPre failure would enter a restart loop and can
     # block Plasma from stopping graphical-session.target during logout.
     systemd.user.services.sunshine.serviceConfig.ExecCondition = lib.mkIf (
-      cfg.ipadDisplay.connector != null
+      !sunshineKms && cfg.ipadDisplay.connector != null
     ) "${ipadDisplayEnsure}/bin/ipad-display-ensure";
+    # Keep the scheduling capability available for the compiled NVENC fallback
+    # so its EGL context can request high GPU priority. Grant only that narrow
+    # capability through a root-owned wrapper; CAP_SYS_ADMIN is neither needed
+    # nor granted.
+    security.wrappers.sunshine = lib.mkIf (!sunshineKms) {
+      owner = "root";
+      group = "root";
+      capabilities = "cap_sys_nice+p";
+      source = lib.getExe config.services.sunshine.package;
+    };
+    systemd.user.services.sunshine.serviceConfig.ExecStart = lib.mkIf (!sunshineKms) (
+      lib.mkForce "${config.security.wrapperDir}/sunshine ${sunshineConfig}"
+    );
     # The current capture backend and dummy-display preparation are both
     # Plasma-specific. Do not let an experimental compositor session churn
     # through KScreen retries and Sunshine's restart limit.
-    systemd.user.services.sunshine.unitConfig.ConditionEnvironment = "XDG_CURRENT_DESKTOP=KDE";
+    systemd.user.services.sunshine.unitConfig =
+      if sunshineKms then
+        {
+          RefuseManualStart = true;
+        }
+      else
+        {
+          ConditionEnvironment = "XDG_CURRENT_DESKTOP=KDE";
+        };
+
+    # A single system-owned unit remains alive while SDDM and the selectable
+    # Wayland compositors trade DRM master. It still runs as Alex and reuses
+    # the existing ~/.config/sunshine pairing state; only the KMS capture and
+    # scheduling capabilities are elevated. The web rescue terminal is kept
+    # independent so a failed capture experiment cannot strand the machine.
+    systemd.services.sunshine = lib.mkIf sunshineKms {
+      description = "Persistent KMS game stream host for Moonlight";
+      wantedBy = [ "multi-user.target" ];
+      wants = [
+        "network-online.target"
+        "user@1000.service"
+      ];
+      after = [
+        "display-manager.service"
+        "network-online.target"
+        "user@1000.service"
+      ];
+      startLimitIntervalSec = 500;
+      startLimitBurst = 10;
+      path = [
+        pkgs.coreutils
+        pkgs.systemd
+      ];
+      environment = {
+        HOME = "/home/${cfg.user}";
+        XDG_CONFIG_HOME = "/home/${cfg.user}/.config";
+        XDG_RUNTIME_DIR = "/run/user/1000";
+        DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus";
+        PULSE_SERVER = "unix:/run/user/1000/pulse/native";
+        XDG_SEAT = "seat0";
+      };
+      serviceConfig = {
+        Type = "simple";
+        User = cfg.user;
+        Group = "users";
+        SupplementaryGroups = [
+          "audio"
+          "input"
+          "uinput"
+          "video"
+        ];
+        RuntimeDirectory = "sunshine";
+        RuntimeDirectoryMode = "0700";
+        ExecStart = lib.getExe sunshineKmsLauncher;
+        Restart = "always";
+        RestartSec = 5;
+        UMask = "0077";
+        AmbientCapabilities = [
+          "CAP_SYS_ADMIN"
+          "CAP_SYS_NICE"
+        ];
+        CapabilityBoundingSet = [
+          "CAP_SYS_ADMIN"
+          "CAP_SYS_NICE"
+        ];
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectControlGroups = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        RestrictRealtime = false;
+      };
+    };
+
+    # Reconcile the same dummy policy through each session's native output
+    # control API. Niri, Hyprland, and Mango also receive generated static
+    # config; this service gives Plasma and COSMIC an equivalent path and
+    # retries while a compositor is still bringing up its control socket.
+    systemd.user.services.chev-ipad-display =
+      lib.mkIf (sunshineKms && cfg.ipadDisplay.connector != null)
+        {
+          description = "Keep the iPad dummy output available to persistent Sunshine";
+          wantedBy = [ "graphical-session.target" ];
+          partOf = [ "graphical-session.target" ];
+          after = [ "graphical-session.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = lib.getExe ipadDisplaySessionOn;
+            RemainAfterExit = true;
+          };
+        };
+
+    # KWin's direct-scanout overlays bypass the framebuffer KMS captures.
+    # Disable them for both Plasma and SDDM while persistent capture is active.
+    environment.sessionVariables.KWIN_USE_OVERLAYS = lib.mkIf sunshineKms "0";
+    systemd.services.display-manager.environment.KWIN_USE_OVERLAYS = lib.mkIf sunshineKms "0";
     # Sunshine's DualSense emulation uses UHID in addition to UInput. The
     # upstream udev rules also grant access to the virtual devices Sunshine
     # creates so their advanced controller features remain usable.
@@ -488,6 +872,9 @@ in
     users.users.${cfg.user} = {
       isNormalUser = true;
       uid = 1000;
+      # Keep PipeWire and the user bus available to the persistent Sunshine
+      # service even while SDDM owns the visible session.
+      linger = sunshineKms;
       description = cfg.userDescription;
       home = "/home/${cfg.user}";
       createHome = true;
@@ -541,6 +928,10 @@ in
           cfg.ipadDisplay.connector == null
           || builtins.match "^[A-Za-z0-9._-]+$" cfg.ipadDisplay.connector != null;
         message = "dotfiles.desktop.ipadDisplay.connector contains unsafe characters";
+      }
+      {
+        assertion = builtins.match "^[A-Za-z0-9._-]+$" cfg.sunshine.fallbackConnector != null;
+        message = "dotfiles.desktop.sunshine.fallbackConnector contains unsafe characters";
       }
     ];
   };

@@ -149,13 +149,13 @@ flake_ref_for_profile() {
 	local profile="$1"
 	local source_root="${2:-$REPO_ROOT}"
 	case "$profile" in
-		nixos-wsl) printf '%s#wsl\n' "$source_root" ;;
+		nixos-wsl) printf 'path:%s#wsl\n' "$source_root" ;;
 		# The native target includes a machine-generated, gitignored ESP PARTUUID.
 		# path: semantics deliberately include it in every rebuild.
 		chev-desktop) printf 'path:%s#chev-desktop\n' "$source_root" ;;
-		linux) printf '%s#linux\n' "$source_root" ;;
-		macos) printf '%s#macos-arm64\n' "$source_root" ;;
-		darwin-macos) printf '%s#macos-arm64\n' "$source_root" ;;
+		linux) printf 'path:%s#linux\n' "$source_root" ;;
+		macos) printf 'path:%s#macos-arm64\n' "$source_root" ;;
+		darwin-macos) printf 'path:%s#macos-arm64\n' "$source_root" ;;
 		*)
 			printf 'Profile does not have a Nix flake output: %s\n' "$profile" >&2
 			return 2

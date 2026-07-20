@@ -19,6 +19,24 @@
       url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Keep the experimental compositor stack pinned independently from the
+    # stable workstation base. Mango's modern socket protocol is shared by
+    # both shell experiments below.
+    mango = {
+      url = "github:mangowm/mango/0.15.4";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    dms = {
+      url = "github:AvengeMedia/DankMaterialShell/v1.5.2";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    noctalia = {
+      url = "github:noctalia-dev/noctalia-shell/v5.0.0-beta.3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -115,6 +133,7 @@
               evaluated = home-manager.lib.homeManagerConfiguration {
                 inherit pkgs;
                 extraSpecialArgs = {
+                  inherit inputs;
                   profile = "generic";
                   toolPkgs = mkToolPkgs system;
                 };
@@ -161,6 +180,7 @@
         codex = ./modules/home/codex.nix;
         cloud = ./modules/home/cloud.nix;
         terminal = ./modules/home/terminal.nix;
+        wallpaper = ./modules/home/wallpaper.nix;
         compositors = ./modules/home/compositors.nix;
         windows = ./modules/home/windows.nix;
         default = ./modules/home/default.nix;

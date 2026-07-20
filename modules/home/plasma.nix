@@ -7,6 +7,7 @@
 let
   cfg = config.dotfiles.plasma;
   enabled = pkgs.stdenv.hostPlatform.isLinux && cfg.enable;
+  wallpaper = config.dotfiles.wallpaper;
   launchers = map (desktopId: "applications:${desktopId}") cfg.taskbarLaunchers;
   plasmaTaskbarScript = pkgs.writeText "dotfiles-plasma-taskbar.js" ''
     const desired = ${builtins.toJSON launchers};
@@ -53,12 +54,63 @@ let
         /PlasmaShell \
         org.kde.PlasmaShell \
         evaluateScript \
+      s "$script"
+    '';
+  };
+  plasmaWallpaperScript = pkgs.writeText "dotfiles-plasma-wallpaper.js" ''
+    const wallpaperUrl = ${builtins.toJSON "file://${wallpaper.installedPath}"};
+    const targetWidth = ${toString wallpaper.logicalWidth};
+    const targetHeight = ${toString wallpaper.logicalHeight};
+    let found = 0;
+
+    for (const desktop of desktops()) {
+      const geometry = screenGeometry(desktop.screen);
+      if (geometry.width !== targetWidth || geometry.height !== targetHeight) {
+        continue;
+      }
+
+      desktop.wallpaperPlugin = "org.kde.image";
+      desktop.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
+      desktop.writeConfig("Image", wallpaperUrl);
+      desktop.writeConfig("FillMode", "2");
+      desktop.reloadConfig();
+      found++;
+    }
+
+    print("dotfiles-plasma-wallpaper: applied=" + found);
+  '';
+  applyPlasmaWallpaper = pkgs.writeShellApplication {
+    name = "dotfiles-apply-plasma-wallpaper";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      attempt=0
+      until busctl --user status org.kde.plasmashell >/dev/null 2>&1; do
+        ((attempt += 1))
+        if ((attempt >= 100)); then
+          printf '%s\n' 'Plasma Shell did not appear on the user bus.' >&2
+          exit 1
+        fi
+        sleep 0.1
+      done
+
+      script="$(<${plasmaWallpaperScript})"
+      exec busctl --user call \
+        org.kde.plasmashell \
+        /PlasmaShell \
+        org.kde.PlasmaShell \
+        evaluateScript \
         s "$script"
     '';
   };
 in
 {
-  imports = [ ./core.nix ];
+  imports = [
+    ./core.nix
+    ./wallpaper.nix
+  ];
 
   options.dotfiles.plasma = {
     enable = lib.mkOption {
@@ -84,6 +136,12 @@ in
         home.activation.plasmaIdlePolicy = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           kwrite=${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"}
 
+          # XWayland has one session-wide scale even though Wayland outputs can
+          # scale independently. Keep legacy games at the LG's native 100%; the
+          # iPad dummy retains its per-output 175% scale for native Wayland apps.
+          run "$kwrite" --file kwinrc --group Xwayland \
+            --key Scale --notify 1
+
           run "$kwrite" --file kscreenlockerrc --group Daemon \
             --key Autolock --type bool --notify false
           run "$kwrite" --file kscreenlockerrc --group Daemon \
@@ -99,6 +157,23 @@ in
             --key TurnOffDisplayWhenIdle --type bool --notify false
           run "$kwrite" --file powerdevilrc --group AC --group SuspendAndShutdown \
             --key AutoSuspendAction --notify 0
+
+          # PowerDevil registers its idle timeout when loading the profile and
+          # does not reliably react to KConfig notifications alone. Reload the
+          # running daemon so the no-suspend value takes effect immediately.
+          busctl=${lib.getExe' pkgs.systemd "busctl"}
+          if "$busctl" --user status org.kde.Solid.PowerManagement >/dev/null 2>&1; then
+            run "$busctl" --user call \
+              org.kde.Solid.PowerManagement \
+              /org/kde/Solid/PowerManagement \
+              org.kde.Solid.PowerManagement \
+              reparseConfiguration
+            run "$busctl" --user call \
+              org.kde.Solid.PowerManagement \
+              /org/kde/Solid/PowerManagement \
+              org.kde.Solid.PowerManagement \
+              refreshStatus
+          fi
         '';
       }
 
@@ -130,6 +205,44 @@ in
           if ${lib.getExe' pkgs.systemd "busctl"} --user status org.kde.plasmashell >/dev/null 2>&1; then
             if ! run ${lib.getExe applyPlasmaTaskbar}; then
               echo 'Could not update the live Plasma taskbar; it will retry at the next Plasma login.' >&2
+            fi
+          fi
+        '';
+      })
+
+      (lib.mkIf wallpaper.enable {
+        home.packages = [ applyPlasmaWallpaper ];
+
+        # Plasma's numeric screen index changes when the iPad dummy is the only
+        # active output. Match the LG's logical geometry instead, and retry on
+        # KWin output changes so hot-plugging the LG is handled as well.
+        systemd.user.services.dotfiles-plasma-wallpaper = {
+          Unit = {
+            Description = "Set the LG Plasma wallpaper";
+            PartOf = [ "plasma-workspace.target" ];
+            After = [ "plasma-plasmashell.service" ];
+          };
+          Service = {
+            Type = "oneshot";
+            ExecStart = lib.getExe applyPlasmaWallpaper;
+            Slice = "session.slice";
+          };
+          Install.WantedBy = [ "plasma-workspace.target" ];
+        };
+
+        systemd.user.paths.dotfiles-plasma-wallpaper = {
+          Unit = {
+            Description = "Watch Plasma output topology for the LG wallpaper";
+            PartOf = [ "plasma-workspace.target" ];
+          };
+          Path.PathChanged = "%h/.config/kwinoutputconfig.json";
+          Install.WantedBy = [ "plasma-workspace.target" ];
+        };
+
+        home.activation.plasmaWallpaper = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          if ${lib.getExe' pkgs.systemd "busctl"} --user status org.kde.plasmashell >/dev/null 2>&1; then
+            if ! run ${lib.getExe applyPlasmaWallpaper}; then
+              echo 'Could not update the live Plasma wallpaper; it will retry at the next Plasma login.' >&2
             fi
           fi
         '';

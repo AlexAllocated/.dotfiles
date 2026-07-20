@@ -37,7 +37,6 @@ config.adjust_window_size_when_changing_font_size = false
 config.bold_brightens_ansi_colors = "BrightAndBold"
 config.default_cursor_style = "BlinkingBlock"
 config.enable_scroll_bar = false
--- config.enable_wayland = true
 config.exit_behavior_messaging = "Verbose"
 config.front_end = "WebGpu" -- ["OpenGL", "Software", "WebGpu"]
 config.hide_mouse_cursor_when_typing = true
@@ -74,10 +73,17 @@ if wezterm.target_triple:match("windows") then
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
 elseif wezterm.target_triple:match("linux") then
-	-- KWin can force an extra client-side titlebar on native Wayland even when
-	-- WezTerm uses integrated controls. XWayland lets the scoped KWin rule
-	-- suppress that outer frame reliably.
-	config.enable_wayland = false
+	-- Plasma owns the sole title bar and resize frame; tmux owns terminal tabs.
+	config.enable_tab_bar = false
+	config.enable_wayland = true
+	-- Niri delivers keyboard events correctly, but WezTerm's WebGPU frontend
+	-- stops processing them on this native Wayland/NVIDIA combination. OpenGL
+	-- keeps the native Wayland path fully responsive.
+	local current_desktop = (os.getenv("XDG_CURRENT_DESKTOP") or ""):lower()
+	if current_desktop:find("niri", 1, true) then
+		config.front_end = "OpenGL"
+	end
+	config.window_decorations = "TITLE|RESIZE"
 elseif wezterm.target_triple:match("darwin") then
 	local home = os.getenv("HOME") or "."
 	config.default_prog = { "/bin/zsh", "-l" }
