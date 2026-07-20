@@ -61,13 +61,42 @@ let
       ${systemctl} --user set-environment \
         DOTFILES_DESKTOP_SHELL=${lib.escapeShellArg shell}
 
+      compositor_pid=""
       cleanup() {
+        if [[ "$compositor_pid" =~ ^[0-9]+$ ]] \
+          && kill -0 "$compositor_pid" 2>/dev/null; then
+          kill -TERM "$compositor_pid" 2>/dev/null || true
+          wait "$compositor_pid" 2>/dev/null || true
+        fi
         clear_session_state
       }
-      trap cleanup EXIT
-      trap 'exit 143' HUP INT TERM
 
-      ${command}
+      terminate_compositor() {
+        # Bash defers a TERM trap while it waits for a foreground process.
+        # Supervise the compositor in the background so desktop-switch can
+        # forward the handoff request instead of deadlocking in this wrapper.
+        trap - HUP INT TERM
+        if [[ "$compositor_pid" =~ ^[0-9]+$ ]] \
+          && kill -0 "$compositor_pid" 2>/dev/null; then
+          kill -TERM "$compositor_pid" 2>/dev/null || true
+          for _attempt in {1..100}; do
+            kill -0 "$compositor_pid" 2>/dev/null || break
+            sleep 0.05
+          done
+          if kill -0 "$compositor_pid" 2>/dev/null; then
+            kill -KILL "$compositor_pid" 2>/dev/null || true
+          fi
+          wait "$compositor_pid" 2>/dev/null || true
+        fi
+        exit 143
+      }
+
+      trap cleanup EXIT
+      trap terminate_compositor HUP INT TERM
+
+      ${command} &
+      compositor_pid=$!
+      wait "$compositor_pid"
     '';
 
   mkExperimentalSession =
@@ -90,10 +119,7 @@ let
       derivationArgs.passthru.providedSessions = [ spec.id ];
     };
 
-  hyprlandCommand = ''
-    /run/current-system/sw/bin/uwsm start -e -D Hyprland -F -- \
-      /run/current-system/sw/bin/start-hyprland
-  '';
+  hyprlandCommand = "/run/current-system/sw/bin/uwsm start -e -D Hyprland -F -- /run/current-system/sw/bin/start-hyprland";
   niriCommand = "/run/current-system/sw/bin/niri-session";
   mangoCommand = "/run/current-system/sw/bin/mango";
 
