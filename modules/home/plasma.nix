@@ -8,6 +8,18 @@ let
   cfg = config.dotfiles.plasma;
   enabled = pkgs.stdenv.hostPlatform.isLinux && cfg.enable;
   wallpaper = config.dotfiles.wallpaper;
+  wallpaperTargets = [
+    {
+      url = "file://${wallpaper.installedPath}";
+      width = wallpaper.logicalWidth;
+      height = wallpaper.logicalHeight;
+    }
+  ]
+  ++ lib.optional (wallpaper.ipad.connector != null) {
+    url = "file://${wallpaper.ipad.installedPath}";
+    width = wallpaper.ipad.logicalWidth;
+    height = wallpaper.ipad.logicalHeight;
+  };
   launchers = map (desktopId: "applications:${desktopId}") cfg.taskbarLaunchers;
   plasmaTaskbarScript = pkgs.writeText "dotfiles-plasma-taskbar.js" ''
     const desired = ${builtins.toJSON launchers};
@@ -58,20 +70,21 @@ let
     '';
   };
   plasmaWallpaperScript = pkgs.writeText "dotfiles-plasma-wallpaper.js" ''
-    const wallpaperUrl = ${builtins.toJSON "file://${wallpaper.installedPath}"};
-    const targetWidth = ${toString wallpaper.logicalWidth};
-    const targetHeight = ${toString wallpaper.logicalHeight};
+    const targets = ${builtins.toJSON wallpaperTargets};
     let found = 0;
 
     for (const desktop of desktops()) {
       const geometry = screenGeometry(desktop.screen);
-      if (geometry.width !== targetWidth || geometry.height !== targetHeight) {
+      const target = targets.find(
+        candidate => candidate.width === geometry.width && candidate.height === geometry.height
+      );
+      if (target === undefined) {
         continue;
       }
 
       desktop.wallpaperPlugin = "org.kde.image";
       desktop.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-      desktop.writeConfig("Image", wallpaperUrl);
+      desktop.writeConfig("Image", target.url);
       desktop.writeConfig("FillMode", "2");
       desktop.reloadConfig();
       found++;
@@ -218,7 +231,7 @@ in
         # KWin output changes so hot-plugging the LG is handled as well.
         systemd.user.services.dotfiles-plasma-wallpaper = {
           Unit = {
-            Description = "Set the LG Plasma wallpaper";
+            Description = "Set per-display Plasma wallpapers";
             PartOf = [ "plasma-workspace.target" ];
             After = [ "plasma-plasmashell.service" ];
           };
@@ -232,7 +245,7 @@ in
 
         systemd.user.paths.dotfiles-plasma-wallpaper = {
           Unit = {
-            Description = "Watch Plasma output topology for the LG wallpaper";
+            Description = "Watch Plasma output topology for per-display wallpapers";
             PartOf = [ "plasma-workspace.target" ];
           };
           Path.PathChanged = "%h/.config/kwinoutputconfig.json";

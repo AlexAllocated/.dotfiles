@@ -69,6 +69,7 @@
         stateVersion = "26.05";
       };
       dotfiles.profile = profile;
+      dotfiles.wallpaper.ipad.connector = config.dotfiles.desktop.ipadDisplay.connector;
       dotfiles.compositors.outputs = {
         DP-1 = {
           mode = "3440x1440@160";

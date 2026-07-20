@@ -411,6 +411,7 @@ let
       session="$(active_session)"
       ${lib.getExe config.services.sunshine.package} "$runtime_config" &
       sunshine_pid=$!
+      topology_misses=0
       cleanup() {
         kill "$sunshine_pid" 2>/dev/null || true
         wait "$sunshine_pid" 2>/dev/null || true
@@ -424,6 +425,25 @@ let
           printf 'Active seat session changed from %s to %s; refreshing KMS topology.\n' \
             "''${session:-none}" "''${current_session:-none}"
           exit 75
+        fi
+
+        # Sunshine's KMS output_name is a transient plane-list index rather
+        # than a stable connector name. When the LG powers off, the persistent
+        # DP-2 dummy normally changes from display 1 to display 0 even though
+        # DP-2 itself never disconnected. Follow that renumbering so a
+        # headless Moonlight connection does not keep targeting a vanished
+        # monitor until the next login or reboot. Require two consecutive
+        # misses to ride through the brief empty topology during a modeset.
+        current_display_id="$(kms_display_id "$selected" 2>/dev/null || true)"
+        if connector_state "$selected" && [[ "$current_display_id" == "$display_id" ]]; then
+          topology_misses=0
+        else
+          ((topology_misses += 1))
+          if ((topology_misses >= 2)); then
+            printf 'KMS topology for %s changed from display %s to %s; refreshing capture.\n' \
+              "$selected" "$display_id" "''${current_display_id:-unavailable}"
+            exit 75
+          fi
         fi
       done
       wait "$sunshine_pid"

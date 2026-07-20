@@ -7,10 +7,10 @@
 let
   cfg = config.dotfiles.wallpaper;
   enabled = pkgs.stdenv.hostPlatform.isLinux && cfg.enable;
-  cosmicEntry = output: ''
+  cosmicEntry = output: source: ''
     (
         output: "${output}",
-        source: Path("${cfg.installedPath}"),
+        source: Path("${source}"),
         filter_by_theme: false,
         rotation_frequency: 3600,
         filter_method: Nearest,
@@ -65,6 +65,46 @@ in
       default = 1440;
       description = "Logical height used to identify the output in Plasma.";
     };
+
+    ipad = {
+      connector = lib.mkOption {
+        type = lib.types.nullOr (lib.types.strMatching "^[A-Za-z0-9._-]+$");
+        default = null;
+        example = "DP-2";
+        description = "Optional iPad dummy output that receives the 4:3 wallpaper.";
+      };
+
+      source = lib.mkOption {
+        type = lib.types.path;
+        default = ../../assets/wallpapers/pixel-meadow-hex-gruvbox-2732x2048.png;
+        description = "Source image installed as the iPad dummy wallpaper.";
+      };
+
+      fileName = lib.mkOption {
+        type = lib.types.strMatching "^[A-Za-z0-9._+-]+[.]png$";
+        default = "pixel-meadow-hex-gruvbox-2732x2048.png";
+        description = "Stable installed filename for the iPad dummy wallpaper.";
+      };
+
+      installedPath = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = "${config.xdg.dataHome}/wallpapers/dotfiles/${cfg.ipad.fileName}";
+        description = "Stable user-visible path to the installed iPad wallpaper.";
+      };
+
+      logicalWidth = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 1561;
+        description = "Scaled logical width used to identify the iPad output in Plasma.";
+      };
+
+      logicalHeight = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 1170;
+        description = "Scaled logical height used to identify the iPad output in Plasma.";
+      };
+    };
   };
 
   config = lib.mkIf enabled {
@@ -75,6 +115,10 @@ in
       run ${lib.getExe' pkgs.coreutils "mkdir"} -p -- ${lib.escapeShellArg "${config.xdg.dataHome}/wallpapers/dotfiles"}
       run ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArg cfg.installedPath}
       run ${lib.getExe' pkgs.coreutils "install"} -m 0644 -- ${lib.escapeShellArg (toString cfg.source)} ${lib.escapeShellArg cfg.installedPath}
+      ${lib.optionalString (cfg.ipad.connector != null) ''
+        run ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArg cfg.ipad.installedPath}
+        run ${lib.getExe' pkgs.coreutils "install"} -m 0644 -- ${lib.escapeShellArg (toString cfg.ipad.source)} ${lib.escapeShellArg cfg.ipad.installedPath}
+      ''}
     '';
 
     # COSMIC stores one RON entry per connector. Keep same-on-all disabled so
@@ -86,11 +130,19 @@ in
       };
       "cosmic/com.system76.CosmicBackground/v1/backgrounds" = {
         force = true;
-        text = builtins.toJSON [ cfg.connector ] + "\n";
+        text =
+          builtins.toJSON ([ cfg.connector ] ++ lib.optional (cfg.ipad.connector != null) cfg.ipad.connector)
+          + "\n";
       };
       "cosmic/com.system76.CosmicBackground/v1/output.${cfg.connector}" = {
         force = true;
-        text = cosmicEntry cfg.connector;
+        text = cosmicEntry cfg.connector cfg.installedPath;
+      };
+    }
+    // lib.optionalAttrs (cfg.ipad.connector != null) {
+      "cosmic/com.system76.CosmicBackground/v1/output.${cfg.ipad.connector}" = {
+        force = true;
+        text = cosmicEntry cfg.ipad.connector cfg.ipad.installedPath;
       };
     };
   };

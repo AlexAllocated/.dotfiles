@@ -19,6 +19,14 @@ let
   dmsPackage = config.programs.dank-material-shell.package;
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   wallpaper = config.dotfiles.wallpaper;
+  wallpaperPaths = {
+    ${wallpaper.connector} = wallpaper.installedPath;
+  }
+  // lib.optionalAttrs (wallpaper.ipad.connector != null) {
+    ${wallpaper.ipad.connector} = wallpaper.ipad.installedPath;
+  };
+  noctaliaWallpaperMonitors = lib.mapAttrs (_: path: { inherit path; }) wallpaperPaths;
+  wallpaperFillModes = lib.mapAttrs (_: _: "Fill") wallpaperPaths;
 
   renderHyprlandOutput =
     name: output:
@@ -196,6 +204,11 @@ let
         systemctl --user import-environment "''${variables[@]}"
       fi
       systemctl --user restart dotfiles-desktop-shell.service
+      if [[ "''${XDG_CURRENT_DESKTOP:-}" == niri ]]; then
+        systemctl --user restart dotfiles-niri-output-follow.service
+      else
+        systemctl --user stop dotfiles-niri-output-follow.service >/dev/null 2>&1 || true
+      fi
     '';
   };
 
@@ -211,6 +224,109 @@ let
         systemctl --user stop dotfiles-compositor-polkit.service \
           >/dev/null 2>&1 || true
       fi
+    '';
+  };
+
+  niriFollowPrimaryOutput = pkgs.writeShellApplication {
+    name = "dotfiles-niri-follow-primary-output";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+      pkgs.niri
+    ];
+    text = ''
+      primary=${lib.escapeShellArg wallpaper.connector}
+      fallback=${
+        lib.escapeShellArg (if wallpaper.ipad.connector == null then "" else wallpaper.ipad.connector)
+      }
+      state_dir="''${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is unset}/dotfiles-niri-output-follow"
+      anchors_file="$state_dir/primary-workspace-anchors.json"
+      last_state=unknown
+      mkdir -p -- "$state_dir"
+
+      [[ -n "$fallback" ]] || {
+        printf '%s\n' 'No iPad fallback connector is configured; output following is disabled.' >&2
+        exit 0
+      }
+
+      focused_window_id() {
+        niri msg --json focused-window 2>/dev/null | jq -r '.id // empty'
+      }
+
+      workspace_anchors() {
+        local output="$1"
+        local workspaces="$2"
+        jq -c --arg output "$output" \
+          '[.[] | select(.output == $output and .active_window_id != null) | .active_window_id]' \
+          <<<"$workspaces"
+      }
+
+      move_anchored_workspaces() {
+        local target="$1"
+        local anchors="$2"
+        local restore_focus anchor
+        restore_focus="$(focused_window_id || true)"
+
+        while IFS= read -r anchor; do
+          [[ "$anchor" =~ ^[0-9]+$ ]] || continue
+          niri msg action focus-window --id "$anchor" >/dev/null 2>&1 || continue
+          niri msg action move-workspace-to-monitor "$target" >/dev/null 2>&1 || true
+        done < <(jq -r '.[]' <<<"$anchors")
+
+        if [[ "$restore_focus" =~ ^[0-9]+$ ]]; then
+          niri msg action focus-window --id "$restore_focus" >/dev/null 2>&1 || true
+        fi
+      }
+
+      while true; do
+        outputs="$(niri msg --json outputs 2>/dev/null)" || {
+          sleep 1
+          continue
+        }
+        workspaces="$(niri msg --json workspaces 2>/dev/null)" || {
+          sleep 1
+          continue
+        }
+
+        if jq -e --arg primary "$primary" \
+          '.[$primary].current_mode != null and .[$primary].logical != null' \
+          <<<"$outputs" >/dev/null; then
+          current_state=on
+        else
+          current_state=off
+        fi
+
+        if [[ "$last_state" == off && "$current_state" == on ]]; then
+          if [[ -s "$anchors_file" ]] && jq -e 'type == "array"' "$anchors_file" >/dev/null 2>&1; then
+            anchors="$(<"$anchors_file")"
+            move_anchored_workspaces "$primary" "$anchors"
+          fi
+        elif [[ "$last_state" == on && "$current_state" == off ]]; then
+          # Niri normally evacuates workspaces itself when an output vanishes.
+          # Repeating the move through one stable window ID per workspace also
+          # covers monitors that remain logically present for part of their
+          # physical power-down sequence.
+          if [[ -s "$anchors_file" ]]; then
+            move_anchored_workspaces "$fallback" "$(<"$anchors_file")"
+          fi
+        fi
+
+        if [[ "$current_state" == on ]]; then
+          anchors="$(workspace_anchors "$primary" "$workspaces")"
+          printf '%s\n' "$anchors" > "$anchors_file"
+          chmod 0600 "$anchors_file"
+        elif [[ "$last_state" == unknown && ! -s "$anchors_file" ]]; then
+          # A headless boot has no prior ownership map. Treat the workspaces
+          # initially created on the dummy as primary work so they return to
+          # the LG if it is powered on later.
+          anchors="$(workspace_anchors "$fallback" "$workspaces")"
+          printf '%s\n' "$anchors" > "$anchors_file"
+          chmod 0600 "$anchors_file"
+        fi
+
+        last_state="$current_state"
+        sleep 1
+      done
     '';
   };
 
@@ -476,9 +592,7 @@ in
           enabled = true;
           fill_mode = "crop";
           automation.enabled = false;
-          monitors = {
-            "${wallpaper.connector}".path = wallpaper.installedPath;
-          };
+          monitors = noctaliaWallpaperMonitors;
         };
       };
     };
@@ -489,7 +603,7 @@ in
     };
 
     # Keep DMS's GUI settings mutable while enforcing the workstation's power
-    # policy and seeding only the LG's wallpaper on every activation.
+    # policy and seeding the connector-specific wallpapers on every activation.
     home.activation.dmsNeverSleep = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       settings_dir=${lib.escapeShellArg "${config.xdg.configHome}/DankMaterialShell"}
       settings_file="$settings_dir/settings.json"
@@ -531,14 +645,13 @@ in
       session_tmp="$(${lib.getExe' pkgs.coreutils "mktemp"} "$session_dir/.session.json.XXXXXX")"
       trap '${lib.getExe' pkgs.coreutils "rm"} -f -- "$session_tmp"' EXIT
       ${lib.getExe pkgs.jq} \
-        --arg connector ${lib.escapeShellArg wallpaper.connector} \
-        --arg wallpaper ${lib.escapeShellArg wallpaper.installedPath} '
+        --argjson wallpapers ${lib.escapeShellArg (builtins.toJSON wallpaperPaths)} \
+        --argjson fill_modes ${lib.escapeShellArg (builtins.toJSON wallpaperFillModes)} '
           .configVersion = (.configVersion // 3)
           | .wallpaperPath = (.wallpaperPath // "")
           | .perMonitorWallpaper = true
-          | .monitorWallpapers = ((.monitorWallpapers // {}) + {($connector): $wallpaper})
-          | .monitorWallpaperFillModes =
-              ((.monitorWallpaperFillModes // {}) + {($connector): "Fill"})
+          | .monitorWallpapers = ((.monitorWallpapers // {}) + $wallpapers)
+          | .monitorWallpaperFillModes = ((.monitorWallpaperFillModes // {}) + $fill_modes)
         ' "$session_input" > "$session_tmp"
       run ${lib.getExe' pkgs.coreutils "chmod"} 0600 "$session_tmp"
       run ${lib.getExe' pkgs.coreutils "mv"} -T "$session_tmp" "$session_file"
@@ -625,6 +738,20 @@ in
       };
       Service = {
         ExecStart = "${pkgs.hyprpolkitagent}/libexec/hyprpolkitagent";
+        Restart = "on-failure";
+        RestartSec = 1;
+        Slice = "session.slice";
+      };
+    };
+
+    systemd.user.services.dotfiles-niri-output-follow = {
+      Unit = {
+        Description = "Move Niri workspaces with the physical LG output";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = lib.getExe niriFollowPrimaryOutput;
         Restart = "on-failure";
         RestartSec = 1;
         Slice = "session.slice";

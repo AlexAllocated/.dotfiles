@@ -269,12 +269,19 @@ the same atomic KScreen update:
 ipad-display-off --restore-output DP-1
 ```
 
-Sunshine probes displays before it runs an application's preparation command.
-The native profile therefore runs a retrying `ipad-display-on` preflight before
-every Sunshine start, and Plasma retains the dummy's enabled state. Keep the
-dummy enabled for dependable downstairs/headless recovery. `ipad-display-off`
-is a local teardown command, not a remote wake mechanism; after using it,
-restart Sunshine locally before relying on Moonlight again.
+The native profile keeps the dummy enabled through each compositor's output
+API and runs one system-owned Sunshine service beneath SDDM and the graphical
+sessions. Sunshine captures the dummy through KMS. Because Sunshine identifies
+KMS outputs by a temporary plane-list number, its launcher monitors DP-2 and
+restarts capture whenever the LG powering off or returning renumbers the dummy.
+Keep the dummy enabled for dependable downstairs/headless recovery.
+
+Niri natively evacuates workspaces from a disappearing output. A small user
+service also records one stable window anchor per LG workspace: it ensures the
+workspaces reach DP-2 during the power-down transition and returns only those
+evacuated workspaces to the LG when it comes back. Workspaces that were already
+on the iPad remain there. The two connectors also receive separate native-size
+Gruvbox meadow wallpapers.
 
 `ipad-display-prepare --apply-now` can use the kernel's per-connector debugfs
 override and either its hotplug trigger or the standard DRM reprobe interface;
@@ -282,10 +289,10 @@ it still refuses any connector whose EDID is not FUN/EK1080. Request 2732x2048
 in Moonlight so Sunshine's host capture and encoded client frame remain the
 same native iPad size.
 
-The pinned Sunshine build supports the Plasma Wayland `kwin` capture backend.
-Once the connector is configured, Nix also sets Sunshine `output_name` to that
-dummy output and its Desktop prep command enables the mode. `alex` belongs to
-the `uinput` group so Moonlight keyboard, mouse, and gamepad injection works.
+The pinned Sunshine build supports persistent KMS capture. Once the connector
+is configured, Nix maps the stable dummy connector to Sunshine's current
+numeric `output_name`; `alex` belongs to the `uinput` group so Moonlight
+keyboard, mouse, and gamepad injection works.
 
 The native target also enables the Docker daemon, Steam/GE-Proton, Gamescope,
 GameMode, Sunshine, and non-autostart WiVRn/ALVR. OBS, Kdenlive, GIMP, Krita,

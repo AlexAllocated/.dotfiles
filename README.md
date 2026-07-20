@@ -109,15 +109,18 @@ launcher, notifications, and session controls. Common bindings are
 `Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
 menu. `Ctrl+Alt+Delete` safely restarts the current experimental session if the
 shell fails. Mango remaps its upstream `Super+M` quit binding to minimize the
-focused window instead.
-Their initial monitor policy keeps the iPad dummy disabled.
+focused window instead. The iPad dummy stays enabled at its native 2732x2048
+mode, beside the 3440x1440 LG, with connector-specific Gruvbox meadow art.
+Niri evacuates LG workspaces to the dummy when the LG powers off and restores
+only those workspaces when it returns.
 First-run Noctalia settings select Gruvbox Dark and hide lock, suspend, and
 hibernate until the workstation password has been intentionally set and
 tested.
 
-Sunshine is deliberately still Plasma-only: its proven capture backend and
-iPad preparation use KWin and KScreen. Add compositor-aware capture and display
-helpers before relying on Moonlight from a Hyprland or niri session.
+Sunshine runs as one persistent system service below SDDM and every selectable
+Wayland session. It captures the DP-2 dummy through KMS and follows the dummy's
+transient KMS display number when the LG powers off or returns, so Moonlight
+remains a recovery path without requiring the physical display.
 
 Build the local-first internal installer with:
 
