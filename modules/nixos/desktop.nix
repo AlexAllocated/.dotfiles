@@ -39,6 +39,72 @@ let
     '';
     inherit (pkgs.discord) meta passthru;
   };
+  mkChromeWebApp =
+    {
+      name,
+      desktopName,
+      comment,
+      url,
+      iconUrl,
+      iconHash,
+      startupWMClass,
+    }:
+    let
+      icon = pkgs.fetchurl {
+        url = iconUrl;
+        hash = iconHash;
+      };
+      launcher = pkgs.writeShellApplication {
+        inherit name;
+        text = ''
+          exec ${lib.getExe pkgs.google-chrome} \
+            --app=${lib.escapeShellArg url} \
+            --class=${lib.escapeShellArg startupWMClass} \
+            --name=${lib.escapeShellArg desktopName} \
+            --no-default-browser-check \
+            --no-first-run \
+            --password-store=basic \
+            "$@"
+        '';
+      };
+      desktopItem = pkgs.makeDesktopItem {
+        inherit
+          name
+          desktopName
+          comment
+          startupWMClass
+          ;
+        exec = "${launcher}/bin/${name} %U";
+        icon = icon;
+        categories = [ "Office" ];
+        terminal = false;
+      };
+    in
+    pkgs.symlinkJoin {
+      name = "${name}-web-app";
+      paths = [
+        launcher
+        desktopItem
+      ];
+    };
+  linearWebApp = mkChromeWebApp {
+    name = "linear";
+    desktopName = "Linear";
+    comment = "Plan and track product development";
+    url = "https://linear.app/";
+    iconUrl = "https://linear.app/favicon.ico";
+    iconHash = "sha256-DgXIufWkobfvMIPVffAYQYXnSJePk8pb2UUJKA8OkY4=";
+    startupWMClass = "Linear";
+  };
+  teamsWebApp = mkChromeWebApp {
+    name = "teams";
+    desktopName = "Microsoft Teams";
+    comment = "Chat, meet, call, and collaborate";
+    url = "https://teams.microsoft.com/";
+    iconUrl = "https://teams.microsoft.com/favicon.ico";
+    iconHash = "sha256-OX7d9E4b9+VXsLT1Fz2pXY/YMrby8Q1uQcF9xTnVqCI=";
+    startupWMClass = "Microsoft Teams";
+  };
   ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {
     clean = true;
     modelines = ''
@@ -909,12 +975,15 @@ in
       kdePackages.kdialog
       krita
       ksnip
+      linearWebApp
       libimobiledevice
       libva-utils
       mangohud
       nvtopPackages.nvidia
       pciutils
       pulseaudio
+      slack
+      teamsWebApp
       usbutils
       vim
       vulkan-tools
