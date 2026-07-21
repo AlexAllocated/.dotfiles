@@ -326,7 +326,7 @@ let
       ]
       [
         "bind=Alt,space,spawn,dotfiles-shell-action launcher"
-        "bind=Alt,Return,spawn,alacritty"
+        "bind=Alt,Return,spawn,wezterm start"
         "bind=SUPER,n,spawn,${lib.getExe mangoCycleLayout}"
         "bind=SUPER,m,minimized,"
       ]
@@ -339,7 +339,7 @@ let
     ${mangoOutputs}
 
     # Familiar aliases layered over Mango's complete upstream starter config.
-    bind=SUPER,Return,spawn,alacritty
+    bind=SUPER,Return,spawn,wezterm start
     bind=SUPER,space,spawn,dotfiles-shell-action launcher
     bind=SUPER,a,spawn,dotfiles-shell-action control-center
     bind=SUPER,comma,spawn,dotfiles-shell-action settings

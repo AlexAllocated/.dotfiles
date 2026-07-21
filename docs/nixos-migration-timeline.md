@@ -745,6 +745,15 @@
    - Process reloads.
    - Live state matches.
    - Human-visible result works.
+- WezTerm was subsequently restored as the default terminal.
+- Alacritty remained installed as the fast, minimal alternative.
+- The change covered:
+   - `$TERMINAL`.
+   - `xdg-terminal-exec`.
+   - Plasma's terminal service.
+   - Niri's terminal bindings.
+   - Mango's terminal bindings.
+   - Plasma taskbar order.
 
 ## July 21 — The first long-form draft is produced
 
@@ -768,8 +777,8 @@
 - Niri + Noctalia is the preferred daily desktop.
 - Mango + Noctalia remains available for experimentation.
 - Plasma remains the known-good recovery baseline.
-- Alacritty is the default terminal.
-- WezTerm remains installed as an alternative.
+- WezTerm is the default terminal.
+- Alacritty remains installed as an alternative.
 - Tmux provides durable sessions and recovery continuity.
 - The LG runs at its native 3440×1440 high-refresh mode.
 - Moonlight has connected successfully at the iPad's native 2732×2048 mode.

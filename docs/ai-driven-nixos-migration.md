@@ -868,9 +868,9 @@ still Windows-only.
 
 Niri with Noctalia is my preferred daily desktop. Mango remains available
 because its layouts and global-window behavior are too much fun to throw away.
-Plasma remains the reliable fallback and recovery baseline. Alacritty is the
-default terminal; WezTerm is the feature-rich alternative; tmux provides
-durable sessions when I need them.
+Plasma remains the reliable fallback and recovery baseline. WezTerm is the
+default terminal; Alacritty remains installed as the minimal alternative; tmux
+provides durable sessions when I need them.
 
 Sunshine can survive the login and compositor boundaries, bring up the iPad
 dummy at the correct resolution, and tear it down when streaming ends. Niri can

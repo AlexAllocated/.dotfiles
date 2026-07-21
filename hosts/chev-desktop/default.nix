@@ -124,8 +124,8 @@
       # generation-specific Nix store paths. Keep the desired order as stable
       # desktop IDs so rebuilds and rollbacks cannot strand the taskbar icons.
       dotfiles.plasma.taskbarLaunchers = [
-        "Alacritty.desktop"
         "org.wezfurlong.wezterm.desktop"
+        "Alacritty.desktop"
       ];
     };
   };

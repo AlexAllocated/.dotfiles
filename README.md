@@ -93,9 +93,9 @@ PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
 with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
 XBOOTLDR partition mounted at `/boot`.
 
-Alacritty is the default terminal and WezTerm remains installed as the
-feature-rich alternative. Both use the BigBlueTerm Nerd Font and Gruvbox Dark
-palette. Alacritty stays deliberately minimal as a tmux-first option.
+WezTerm is the default terminal and Alacritty remains installed as the fast,
+minimal alternative. Both use the BigBlueTerm Nerd Font and Gruvbox Dark
+palette.
 Konsole gets a non-destructive managed profile with the same font and palette.
 Tmux is available everywhere with its stock `Ctrl+B` bindings, plus portable
 true color, clipboard forwarding, mouse scrolling, and extended scrollback.
@@ -104,7 +104,7 @@ Run `tmux-cheatsheet` for the local quick reference.
 Plasma remains the default and remote-recovery desktop. SDDM also offers niri
 and Mango sessions. Both optional compositors use Noctalia for their bar,
 launcher, notifications, and session controls. Common bindings are
-`Super+Return` for Alacritty, `Super+Space` for the launcher,
+`Super+Return` for WezTerm, `Super+Space` for the launcher,
 `Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
 menu. `Ctrl+Alt+Delete` safely restarts the current experimental session if the
 shell fails. Mango remaps its upstream `Super+M` quit binding to minimize the

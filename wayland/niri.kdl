@@ -66,9 +66,9 @@ binds {
     // the built-in hotkey overlay useful while we evaluate the compositor.
     Mod+Shift+Slash { show-hotkey-overlay; }
 
-    Mod+T { spawn "alacritty"; }
+    Mod+T { spawn "wezterm" "start"; }
     Mod+D { spawn "fuzzel"; }
-    Mod+Return { spawn "alacritty"; }
+    Mod+Return { spawn "wezterm" "start"; }
     Mod+Space { spawn "dotfiles-shell-action" "launcher"; }
     Mod+Shift+D { spawn "fuzzel"; }
     Mod+S { spawn "dotfiles-shell-action" "control-center"; }

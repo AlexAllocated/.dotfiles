@@ -20,14 +20,14 @@ in
       terminalFont
     ];
     home.sessionVariables = lib.mkIf nativeLinux {
-      TERMINAL = "alacritty";
+      TERMINAL = "wezterm";
     };
 
     xdg.terminal-exec = lib.mkIf nativeLinux {
       enable = true;
       settings = {
-        default = [ "Alacritty.desktop" ];
-        KDE = [ "Alacritty.desktop" ];
+        default = [ "org.wezfurlong.wezterm.desktop" ];
+        KDE = [ "org.wezfurlong.wezterm.desktop" ];
       };
     };
 
@@ -109,8 +109,8 @@ in
       extraConfig = builtins.readFile (sourceRoot + "/tmux/tmux.conf");
     };
 
-    # Alacritty is the native Linux default. WezTerm remains installed as the
-    # portable, feature-rich alternative.
+    # Keep Alacritty installed as the fast, deliberately minimal alternative
+    # even though WezTerm owns the native Linux terminal defaults.
     programs.alacritty = lib.mkIf nativeLinux {
       enable = true;
       settings = {
@@ -204,18 +204,18 @@ in
       };
     };
 
-    home.activation.alacrittyPlasmaDefault = lib.mkIf plasmaDesktop (
+    home.activation.weztermPlasmaDefault = lib.mkIf plasmaDesktop (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
           --file kdeglobals \
           --group General \
           --key TerminalApplication \
-          "alacritty --working-directory ."
+          "wezterm start --cwd ."
         run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
           --file kdeglobals \
           --group General \
           --key TerminalService \
-          "Alacritty.desktop"
+          "org.wezfurlong.wezterm.desktop"
       ''
     );
 
