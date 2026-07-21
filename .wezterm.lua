@@ -52,7 +52,7 @@ config.tab_bar_at_bottom = false
 config.use_fancy_tab_bar = true
 config.webgpu_power_preference = "HighPerformance"
 -- config.webgpu_preferred_adapter = wezterm.gui.enumerate_gpus()[2]
--- config.window_background_opacity = 1
+config.window_background_opacity = 0.9
 config.window_close_confirmation = "AlwaysPrompt"
 config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
 -- config.window_padding = { left = 10, right = 10, top = 25, bottom = 10 }
