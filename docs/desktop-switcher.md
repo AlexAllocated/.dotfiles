@@ -16,18 +16,16 @@ switcher never reboots the computer automatically.
 desktop-switch --list
 desktop-switch --status
 desktop-switch niri
-desktop-switch hyprland
+desktop-switch mango
 desktop-switch plasma
-desktop-switch cosmic
 ```
 
-The short names select the Noctalia variant. Every explicit target is also
-available:
+The compositor short names select their Noctalia sessions. Every explicit
+target is also available:
 
-- `niri-noctalia` and `niri-dms`
-- `hyprland-noctalia` and `hyprland-dms`
-- `mango-noctalia` and `mango-dms`
-- `plasma` and `cosmic`
+- `niri-noctalia`
+- `mango-noctalia`
+- `plasma`
 
 Use `desktop-switch --restart` to restart the current desktop, or use
 `desktop-switch --next TARGET` to remember a choice without ending the current

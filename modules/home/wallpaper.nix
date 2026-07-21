@@ -7,17 +7,6 @@
 let
   cfg = config.dotfiles.wallpaper;
   enabled = pkgs.stdenv.hostPlatform.isLinux && cfg.enable;
-  cosmicEntry = output: source: ''
-    (
-        output: "${output}",
-        source: Path("${source}"),
-        filter_by_theme: false,
-        rotation_frequency: 3600,
-        filter_method: Nearest,
-        scaling_mode: Zoom,
-        sampling_method: Alphanumeric,
-    )
-  '';
 in
 {
   imports = [ ./core.nix ];
@@ -120,30 +109,5 @@ in
         run ${lib.getExe' pkgs.coreutils "install"} -m 0644 -- ${lib.escapeShellArg (toString cfg.ipad.source)} ${lib.escapeShellArg cfg.ipad.installedPath}
       ''}
     '';
-
-    # COSMIC stores one RON entry per connector. Keep same-on-all disabled so
-    # the iPad dummy retains its own fallback rather than receiving 21:9 art.
-    xdg.configFile = {
-      "cosmic/com.system76.CosmicBackground/v1/same-on-all" = {
-        force = true;
-        text = "false\n";
-      };
-      "cosmic/com.system76.CosmicBackground/v1/backgrounds" = {
-        force = true;
-        text =
-          builtins.toJSON ([ cfg.connector ] ++ lib.optional (cfg.ipad.connector != null) cfg.ipad.connector)
-          + "\n";
-      };
-      "cosmic/com.system76.CosmicBackground/v1/output.${cfg.connector}" = {
-        force = true;
-        text = cosmicEntry cfg.connector cfg.installedPath;
-      };
-    }
-    // lib.optionalAttrs (cfg.ipad.connector != null) {
-      "cosmic/com.system76.CosmicBackground/v1/output.${cfg.ipad.connector}" = {
-        force = true;
-        text = cosmicEntry cfg.ipad.connector cfg.ipad.installedPath;
-      };
-    };
   };
 }

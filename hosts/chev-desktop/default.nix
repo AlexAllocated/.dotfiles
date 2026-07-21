@@ -12,7 +12,6 @@
 {
   imports = [
     inputs.home-manager.nixosModules.home-manager
-    inputs.dms.nixosModules.dank-material-shell
     inputs.mango.nixosModules.mango
     inputs.noctalia.nixosModules.default
     ../../modules/nixos/desktop.nix

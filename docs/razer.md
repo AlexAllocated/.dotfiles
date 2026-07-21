@@ -5,8 +5,8 @@ The native desktop uses two complementary tools:
 - **Polychromatic/OpenRazer** manages lighting, DPI, polling rate, battery
   notifications, and other supported hardware settings.
 - **Input Remapper** manages keyboard, keypad, and mouse-button mappings above
-  the Linux `evdev`/`uinput` layer. Its mappings work in Plasma, niri, Hyprland,
-  Mango, and other Wayland sessions.
+  the Linux `evdev`/`uinput` layer. Its mappings work in Plasma, niri, Mango,
+  and other Wayland sessions.
 
 The recovered Synapse 4 profiles are tracked under
 `razer/input-remapper-2/presets/`. Home Manager seeds writable copies into

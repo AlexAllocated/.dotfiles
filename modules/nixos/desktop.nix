@@ -244,10 +244,8 @@ let
   ipadDisplaySessionOn = pkgs.writeShellApplication {
     name = "ipad-display-session-on";
     runtimeInputs = [
-      pkgs.cosmic-randr
       pkgs.coreutils
       pkgs.gnused
-      pkgs.hyprland
       pkgs.niri
       pkgs.systemd
       pkgs.wlr-randr
@@ -269,7 +267,7 @@ let
 
       for variable in \
         WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
-        HYPRLAND_INSTANCE_SIGNATURE MANGO_INSTANCE_SIGNATURE; do
+        MANGO_INSTANCE_SIGNATURE; do
         import_manager_variable "$variable"
       done
 
@@ -286,18 +284,6 @@ let
               && niri msg output "$connector" mode 2732x2048@60.001 \
               && niri msg output "$connector" scale 1.75 \
               && niri msg output "$connector" position set 3440 0; then
-              exit 0
-            fi
-            ;;
-          Hyprland)
-            if hyprctl keyword monitor "$connector,2732x2048@60,3440x0,1.75"; then
-              exit 0
-            fi
-            ;;
-          COSMIC)
-            if cosmic-randr enable "$connector" \
-              && cosmic-randr mode "$connector" 2732 2048 \
-                --refresh 60.001 --pos-x 3440 --pos-y 0 --scale 1.75; then
               exit 0
             fi
             ;;
@@ -329,10 +315,8 @@ let
   ipadDisplaySessionOff = pkgs.writeShellApplication {
     name = "ipad-display-session-off";
     runtimeInputs = [
-      pkgs.cosmic-randr
       pkgs.coreutils
       pkgs.gnused
-      pkgs.hyprland
       pkgs.niri
       pkgs.systemd
       pkgs.wlr-randr
@@ -354,7 +338,7 @@ let
 
       for variable in \
         WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
-        HYPRLAND_INSTANCE_SIGNATURE MANGO_INSTANCE_SIGNATURE; do
+        MANGO_INSTANCE_SIGNATURE; do
         import_manager_variable "$variable"
       done
 
@@ -365,12 +349,6 @@ let
           ;;
         niri)
           niri msg output "$connector" off
-          ;;
-        Hyprland)
-          hyprctl keyword monitor "$connector,disable"
-          ;;
-        COSMIC)
-          cosmic-randr disable "$connector"
           ;;
         Mango | mango)
           wlr-randr --output "$connector" --off
@@ -383,6 +361,12 @@ let
             "$connector" "''${desktop:-unknown}"
           ;;
       esac
+
+      # Lan Mouse's layer-shell backend follows a newly enabled rightmost
+      # output, but 0.11.0 does not move its capture edge back when that output
+      # disappears. Recreate its capture surface after Sunshine removes the
+      # iPad dummy so the physical LG edge controls the Mac again.
+      systemctl --user try-restart lan-mouse.service || true
     '';
   };
   sunshineSessionRun = pkgs.writeShellApplication {
@@ -442,10 +426,10 @@ let
       import_graphical_environment() {
         unset \
           WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE \
-          NIRI_SOCKET HYPRLAND_INSTANCE_SIGNATURE MANGO_INSTANCE_SIGNATURE
+          NIRI_SOCKET MANGO_INSTANCE_SIGNATURE
         while IFS= read -r entry; do
           case "$entry" in
-            WAYLAND_DISPLAY=* | DISPLAY=* | XDG_CURRENT_DESKTOP=* | XDG_SESSION_DESKTOP=* | XDG_SESSION_TYPE=* | NIRI_SOCKET=* | HYPRLAND_INSTANCE_SIGNATURE=* | MANGO_INSTANCE_SIGNATURE=*)
+            WAYLAND_DISPLAY=* | DISPLAY=* | XDG_CURRENT_DESKTOP=* | XDG_SESSION_DESKTOP=* | XDG_SESSION_TYPE=* | NIRI_SOCKET=* | MANGO_INSTANCE_SIGNATURE=*)
               export "''${entry?}"
               ;;
           esac

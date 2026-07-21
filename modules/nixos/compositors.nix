@@ -34,10 +34,9 @@ let
       export DOTFILES_DESKTOP_SHELL=${lib.escapeShellArg shell}
       export PATH="/run/wrappers/bin:/run/current-system/sw/bin:$PATH"
 
-      # Mango does not stop its graphical targets on exit, and any compositor
-      # can be killed before cleaning its socket variables. Clear all of that
-      # state both before this session starts and after it exits so UWSM never
-      # rejects Hyprland because an older session still appears active.
+      # Mango does not stop its graphical targets on exit, and either
+      # compositor can be killed before cleaning its socket variables. Clear
+      # all of that state before this session starts and after it exits.
       clear_session_state() {
         ${systemctl} --user stop \
           dotfiles-desktop-shell.service \
@@ -47,7 +46,6 @@ let
           graphical-session-pre.target >/dev/null 2>&1 || true
         ${systemctl} --user unset-environment \
           DOTFILES_DESKTOP_SHELL \
-          HYPRLAND_INSTANCE_SIGNATURE \
           NIRI_SOCKET \
           MANGO_INSTANCE_SIGNATURE \
           WAYLAND_DISPLAY \
@@ -119,25 +117,10 @@ let
       derivationArgs.passthru.providedSessions = [ spec.id ];
     };
 
-  hyprlandCommand = "/run/current-system/sw/bin/uwsm start -e -D Hyprland -F -- /run/current-system/sw/bin/start-hyprland";
   niriCommand = "/run/current-system/sw/bin/niri-session";
   mangoCommand = "/run/current-system/sw/bin/mango";
 
   experimentalSessionSpecs = [
-    {
-      id = "hyprland-noctalia";
-      name = "Hyprland + Noctalia";
-      desktopNames = "Hyprland";
-      shell = "noctalia";
-      command = hyprlandCommand;
-    }
-    {
-      id = "hyprland-dms";
-      name = "Hyprland + DMS";
-      desktopNames = "Hyprland";
-      shell = "dms";
-      command = hyprlandCommand;
-    }
     {
       id = "niri-noctalia";
       name = "Niri + Noctalia";
@@ -146,24 +129,10 @@ let
       command = niriCommand;
     }
     {
-      id = "niri-dms";
-      name = "Niri + DMS";
-      desktopNames = "niri";
-      shell = "dms";
-      command = niriCommand;
-    }
-    {
       id = "mango-noctalia";
       name = "Mango + Noctalia";
       desktopNames = "mango;wlroots";
       shell = "noctalia";
-      command = mangoCommand;
-    }
-    {
-      id = "mango-dms";
-      name = "Mango + DMS";
-      desktopNames = "mango;wlroots";
-      shell = "dms";
       command = mangoCommand;
     }
   ];
@@ -181,40 +150,15 @@ let
       label = "Niri + Noctalia";
       command = experimentalLaunchers.niri-noctalia;
     };
-    niri-dms = {
-      label = "Niri + DMS";
-      command = experimentalLaunchers.niri-dms;
-    };
-    hyprland-noctalia = {
-      label = "Hyprland + Noctalia";
-      command = experimentalLaunchers.hyprland-noctalia;
-    };
-    hyprland-dms = {
-      label = "Hyprland + DMS";
-      command = experimentalLaunchers.hyprland-dms;
-    };
     mango-noctalia = {
       label = "Mango + Noctalia";
       command = experimentalLaunchers.mango-noctalia;
-    };
-    mango-dms = {
-      label = "Mango + DMS";
-      command = experimentalLaunchers.mango-dms;
-    };
-    cosmic = {
-      label = "COSMIC";
-      command = lib.getExe' pkgs.cosmic-session "start-cosmic";
     };
   };
   desktopTargetOrder = [
     "plasma"
     "niri-noctalia"
-    "niri-dms"
-    "hyprland-noctalia"
-    "hyprland-dms"
     "mango-noctalia"
-    "mango-dms"
-    "cosmic"
   ];
   desktopTargetHelp = lib.concatMapStringsSep "\n" (
     target: "  ${target}\t${desktopTargets.${target}.label}"
@@ -417,7 +361,7 @@ let
       Targets:
       ${desktopTargetHelp}
 
-      Short aliases: niri, hyprland, mango
+      Short aliases: niri, mango
 
       Switching ends the current graphical login. Save application work first.
       Sunshine remains running; Moonlight may need one reconnect during handoff.
@@ -427,7 +371,6 @@ let
       canonicalize() {
         case "$1" in
           niri) printf '%s\n' niri-noctalia ;;
-          hyprland) printf '%s\n' hyprland-noctalia ;;
           mango) printf '%s\n' mango-noctalia ;;
           ${lib.concatStringsSep " | " desktopTargetOrder}) printf '%s\n' "$1" ;;
           *) return 1 ;;
@@ -557,12 +500,6 @@ in
 
   config = {
     programs = {
-      hyprland = {
-        enable = true;
-        withUWSM = true;
-        xwayland.enable = true;
-      };
-
       niri = {
         enable = true;
         # Dolphin remains the desktop file manager; use the GTK portal instead
@@ -572,14 +509,9 @@ in
 
       mango = {
         enable = true;
-        # The six explicitly named shell combinations below replace Mango's
-        # generic upstream chooser entry.
+        # The explicitly named Noctalia session below replaces Mango's generic
+        # upstream chooser entry.
         addLoginEntry = false;
-      };
-
-      dank-material-shell = {
-        enable = true;
-        systemd.enable = false;
       };
 
       noctalia = {
@@ -590,11 +522,6 @@ in
 
       # This is an application-compatibility server inside Wayland sessions,
       # not a selectable X11 desktop session.
-      xwayland.enable = true;
-    };
-
-    services.desktopManager.cosmic = {
-      enable = true;
       xwayland.enable = true;
     };
 
@@ -610,7 +537,6 @@ in
       [
         desktopDispatcherSession
         plasmaWaylandSession
-        pkgs.cosmic-session
       ]
       ++ experimentalSessions
     );

@@ -102,8 +102,7 @@ true color, clipboard forwarding, mouse scrolling, and extended scrollback.
 Run `tmux-cheatsheet` for the local quick reference.
 
 Plasma remains the default and remote-recovery desktop. SDDM also offers niri
-and both plain and UWSM-managed Hyprland sessions; choose **Hyprland (UWSM)**
-for normal testing. The optional sessions share Noctalia for their bar,
+and Mango sessions. Both optional compositors use Noctalia for their bar,
 launcher, notifications, and session controls. Common bindings are
 `Super+Return` for Alacritty, `Super+Space` for the launcher,
 `Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
@@ -204,7 +203,7 @@ Available modules:
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
 - `terminal`: Alacritty, WezTerm, Konsole styling, and portable tmux
-- `compositors`: optional Hyprland/niri configs, shared Noctalia shell, and portable output policy
+- `compositors`: optional niri/Mango configs, shared Noctalia shell, and portable output policy
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition
 

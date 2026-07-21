@@ -13,13 +13,10 @@ let
       config.dotfiles.mutableSource
     else
       config.dotfiles.source;
-  toLua = lib.generators.toLua { };
-
   noctaliaPackage = config.programs.noctalia.package;
   noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
     builtins.readFile ../../patches/noctalia-focus-existing-windows.patch
   );
-  dmsPackage = config.programs.dank-material-shell.package;
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   wallpaper = config.dotfiles.wallpaper;
   wallpaperPaths = {
@@ -29,31 +26,6 @@ let
     ${wallpaper.ipad.connector} = wallpaper.ipad.installedPath;
   };
   noctaliaWallpaperMonitors = lib.mapAttrs (_: path: { inherit path; }) wallpaperPaths;
-  wallpaperFillModes = lib.mapAttrs (_: _: "Fill") wallpaperPaths;
-
-  renderHyprlandOutput =
-    name: output:
-    let
-      value =
-        if output.enable then
-          {
-            output = name;
-            mode = if output.mode == null then "preferred" else output.mode;
-            position =
-              if output.position == null then
-                "auto"
-              else
-                "${toString output.position.x}x${toString output.position.y}";
-            scale = output.scale;
-          }
-        else
-          {
-            output = name;
-            disabled = true;
-          };
-    in
-    "hl.monitor(${toLua value})";
-
   renderNiriOutput =
     name: output:
     let
@@ -111,76 +83,33 @@ let
     in
     "monitorrule=${lib.concatStringsSep "," arguments}";
 
-  hyprlandOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderHyprlandOutput cfg.outputs);
   niriOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderNiriOutput cfg.outputs);
   mangoOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderMangoOutput cfg.outputs);
 
   desktopShellProcess = pkgs.writeShellApplication {
     name = "dotfiles-desktop-shell-process";
-    runtimeInputs = [
-      dmsPackage
-      noctaliaPackage
-    ];
-    text = ''
-      case "''${DOTFILES_DESKTOP_SHELL:-noctalia}" in
-        noctalia)
-          exec noctalia
-          ;;
-        dms)
-          exec dms run --session
-          ;;
-        *)
-          printf 'Unknown desktop shell: %s\n' "$DOTFILES_DESKTOP_SHELL" >&2
-          exit 64
-          ;;
-      esac
-    '';
+    runtimeInputs = [ noctaliaPackage ];
+    text = "exec noctalia";
   };
-
-  resolveDesktopShell = ''
-    selected_shell="''${DOTFILES_DESKTOP_SHELL:-}"
-    if [[ -z "$selected_shell" ]]; then
-      selected_shell="$(${systemctl} --user show-environment \
-        | ${lib.getExe pkgs.gnused} -n 's/^DOTFILES_DESKTOP_SHELL=//p' \
-        | ${lib.getExe' pkgs.coreutils "head"} -n 1)"
-    fi
-    selected_shell="''${selected_shell:-noctalia}"
-  '';
 
   shellAction = pkgs.writeShellApplication {
     name = "dotfiles-shell-action";
-    runtimeInputs = [
-      dmsPackage
-      noctaliaPackage
-      pkgs.systemd
-    ];
+    runtimeInputs = [ noctaliaPackage ];
     text = ''
-      ${resolveDesktopShell}
       action="''${1:-}"
 
-      case "$selected_shell:$action" in
-        noctalia:launcher) exec noctalia msg panel-toggle launcher ;;
-        noctalia:control-center) exec noctalia msg panel-toggle control-center ;;
-        noctalia:notifications) exec noctalia msg panel-toggle control-center notifications ;;
-        noctalia:settings) exec noctalia msg settings-toggle ;;
-        noctalia:session-menu) exec noctalia msg panel-toggle session ;;
-        noctalia:volume-up) exec noctalia msg volume-up 3 ;;
-        noctalia:volume-down) exec noctalia msg volume-down 3 ;;
-        noctalia:volume-mute) exec noctalia msg volume-mute ;;
-        noctalia:mic-mute) exec noctalia msg mic-mute ;;
-
-        dms:launcher) exec dms ipc call spotlight toggle ;;
-        dms:control-center) exec dms ipc call control-center toggle ;;
-        dms:notifications) exec dms ipc call notifications toggle ;;
-        dms:settings) exec dms ipc call settings toggle ;;
-        dms:session-menu) exec dms ipc call powermenu toggle ;;
-        dms:volume-up) exec dms ipc call audio increment 3 ;;
-        dms:volume-down) exec dms ipc call audio decrement 3 ;;
-        dms:volume-mute) exec dms ipc call audio mute ;;
-        dms:mic-mute) exec dms ipc call audio micmute ;;
-
+      case "$action" in
+        launcher) exec noctalia msg panel-toggle launcher ;;
+        control-center) exec noctalia msg panel-toggle control-center ;;
+        notifications) exec noctalia msg panel-toggle control-center notifications ;;
+        settings) exec noctalia msg settings-toggle ;;
+        session-menu) exec noctalia msg panel-toggle session ;;
+        volume-up) exec noctalia msg volume-up 3 ;;
+        volume-down) exec noctalia msg volume-down 3 ;;
+        volume-mute) exec noctalia msg volume-mute ;;
+        mic-mute) exec noctalia msg mic-mute ;;
         *)
-          printf 'Unsupported desktop-shell action: %s (%s)\n' "$action" "$selected_shell" >&2
+          printf 'Unsupported desktop-shell action: %s\n' "$action" >&2
           exit 64
           ;;
       esac
@@ -198,7 +127,7 @@ let
       for variable in \
         WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE \
         XDG_SESSION_DESKTOP DOTFILES_DESKTOP_SHELL \
-        HYPRLAND_INSTANCE_SIGNATURE NIRI_SOCKET MANGO_INSTANCE_SIGNATURE; do
+        NIRI_SOCKET MANGO_INSTANCE_SIGNATURE; do
         if [[ -n "''${!variable+x}" ]]; then
           variables+=("$variable")
         fi
@@ -218,16 +147,7 @@ let
   startPolkitAgent = pkgs.writeShellApplication {
     name = "dotfiles-start-compositor-polkit";
     runtimeInputs = [ pkgs.systemd ];
-    text = ''
-      ${resolveDesktopShell}
-      if [[ "$selected_shell" == noctalia ]]; then
-        systemctl --user start dotfiles-compositor-polkit.service
-      else
-        # DMS provides its own authentication agent.
-        systemctl --user stop dotfiles-compositor-polkit.service \
-          >/dev/null 2>&1 || true
-      fi
-    '';
+    text = "systemctl --user start dotfiles-compositor-polkit.service";
   };
 
   niriFollowPrimaryOutput = pkgs.writeShellApplication {
@@ -396,8 +316,6 @@ let
     '';
   };
 
-  stopHyprlandSession = "${lib.getExe pkgs.uwsm} stop";
-
   mangoStarterConfig =
     lib.replaceStrings
       [
@@ -483,7 +401,6 @@ let
 in
 {
   imports = [
-    inputs.dms.homeModules.dank-material-shell
     inputs.mango.hmModules.mango
     inputs.noctalia.homeModules.default
     ./core.nix
@@ -546,7 +463,6 @@ in
     home.packages = with pkgs; [
       fuzzel
       hyprpolkitagent
-      hyprshot
       playerctl
       mangoCycleLayout
       shellAction
@@ -566,8 +482,7 @@ in
       settings = {
         shell = {
           telemetry_enabled = false;
-          # Noctalia sessions use the small compositor-specific service below;
-          # DMS provides its own agent.
+          # Noctalia sessions use the small compositor-specific service below.
           polkit_agent = false;
           session.actions = [
             { action = "lock"; }
@@ -603,87 +518,6 @@ in
           monitors = noctaliaWallpaperMonitors;
         };
       };
-    };
-
-    programs.dank-material-shell = {
-      enable = true;
-      systemd.enable = false;
-    };
-
-    # Keep DMS's GUI settings mutable while enforcing the workstation's power
-    # policy and seeding the connector-specific wallpapers on every activation.
-    home.activation.dmsNeverSleep = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      settings_dir=${lib.escapeShellArg "${config.xdg.configHome}/DankMaterialShell"}
-      settings_file="$settings_dir/settings.json"
-      run ${lib.getExe' pkgs.coreutils "mkdir"} -p "$settings_dir"
-
-      if [[ -s "$settings_file" ]] \
-        && ${lib.getExe pkgs.jq} -e 'type == "object"' "$settings_file" >/dev/null 2>&1; then
-        settings_input="$settings_file"
-      else
-        settings_input=${pkgs.writeText "dms-empty-settings.json" "{}"}
-      fi
-
-      settings_tmp="$(${lib.getExe' pkgs.coreutils "mktemp"} "$settings_dir/.settings.json.XXXXXX")"
-      trap '${lib.getExe' pkgs.coreutils "rm"} -f -- "$settings_tmp"' EXIT
-      ${lib.getExe pkgs.jq} '
-        .powerMenuActions = ["reboot", "logout", "poweroff", "lock", "restart"]
-        | .acMonitorTimeout = 0
-        | .acLockTimeout = 0
-        | .acSuspendTimeout = 0
-        | .batteryMonitorTimeout = 0
-        | .batteryLockTimeout = 0
-        | .batterySuspendTimeout = 0
-      ' "$settings_input" > "$settings_tmp"
-      run ${lib.getExe' pkgs.coreutils "chmod"} 0600 "$settings_tmp"
-      run ${lib.getExe' pkgs.coreutils "mv"} -T "$settings_tmp" "$settings_file"
-      trap - EXIT
-
-      session_dir=${lib.escapeShellArg "${config.xdg.stateHome}/DankMaterialShell"}
-      session_file="$session_dir/session.json"
-      run ${lib.getExe' pkgs.coreutils "mkdir"} -p "$session_dir"
-
-      if [[ -s "$session_file" ]] \
-        && ${lib.getExe pkgs.jq} -e 'type == "object"' "$session_file" >/dev/null 2>&1; then
-        session_input="$session_file"
-      else
-        session_input=${pkgs.writeText "dms-empty-session.json" "{}"}
-      fi
-
-      session_tmp="$(${lib.getExe' pkgs.coreutils "mktemp"} "$session_dir/.session.json.XXXXXX")"
-      trap '${lib.getExe' pkgs.coreutils "rm"} -f -- "$session_tmp"' EXIT
-      ${lib.getExe pkgs.jq} \
-        --argjson wallpapers ${lib.escapeShellArg (builtins.toJSON wallpaperPaths)} \
-        --argjson fill_modes ${lib.escapeShellArg (builtins.toJSON wallpaperFillModes)} '
-          .configVersion = (.configVersion // 3)
-          | .wallpaperPath = (.wallpaperPath // "")
-          | .perMonitorWallpaper = true
-          | .monitorWallpapers = ((.monitorWallpapers // {}) + $wallpapers)
-          | .monitorWallpaperFillModes = ((.monitorWallpaperFillModes // {}) + $fill_modes)
-        ' "$session_input" > "$session_tmp"
-      run ${lib.getExe' pkgs.coreutils "chmod"} 0600 "$session_tmp"
-      run ${lib.getExe' pkgs.coreutils "mv"} -T "$session_tmp" "$session_file"
-      trap - EXIT
-    '';
-
-    # UWSM owns the Hyprland systemd session. Home Manager owns only the
-    # generated configuration, avoiding two competing graphical targets.
-    wayland.windowManager.hyprland = {
-      enable = true;
-      package = null;
-      portalPackage = null;
-      configType = "lua";
-      systemd.enable = false;
-      extraConfig = ''
-        ${hyprlandOutputs}
-
-        local start_desktop_shell = ${toLua (lib.getExe startDesktopShell)}
-        local start_polkit_agent = ${toLua (lib.getExe startPolkitAgent)}
-        local shell_action = ${toLua (lib.getExe shellAction)}
-        local stop_hyprland_session = ${toLua stopHyprlandSession}
-
-        ${builtins.readFile (sourceRoot + "/wayland/hyprland.lua")}
-      '';
     };
 
     xdg.configFile."niri/config.kdl".text = ''
