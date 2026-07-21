@@ -39,6 +39,21 @@ let
     '';
     inherit (pkgs.discord) meta passthru;
   };
+  razerQdHidSource = pkgs.fetchFromGitHub {
+    owner = "AlexAllocated";
+    repo = "razerqdhid";
+    rev = "2fe504e10dd7f8ea7c6b5d4cfd04d946575b2b5d";
+    hash = "sha256-5po6knQogtjHLauDo2pa0QVQQG9oCiX4OHseSESTriw=";
+  };
+  razerOnboardPython = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.hidapi ]);
+  razerOnboard = pkgs.writeShellApplication {
+    name = "razer-onboard";
+    runtimeInputs = [ razerOnboardPython ];
+    text = ''
+      export PYTHONPATH=${razerQdHidSource}/public/py
+      exec ${razerOnboardPython}/bin/python3 ${../../scripts/nixos/razer-onboard.py} "$@"
+    '';
+  };
   mkChromeWebApp =
     {
       name,
@@ -657,6 +672,20 @@ in
       enableRedistributableFirmware = true;
       firmware = [ ipadEdidFirmware ];
       cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+      openrazer = {
+        enable = true;
+        users = [ cfg.user ];
+        # This workstation intentionally never locks or sleeps. Do not leave
+        # the keyboard, keypad, and mouse dark when a compositor changes its
+        # notion of screensaver state during a remote desktop session.
+        devicesOffOnScreensaver = false;
+        syncEffectsEnabled = true;
+        batteryNotifier = {
+          enable = true;
+          frequency = 600;
+          percentage = 20;
+        };
+      };
       bluetooth = {
         enable = true;
         powerOnBoot = true;
@@ -700,6 +729,10 @@ in
       };
 
       usbmuxd.enable = true;
+
+      # Synapse profile mappings are reproduced with a compositor-independent
+      # evdev/uinput layer, so they work in Plasma and every Wayland session.
+      input-remapper.enable = true;
 
       sunshine = {
         enable = true;
@@ -772,6 +805,29 @@ in
           enable = true;
           importOXRRuntimes = true;
         };
+      };
+    };
+
+    # Upstream starts the privileged daemon but does not apply configured
+    # autoload profiles. Do that after it owns its D-Bus name so mappings are
+    # restored at boot regardless of which graphical session Alex chooses.
+    systemd.services.input-remapper.serviceConfig.ExecStartPost = [
+      "${lib.getExe' pkgs.util-linux "runuser"} -u ${cfg.user} -- ${lib.getExe' pkgs.input-remapper "input-remapper-control"} --command autoload --config-dir /home/${cfg.user}/.config/input-remapper-2"
+    ];
+
+    # The Phantom Green accepts the Basilisk V3 button protocol on interface
+    # zero, which browsers cannot address through WebHID. Apply a volatile
+    # Linux-only layer after boot and whenever either transport reconnects.
+    # Its onboard Windows profile remains untouched.
+    systemd.services.razer-basilisk-linux-bindings = {
+      description = "Apply volatile Linux bindings to the Razer Basilisk Phantom Green";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "systemd-udev-settle.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStartPre = "${lib.getExe' pkgs.coreutils "sleep"} 1";
+        ExecStart = "${lib.getExe razerOnboard} --attempts 20 apply-linux";
+        TimeoutStartSec = 30;
       };
     };
 
@@ -902,6 +958,9 @@ in
     services.udev.extraRules = ''
       KERNEL=="uhid", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess"
       KERNEL=="hidraw*", ATTRS{name}=="Sunshine PS5 (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
+      KERNEL=="hidraw*", ATTRS{idVendor}=="1532", GROUP="openrazer", MODE="0660", TAG+="uaccess"
+      SUBSYSTEM=="usb", ATTR{idVendor}=="1532", GROUP="openrazer", MODE="0660", TAG+="uaccess"
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1532", ATTR{idProduct}=="00d[67]", TAG+="systemd", ENV{SYSTEMD_WANTS}+="razer-basilisk-linux-bindings.service"
       SUBSYSTEMS=="input", ATTRS{name}=="Sunshine X-Box One (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
       SUBSYSTEMS=="input", ATTRS{name}=="Sunshine gamepad (virtual) motion sensors*", GROUP="input", MODE="0660", TAG+="uaccess"
       SUBSYSTEMS=="input", ATTRS{name}=="Sunshine Nintendo (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
@@ -1002,6 +1061,8 @@ in
       nvtopPackages.nvidia
       pciutils
       pulseaudio
+      polychromatic
+      razerOnboard
       slack
       teamsWebApp
       usbutils

@@ -1,0 +1,81 @@
+[
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 275
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_K",
+    "name": "Synapse: Button4"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 276
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_E",
+    "name": "Synapse: Button5"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 2,
+        "code": 6,
+        "analog_threshold": -1
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_TAB",
+    "name": "Synapse: RepeatScrollLeft"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 2,
+        "code": 6,
+        "analog_threshold": 1
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_X",
+    "name": "Synapse: RepeatScrollRight"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 184
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_X",
+    "name": "Synapse via volatile F14: DKM_SB_02"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 185
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_LEFTALT + KEY_S",
+    "name": "Synapse via volatile F15: DKM_SB_03"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 186
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_ESC",
+    "name": "Synapse via volatile F16: DKM_M_106"
+  }
+]

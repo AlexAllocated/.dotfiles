@@ -1,0 +1,481 @@
+{
+  "source": "Razer Synapse 4 profile database (read-only Windows recovery)",
+  "linuxEventCapture": {
+    "device": "Razer Basilisk V3 Pro 35K",
+    "interfaces": [
+      "input0",
+      "input1",
+      "input2"
+    ],
+    "inputRemapperStopped": true,
+    "controlsTested": [
+      "scroll mode",
+      "DPI cycle",
+      "multi-function thumb trigger",
+      "underside profile"
+    ],
+    "result": "No evdev events were emitted by any tested proprietary control",
+    "conclusion": "The controls emit no evdev events, so a native HID bridge now exposes them as volatile F13-F16 inputs for Input Remapper"
+  },
+  "nativeOnboardBridge": {
+    "device": "Razer Basilisk V3 Pro 35K Phantom Green",
+    "transports": {
+      "wired": "1532:00d6",
+      "wireless": "1532:00d7"
+    },
+    "interface": 0,
+    "profile": "volatile direct profile 0",
+    "persistentOnboardWrites": false,
+    "bindings": {
+      "DKM_SB_01": "F13",
+      "DKM_SB_02": "F14",
+      "DKM_SB_03": "F15",
+      "DKM_M_106": "F16"
+    },
+    "hardwareValidation": [
+      "read onboard profile 1 on wired transport",
+      "read onboard profile 1 on wireless transport",
+      "write and verify F2 in volatile profile 0",
+      "restore and verify the original F1 bytes in volatile profile 0"
+    ],
+    "upstreamPullRequest": "https://github.com/geezmolycos/razerqdhid/pull/6"
+  },
+  "devices": {
+    "mouse": {
+      "group": "Razer Razer Basilisk V3 Pro 35K",
+      "profiles": [
+        "Arc Raiders",
+        "BG3",
+        "CHEV-DESKTOP-Default",
+        "DEFAULT",
+        "DEFAULT (1)",
+        "EVE",
+        "Factorio",
+        "No Man's Sky",
+        "Overwatch",
+        "Rust",
+        "Satisfactory",
+        "Valheim",
+        "WoW"
+      ]
+    },
+    "tartarus": {
+      "group": "Razer Razer Tartarus Pro",
+      "profiles": [
+        "Arc Raiders",
+        "DEFAULT",
+        "Factorio",
+        "Overwatch",
+        "Rust",
+        "Satisfactory",
+        "Valheim",
+        "WoW"
+      ]
+    },
+    "huntsman": {
+      "group": "Razer Razer Huntsman V2 Analog",
+      "profiles": [
+        "CHEV-DESKTOP-Default"
+      ]
+    }
+  },
+  "generatedMappingCounts": {
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Arc Raiders.json": 6,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/BG3.json": 3,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/CHEV-DESKTOP-Default.json": 0,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/DEFAULT.json": 2,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/DEFAULT (1).json": 6,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/EVE.json": 7,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Factorio.json": 6,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/No Man's Sky.json": 7,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Overwatch.json": 6,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Rust.json": 8,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Satisfactory.json": 6,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Valheim.json": 8,
+    "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/WoW.json": 7,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Arc Raiders.json": 19,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/DEFAULT.json": 16,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Factorio.json": 16,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Overwatch.json": 19,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Rust.json": 18,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Satisfactory.json": 21,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Valheim.json": 24,
+    "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/WoW.json": 17,
+    "razer/input-remapper-2/presets/Razer Razer Huntsman V2 Analog/CHEV-DESKTOP-Default.json": 2
+  },
+  "sourceConversionExceptions": [
+    {
+      "device": "mouse",
+      "profile": "Arc Raiders",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Arc Raiders",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Arc Raiders",
+      "input": "DKM_SB_02",
+      "output": "KEY_LEFTCTRL + KEY_LEFTALT + KEY_SPACE",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "BG3",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "BG3",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "DEFAULT",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "DEFAULT",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "DEFAULT (1)",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "DEFAULT (1)",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "DEFAULT (1)",
+      "input": "DKM_SB_02",
+      "output": "KEY_T",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "DEFAULT (1)",
+      "input": "Button5",
+      "reason": "macroGroup"
+    },
+    {
+      "device": "mouse",
+      "profile": "EVE",
+      "input": "DKM_SB_02",
+      "output": "KEY_LEFTSHIFT",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "EVE",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "EVE",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Factorio",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Factorio",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Factorio",
+      "input": "DKM_SB_02",
+      "output": "KEY_LEFTSHIFT",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "No Man's Sky",
+      "input": "DKM_SB_02",
+      "output": "KEY_X",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "No Man's Sky",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "No Man's Sky",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Overwatch",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Overwatch",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Rust",
+      "input": "DKM_SB_01",
+      "output": "KEY_F1",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Rust",
+      "input": "DKM_SB_02",
+      "output": "KEY_H",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Rust",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Rust",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "DKM_SB_02",
+      "reason": "hyperShiftGroup"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "DKM_SB_02",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "RepeatScrollLeft",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "RepeatScrollRight",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "Button5",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "Button4",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "DKM_M_106",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "DKM_SB_03",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Satisfactory",
+      "input": "ScrollButton",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "mouse",
+      "profile": "Valheim",
+      "input": "DKM_SB_01",
+      "output": "KEY_F1",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Valheim",
+      "input": "DKM_SB_02",
+      "output": "KEY_H",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Valheim",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "Valheim",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "WoW",
+      "input": "DKM_SB_02",
+      "output": "KEY_LEFTSHIFT",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "WoW",
+      "input": "DKM_SB_03",
+      "output": "KEY_LEFTALT + KEY_S",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "mouse",
+      "profile": "WoW",
+      "input": "DKM_M_106",
+      "output": "KEY_ESC",
+      "reason": "Resolved by native HID bridge as volatile F13-F16"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_5",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_F",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_R",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_E",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_W",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_Q",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_S",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_3",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "Satisfactory",
+      "input": "KEY_4",
+      "reason": "HyperShift-only layer"
+    },
+    {
+      "device": "tartarus",
+      "profile": "WoW",
+      "input": "KEY_LEFT_ALT",
+      "reason": "keyboardGroup"
+    }
+  ],
+  "hardwareSettings": {
+    "mouse": {
+      "dpi": 1800,
+      "pollingRateHz": 1000,
+      "brightnessPercent": 70
+    },
+    "tartarus": {
+      "brightnessPercent": 100
+    },
+    "huntsman": {
+      "brightnessPercent": 100,
+      "snapTap": "A/D enabled in Synapse; unavailable in Input Remapper",
+      "analogActuation": 105
+    }
+  }
+}

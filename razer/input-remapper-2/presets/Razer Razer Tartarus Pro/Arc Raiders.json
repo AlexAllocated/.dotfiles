@@ -1,0 +1,212 @@
+[
+  {
+    "input_combination": [
+      {
+        "type": 2,
+        "code": 8,
+        "analog_threshold": -1
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_LEFTALT + KEY_TAB",
+    "name": "Synapse: ScrollDown"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 2
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_H",
+    "name": "Synapse: KEY_1"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 3
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_3",
+    "name": "Synapse: KEY_2"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 4
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_2",
+    "name": "Synapse: KEY_3"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 5
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_1",
+    "name": "Synapse: KEY_4"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 6
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_R",
+    "name": "Synapse: KEY_5"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 16
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_LEFTCTRL",
+    "name": "Synapse: KEY_Q"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 17
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_LEFTSHIFT",
+    "name": "Synapse: KEY_W"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 19
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_SPACE",
+    "name": "Synapse: KEY_R"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 31
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_LEFTALT",
+    "name": "Synapse: KEY_S"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 56
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_TAB",
+    "name": "Synapse: KEY_LEFT_ALT"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 57
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_M",
+    "name": "Synapse: KEY_SPACEBAR"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 103
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_W",
+    "name": "Synapse: KEY_UP_ARROW"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 108
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_S",
+    "name": "Synapse: KEY_DOWN_ARROW"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 106
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_D",
+    "name": "Synapse: KEY_RIGHT_ARROW"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 105
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_A",
+    "name": "Synapse: KEY_LEFT_ARROW"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 30
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_X",
+    "name": "Synapse: KEY_A"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 32
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_Q",
+    "name": "Synapse: KEY_D"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 15
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_C",
+    "name": "Synapse: KEY_TAB"
+  }
+]

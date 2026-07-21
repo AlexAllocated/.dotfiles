@@ -1,0 +1,24 @@
+[
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 58
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_ESC",
+    "name": "Synapse: KEY_CAPS_LOCK"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 1
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_CAPSLOCK",
+    "name": "Synapse: KEY_ESC"
+  }
+]

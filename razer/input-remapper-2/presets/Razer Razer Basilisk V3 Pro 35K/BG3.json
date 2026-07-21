@@ -1,0 +1,35 @@
+[
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 275
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_F5",
+    "name": "Synapse: Button4"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 185
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_LEFTALT + KEY_S",
+    "name": "Synapse via volatile F15: DKM_SB_03"
+  },
+  {
+    "input_combination": [
+      {
+        "type": 1,
+        "code": 186
+      }
+    ],
+    "target_uinput": "keyboard",
+    "output_symbol": "KEY_ESC",
+    "name": "Synapse via volatile F16: DKM_M_106"
+  }
+]
