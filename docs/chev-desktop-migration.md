@@ -269,12 +269,18 @@ the same atomic KScreen update:
 ipad-display-off --restore-output DP-1
 ```
 
-The native profile keeps the dummy enabled through each compositor's output
-API and runs one system-owned Sunshine service beneath SDDM and the graphical
-sessions. Sunshine captures the dummy through KMS. Because Sunshine identifies
-KMS outputs by a temporary plane-list number, its launcher monitors DP-2 and
-restarts capture whenever the LG powering off or returning renumbers the dummy.
-Keep the dummy enabled for dependable downstairs/headless recovery.
+The native profile runs one system-owned Sunshine service beneath SDDM and the
+graphical sessions. Normal desktop startup leaves the dummy disabled, so the
+pointer and workspaces cannot disappear into an invisible second display.
+Sunshine enables and sizes DP-2 before a Moonlight stream starts, then disables
+it when the final client disconnects. The greeter may retain the dummy because
+it has no user desktop or pointer layout and doing so preserves remote login.
+
+The pinned Sunshine build accepts the stable Linux connector name `DP-2`
+instead of the upstream KMS plane-list number. That matters because the dummy's
+numeric index changes when the LG powers off; stable selection keeps a headless
+connection targeting the iPad output without a failed first attempt or daemon
+restart.
 
 Niri natively evacuates workspaces from a disappearing output. A small user
 service also records one stable window anchor per LG workspace: it ensures the
@@ -289,9 +295,8 @@ it still refuses any connector whose EDID is not FUN/EK1080. Request 2732x2048
 in Moonlight so Sunshine's host capture and encoded client frame remain the
 same native iPad size.
 
-The pinned Sunshine build supports persistent KMS capture. Once the connector
-is configured, Nix maps the stable dummy connector to Sunshine's current
-numeric `output_name`; `alex` belongs to the `uinput` group so Moonlight
+The pinned Sunshine build supports persistent KMS capture and a Linux
+last-client-disconnected hook. `alex` belongs to the `uinput` group so Moonlight
 keyboard, mouse, and gamepad injection works.
 
 The native target also enables the Docker daemon, Steam/GE-Proton, Gamescope,

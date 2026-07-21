@@ -1,0 +1,57 @@
+--- a/src/platform/linux/kmsgrab.cpp
++++ b/src/platform/linux/kmsgrab.cpp
+@@ -246,0 +247,9 @@
++    std::string connector_name(std::uint32_t type, std::uint32_t index) {
++      const char *type_name = drmModeGetConnectorTypeName(type);
++      if (type_name == nullptr) {
++        return {};
++      }
++
++      return std::string {type_name} + "-" + std::to_string(index);
++    }
++
+@@ -614 +623,6 @@
+-        int monitor_index = util::from_view(display_name);
++        const bool numeric_name = !display_name.empty() && std::all_of(
++          display_name.begin(),
++          display_name.end(),
++          [](unsigned char character) { return std::isdigit(character); }
++        );
++        int monitor_index = numeric_name ? util::from_view(display_name) : -1;
+@@ -659 +673,13 @@
+-            if (monitor != monitor_index) {
++            std::string active_connector_name;
++            kms::conn_type_count_t selection_conn_type_count;
++            for (const auto &connector : card.monitors(selection_conn_type_count)) {
++              if (connector.crtc_id == plane->crtc_id) {
++                active_connector_name = kms::connector_name(connector.type, connector.index);
++                break;
++              }
++            }
++
++            const bool selected = numeric_name ?
++                                    monitor == monitor_index :
++                                    active_connector_name == display_name;
++            if (!selected) {
+@@ -1710,0 +1737 @@
++          display_names.emplace_back(kms::connector_name(it->second.type, it->second.index));
+@@ -1718 +1745,4 @@
+-        display_names.emplace_back(std::to_string(count++));
++        if (it == std::end(crtc_to_monitor)) {
++          display_names.emplace_back(std::to_string(count));
++        }
++        ++count;
+--- a/src/platform/linux/misc.cpp
++++ b/src/platform/linux/misc.cpp
+@@ -11,0 +12 @@
++#include <cstdlib>
+@@ -417 +418,8 @@
+-    // Nothing to do
++    const char *command = std::getenv("SUNSHINE_STREAM_STOP_COMMAND");
++    if (command == nullptr || *command == '\0') {
++      return;
++    }
++
++    if (const int status = std::system(command); status != 0) {
++      BOOST_LOG(warning) << "Stream-stop command exited with status ["sv << status << ']';
++    }

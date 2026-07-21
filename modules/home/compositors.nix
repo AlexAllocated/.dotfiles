@@ -16,6 +16,9 @@ let
   toLua = lib.generators.toLua { };
 
   noctaliaPackage = config.programs.noctalia.package;
+  noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
+    builtins.readFile ../../patches/noctalia-focus-existing-windows.patch
+  );
   dmsPackage = config.programs.dank-material-shell.package;
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   wallpaper = config.dotfiles.wallpaper;
@@ -554,6 +557,11 @@ in
 
     programs.noctalia = {
       enable = true;
+      package =
+        inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs
+          (oldAttrs: {
+            patches = (oldAttrs.patches or [ ]) ++ [ noctaliaFocusPatch ];
+          });
       systemd.enable = false;
       settings = {
         shell = {

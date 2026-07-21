@@ -48,6 +48,29 @@
   # It defaults—and automatically falls back—to the proven Plasma session.
   services.displayManager.defaultSession = "dotfiles-desktop";
 
+  networking.networkmanager = {
+    # Prevent NetworkManager from racing this declared profile with another
+    # automatically generated DHCP profile for the same Ethernet interface.
+    settings.main.no-auto-default = "*";
+    ensureProfiles.profiles.chev-static-ethernet = {
+      connection = {
+        id = "chev-static-ethernet";
+        type = "ethernet";
+        interface-name = "eno1";
+        autoconnect = true;
+        autoconnect-priority = 100;
+      };
+      ipv4 = {
+        method = "manual";
+        addresses = "192.168.0.117/24";
+        gateway = "192.168.0.1";
+        dns = "8.8.8.8;4.4.4.4;";
+        dns-search = "lan;";
+      };
+      ipv6.method = "auto";
+    };
+  };
+
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
@@ -83,7 +106,10 @@
       }
       // lib.optionalAttrs (config.dotfiles.desktop.ipadDisplay.connector != null) {
         ${config.dotfiles.desktop.ipadDisplay.connector} = {
-          enable = true;
+          # Sunshine enables this output only while Moonlight is connected.
+          # Keeping it off otherwise prevents an invisible pointer/workspace
+          # region while the iPad is not in use.
+          enable = false;
           mode = "2732x2048@60";
           scale = 1.75;
           # Keep the invisible remote desktop beside, rather than on top of,

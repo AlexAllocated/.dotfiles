@@ -54,6 +54,37 @@ let
       exec ${razerOnboardPython}/bin/python3 ${../../scripts/nixos/razer-onboard.py} "$@"
     '';
   };
+  # nixpkgs is one Lan Mouse release behind. Version 0.11 adds the
+  # authenticated peer protocol and the multi-client configuration used here.
+  lanMouse = pkgs.lan-mouse.overrideAttrs (_oldAttrs: rec {
+    version = "0.11.0";
+    src = pkgs.fetchFromGitHub {
+      owner = "feschber";
+      repo = "lan-mouse";
+      rev = "v${version}";
+      hash = "sha256-6EqA9WfiukOymUT4FkNdMvzmFKByW0LLoI/9sv4TzBU=";
+    };
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+      inherit src;
+      hash = "sha256-Lxs0qWvNAv4KCeJ+cDBYBzwlbJfQJshcxPRdg9w0szc=";
+    };
+    # Version 0.10 synthesized its version and removed build.rs. Version 0.11
+    # uses that build script for feature detection and generated metadata.
+    prePatch = "";
+  });
+  sunshinePackage =
+    (pkgs.sunshine.override {
+      cudaSupport = true;
+      cudaPackages = pkgs.cudaPackages_12_9;
+    }).overrideAttrs
+      (oldAttrs: {
+        # Linux KMS normally exposes volatile numeric plane indexes. Accept a
+        # stable connector name instead and notify our display policy when the
+        # final streaming client disconnects.
+        patches = (oldAttrs.patches or [ ]) ++ [
+          ../../patches/sunshine-linux-kms-connector-and-stream-hook.patch
+        ];
+      });
   mkChromeWebApp =
     {
       name,
@@ -219,6 +250,7 @@ let
       pkgs.hyprland
       pkgs.niri
       pkgs.systemd
+      pkgs.wlr-randr
     ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
@@ -228,6 +260,18 @@ let
           | sed -n "s/^$1=//p" \
           | head -n 1
       }
+
+      import_manager_variable() {
+        local name="$1" value
+        value="$(manager_variable "$name")"
+        [[ -z "$value" ]] || export "$name=$value"
+      }
+
+      for variable in \
+        WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
+        HYPRLAND_INSTANCE_SIGNATURE MANGO_INSTANCE_SIGNATURE; do
+        import_manager_variable "$variable"
+      done
 
       for attempt in $(seq 1 30); do
         desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
@@ -258,12 +302,10 @@ let
             fi
             ;;
           Mango | mango)
-            # Mango consumes the generated monitorrule before its autostart
-            # script runs. Confirm it succeeded rather than applying a second,
-            # compositor-specific mutation here.
-            for enabled_file in /sys/class/drm/card*-"$connector"/enabled; do
-              [[ -r "$enabled_file" && "$(<"$enabled_file")" == enabled ]] && exit 0
-            done
+            if wlr-randr --output "$connector" --on \
+              --mode 2732x2048@60.001Hz --scale 1.75 --pos 3440,0; then
+              exit 0
+            fi
             ;;
           *)
             # Unknown shells may still inherit an already active output from
@@ -282,6 +324,65 @@ let
 
       printf 'Could not enable the persistent Sunshine output %s in this graphical session.\n' "$connector" >&2
       exit 1
+    '';
+  };
+  ipadDisplaySessionOff = pkgs.writeShellApplication {
+    name = "ipad-display-session-off";
+    runtimeInputs = [
+      pkgs.cosmic-randr
+      pkgs.coreutils
+      pkgs.gnused
+      pkgs.hyprland
+      pkgs.niri
+      pkgs.systemd
+      pkgs.wlr-randr
+    ];
+    text = ''
+      connector=${lib.escapeShellArg ipadConnector}
+
+      manager_variable() {
+        systemctl --user show-environment \
+          | sed -n "s/^$1=//p" \
+          | head -n 1
+      }
+
+      import_manager_variable() {
+        local name="$1" value
+        value="$(manager_variable "$name")"
+        [[ -z "$value" ]] || export "$name=$value"
+      }
+
+      for variable in \
+        WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
+        HYPRLAND_INSTANCE_SIGNATURE MANGO_INSTANCE_SIGNATURE; do
+        import_manager_variable "$variable"
+      done
+
+      desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
+      case "$desktop" in
+        KDE)
+          ${ipadDisplayOff}/bin/ipad-display-off
+          ;;
+        niri)
+          niri msg output "$connector" off
+          ;;
+        Hyprland)
+          hyprctl keyword monitor "$connector,disable"
+          ;;
+        COSMIC)
+          cosmic-randr disable "$connector"
+          ;;
+        Mango | mango)
+          wlr-randr --output "$connector" --off
+          ;;
+        *)
+          # SDDM and unknown compositors keep the dummy alive so Sunshine can
+          # remain reachable at the greeter. There is no user desktop here in
+          # which the pointer could disappear into the output.
+          printf 'Leaving %s unchanged for graphical environment %s.\n' \
+            "$connector" "''${desktop:-unknown}"
+          ;;
+      esac
     '';
   };
   sunshineSessionRun = pkgs.writeShellApplication {
@@ -306,9 +407,8 @@ let
     name = "sunshine-kms-launch";
     runtimeInputs = [
       pkgs.coreutils
-      pkgs.drm_info
       pkgs.gnugrep
-      pkgs.jq
+      pkgs.iproute2
       pkgs.systemd
     ];
     text = ''
@@ -335,43 +435,17 @@ let
         [[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]]
       }
 
-      kms_display_id() {
-        local connector="$1"
-        local directory card device connector_id
-        directory="$(connector_directory "$connector")" || return 1
-        card="$(basename "$(dirname "$(readlink -f "$directory")")")"
-        device="/dev/dri/$card"
-        connector_id="$(<"$directory/connector_id")"
-
-        # Sunshine numbers active non-cursor DRM planes, not connectors. Map
-        # the stable connector through its CRTC to the exact ID Sunshine will
-        # use for the current compositor's plane topology.
-        drm_info -j "$device" | jq -er \
-          --arg device "$device" \
-          --argjson connector "$connector_id" '
-            .[$device] as $card
-            | ($card.connectors[]
-                | select(.id == $connector)
-                | .properties.CRTC_ID.value) as $crtc
-            | select($crtc != null and $crtc != 0)
-            | [$card.planes[]
-                | select(.fb_id != 0 and .properties.type.value != 2)
-                | .crtc_id]
-            | to_entries
-            | [.[] | select(.value == $crtc) | .key]
-            | last
-          '
-      }
-
       active_session() {
         loginctl show-seat seat0 --property ActiveSession --value 2>/dev/null || true
       }
 
       import_graphical_environment() {
-        unset WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE
+        unset \
+          WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE \
+          NIRI_SOCKET HYPRLAND_INSTANCE_SIGNATURE MANGO_INSTANCE_SIGNATURE
         while IFS= read -r entry; do
           case "$entry" in
-            WAYLAND_DISPLAY=* | DISPLAY=* | XDG_CURRENT_DESKTOP=* | XDG_SESSION_DESKTOP=* | XDG_SESSION_TYPE=*)
+            WAYLAND_DISPLAY=* | DISPLAY=* | XDG_CURRENT_DESKTOP=* | XDG_SESSION_DESKTOP=* | XDG_SESSION_TYPE=* | NIRI_SOCKET=* | HYPRLAND_INSTANCE_SIGNATURE=* | MANGO_INSTANCE_SIGNATURE=*)
               export "''${entry?}"
               ;;
           esac
@@ -382,11 +456,13 @@ let
         fi
       }
 
+      import_graphical_environment
       selected=""
-      # Give the display manager or newly starting compositor time to apply
-      # the declarative iPad output policy. If the dummy is unplugged or never
-      # comes up, retain local recovery by falling back to the LG.
+      # The persistent daemon validates its encoder before accepting clients,
+      # so briefly bring up the dummy for that probe. The global prep command
+      # repeats this before each real stream; the last-client hook turns it off.
       if [[ -n "$configured" ]]; then
+        ${ipadDisplaySessionOn}/bin/ipad-display-session-on || true
         for _ in $(seq 1 30); do
           if connector_state "$configured"; then
             selected="$configured"
@@ -413,25 +489,34 @@ let
         exit 1
       }
 
-      display_id="$(kms_display_id "$selected")" || {
-        printf 'Could not map DRM connector %s to Sunshine\x27s numeric KMS display ID.\n' "$selected" >&2
-        exit 1
-      }
-
-      import_graphical_environment
       install -m 0600 -- ${sunshineKmsConfig} "$runtime_config"
-      printf '\noutput_name = %s\n' "$display_id" >>"$runtime_config"
-      printf 'Starting persistent KMS Sunshine on %s (KMS display %s).\n' "$selected" "$display_id"
+      printf '\noutput_name = %s\n' "$selected" >>"$runtime_config"
+      printf 'Starting persistent KMS Sunshine on stable connector %s.\n' "$selected"
 
       session="$(active_session)"
       ${lib.getExe config.services.sunshine.package} "$runtime_config" &
       sunshine_pid=$!
-      topology_misses=0
       cleanup() {
         kill "$sunshine_pid" 2>/dev/null || true
         wait "$sunshine_pid" 2>/dev/null || true
+        if [[ "$selected" == "$configured" ]]; then
+          ${ipadDisplaySessionOff}/bin/ipad-display-session-off || true
+        fi
       }
       trap cleanup EXIT INT TERM
+
+      # Encoder probing completes before Sunshine opens its HTTPS listener.
+      # Once it is ready, remove the idle dummy from the compositor layout.
+      for _ in $(seq 1 60); do
+        kill -0 "$sunshine_pid" 2>/dev/null || break
+        if ss -Hln sport = :47990 | grep -q .; then
+          if [[ "$selected" == "$configured" ]]; then
+            ${ipadDisplaySessionOff}/bin/ipad-display-session-off || true
+          fi
+          break
+        fi
+        sleep 1
+      done
 
       while kill -0 "$sunshine_pid" 2>/dev/null; do
         sleep 2
@@ -440,25 +525,6 @@ let
           printf 'Active seat session changed from %s to %s; refreshing KMS topology.\n' \
             "''${session:-none}" "''${current_session:-none}"
           exit 75
-        fi
-
-        # Sunshine's KMS output_name is a transient plane-list index rather
-        # than a stable connector name. When the LG powers off, the persistent
-        # DP-2 dummy normally changes from display 1 to display 0 even though
-        # DP-2 itself never disconnected. Follow that renumbering so a
-        # headless Moonlight connection does not keep targeting a vanished
-        # monitor until the next login or reboot. Require two consecutive
-        # misses to ride through the brief empty topology during a modeset.
-        current_display_id="$(kms_display_id "$selected" 2>/dev/null || true)"
-        if connector_state "$selected" && [[ "$current_display_id" == "$display_id" ]]; then
-          topology_misses=0
-        else
-          ((topology_misses += 1))
-          if ((topology_misses >= 2)); then
-            printf 'KMS topology for %s changed from display %s to %s; refreshing capture.\n' \
-              "$selected" "$display_id" "''${current_display_id:-unavailable}"
-            exit 75
-          fi
         fi
       done
       wait "$sunshine_pid"
@@ -545,6 +611,9 @@ in
     networking = {
       hostName = "chev-desktop";
       networkmanager.enable = true;
+      # Lan Mouse is a TLS-authenticated, peer-to-peer software KVM. Limit
+      # its discovery/input port to the wired home-LAN interface.
+      firewall.interfaces.eno1.allowedUDPPorts = [ 4242 ];
     };
 
     time.timeZone = "America/Denver";
@@ -739,12 +808,9 @@ in
         autoStart = !sunshineKms;
         openFirewall = true;
         # Keep CUDA interop available as a fallback without enabling CUDA
-        # globally. Vulkan Video is the default below because it stays off the
-        # CUDA conversion path that starves when a game saturates this GPU.
-        package = pkgs.sunshine.override {
-          cudaSupport = true;
-          cudaPackages = pkgs.cudaPackages_12_9;
-        };
+        # globally. The local KMS patch selects the iPad by stable connector
+        # name and exposes a final-client-disconnected hook.
+        package = sunshinePackage;
         settings = {
           sunshine_name = "CHEV-DESKTOP";
           capture = if sunshineKms then "kms" else "kwin";
@@ -758,6 +824,14 @@ in
           cert = "credentials/cacert.pem";
           pkey = "credentials/cakey.pem";
           system_tray = !sunshineKms;
+        }
+        // lib.optionalAttrs (sunshineKms && cfg.ipadDisplay.connector != null) {
+          global_prep_cmd = builtins.toJSON [
+            {
+              do = "${ipadDisplaySessionOn}/bin/ipad-display-session-on";
+              undo = "${ipadDisplaySessionOff}/bin/ipad-display-session-off";
+            }
+          ];
         }
         // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
           output_name = cfg.ipadDisplay.connector;
@@ -896,6 +970,7 @@ in
         DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus";
         PULSE_SERVER = "unix:/run/user/1000/pulse/native";
         XDG_SEAT = "seat0";
+        SUNSHINE_STREAM_STOP_COMMAND = lib.getExe ipadDisplaySessionOff;
       };
       serviceConfig = {
         Type = "simple";
@@ -930,23 +1005,20 @@ in
       };
     };
 
-    # Reconcile the same dummy policy through each session's native output
-    # control API. Niri, Hyprland, and Mango also receive generated static
-    # config; this service gives Plasma and COSMIC an equivalent path and
-    # retries while a compositor is still bringing up its control socket.
-    systemd.user.services.chev-ipad-display =
-      lib.mkIf (sunshineKms && cfg.ipadDisplay.connector != null)
-        {
-          description = "Keep the iPad dummy output available to persistent Sunshine";
-          wantedBy = [ "graphical-session.target" ];
-          partOf = [ "graphical-session.target" ];
-          after = [ "graphical-session.target" ];
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = lib.getExe ipadDisplaySessionOn;
-            RemainAfterExit = true;
-          };
-        };
+    # Niri does not implement the InputCapture portal required by
+    # Synergy/Deskflow server mode. Lan Mouse uses niri's supported
+    # layer-shell and wlroots virtual-input protocols instead.
+    systemd.user.services.lan-mouse = {
+      description = "Share keyboard and mouse with LAN peers";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      serviceConfig = {
+        ExecStart = "${lib.getExe lanMouse} daemon";
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
 
     # KWin's direct-scanout overlays bypass the framebuffer KMS captures.
     # Disable them for both Plasma and SDDM while persistent capture is active.
@@ -1049,11 +1121,14 @@ in
       ipadDisplayOff
       ipadDisplayOn
       ipadDisplayPrepare
+      ipadDisplaySessionOff
+      ipadDisplaySessionOn
       kdePackages.kcalc
       kdePackages.kdenlive
       kdePackages.kdialog
       krita
       ksnip
+      lanMouse
       linearWebApp
       libimobiledevice
       libva-utils

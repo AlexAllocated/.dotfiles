@@ -51,7 +51,7 @@ non-Plasma target within two minutes. A desktop that stays alive for 90 seconds
 is considered stable and its failure history is cleared.
 
 If the graphical handoff still fails, use the recovery web terminal at
-`http://192.168.0.155:7681` and run:
+`http://192.168.0.117:7681` and run:
 
 ```console
 desktop-switch --next plasma

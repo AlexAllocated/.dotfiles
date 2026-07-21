@@ -1,0 +1,196 @@
+diff --git a/src/compositors/compositor_platform.cpp b/src/compositors/compositor_platform.cpp
+index 2cd556d..1fd247e 100644
+--- a/src/compositors/compositor_platform.cpp
++++ b/src/compositors/compositor_platform.cpp
+@@ -841,6 +841,13 @@ void CompositorPlatform::activateToplevel(zwlr_foreign_toplevel_handle_v1* handl
+ }
+
+ void CompositorPlatform::activateToplevelInfo(const ToplevelInfo& window) {
++  // Native compositor IDs are more reliable than the generic Wayland
++  // activation request on compositors such as niri. In particular, niri may
++  // acknowledge the foreign-toplevel request without scrolling to the window.
++  if (!window.identifier.empty() && m_workspaceMetadataBackend != nullptr
++      && m_workspaceMetadataBackend->focusWindowById(window.identifier)) {
++    return;
++  }
+   if (window.handle != nullptr) {
+     activateToplevel(window.handle);
+     return;
+diff --git a/src/launcher/app_provider.cpp b/src/launcher/app_provider.cpp
+index fe30411..3e460e6 100644
+--- a/src/launcher/app_provider.cpp
++++ b/src/launcher/app_provider.cpp
+@@ -3,6 +3,7 @@
+ #include "compositors/compositor_platform.h"
+ #include "config/config_service.h"
+ #include "i18n/i18n.h"
++#include "system/app_identity.h"
+ #include "system/desktop_entry_launch.h"
+ #include "util/fuzzy_match.h"
+ #include "util/string_utils.h"
+@@ -219,6 +220,30 @@ bool AppProvider::activate(const LauncherResult& result) {
+       continue;
+     }
+
++    // Treat selecting an application like selecting its running dock item.
++    // Explicit desktop actions still launch, and terminal emulators retain
++    // their expected create-a-new-terminal behavior.
++    if (result.desktopActionId.empty()
++        && m_platform != nullptr
++        && !StringUtils::toLower(entry.categories).contains("terminalemulator")) {
++      const auto runningApps = app_identity::resolveRunningApps(m_platform->runningAppIds(), m_entries);
++      for (const auto& running : runningApps) {
++        if (StringUtils::toLower(running.entry.id) != entry.idLower) {
++          continue;
++        }
++
++        const std::string wmClassLower =
++            entry.startupWmClassLower.empty() ? running.runningLower : entry.startupWmClassLower;
++        auto windows = m_platform->windowsForApp(running.runningLower, wmClassLower);
++        if (windows.empty()) {
++          continue;
++        }
++
++        m_platform->activateToplevelInfo(windows.back());
++        return true;
++      }
++    }
++
+     const DesktopAction* chosen = nullptr;
+     if (!result.desktopActionId.empty()) {
+       for (const auto& action : entry.actions) {
+diff --git a/src/shell/bar/widget_factory.cpp b/src/shell/bar/widget_factory.cpp
+index 91f021c..06140b1 100644
+--- a/src/shell/bar/widget_factory.cpp
++++ b/src/shell/bar/widget_factory.cpp
+@@ -599,6 +599,7 @@ std::unique_ptr<Widget> WidgetFactory::create(
+     TrayWidgetOptions options{
+         .hiddenItems = wc != nullptr ? wc->getStringList("hidden") : std::vector<std::string>{},
+         .pinnedItems = wc != nullptr ? wc->getStringList("pinned") : std::vector<std::string>{},
++        .platform = &m_platform,
+         .drawerMode = wc != nullptr ? wc->getBool("drawer", false) : false,
+         .itemActivated = {},
+         .barPosition = barPosition,
+diff --git a/src/shell/bar/widgets/tray_widget.cpp b/src/shell/bar/widgets/tray_widget.cpp
+index 17d6c45..c8a2528 100644
+--- a/src/shell/bar/widgets/tray_widget.cpp
++++ b/src/shell/bar/widgets/tray_widget.cpp
+@@ -1,8 +1,10 @@
+ #include "shell/bar/widgets/tray_widget.h"
+
++#include "compositors/compositor_platform.h"
+ #include "config/config_service.h"
+ #include "core/log.h"
+ #include "core/ui_phase.h"
+ #include "dbus/tray/tray_service.h"
++#include "system/app_identity.h"
+ #include "render/core/image_file_loader.h"
+ #include "render/core/image_source_log.h"
+ #include "render/core/texture_manager.h"
+@@ -165,9 +167,36 @@ namespace {
+ } // namespace
+
+ TrayWidget::TrayWidget(ConfigService& config, TrayService* tray, TrayWidgetOptions options)
+-    : m_config(config), m_tray(tray), m_hiddenItems(std::move(options.hiddenItems)),
+-      m_pinnedItems(std::move(options.pinnedItems)), m_drawerMode(options.drawerMode),
++    : m_config(config), m_platform(options.platform), m_tray(tray),
++      m_hiddenItems(std::move(options.hiddenItems)), m_pinnedItems(std::move(options.pinnedItems)),
++      m_drawerMode(options.drawerMode),
+       m_itemActivated(std::move(options.itemActivated)), m_barPosition(std::move(options.barPosition)),
+       m_panelGridMode(options.panelGridMode),
+       m_panelGridColumns(std::clamp<std::size_t>(options.panelGridColumns, 1U, 5U)),
+@@ -189,6 +218,51 @@ TrayWidget::TrayWidget(ConfigService& config, TrayService* tray, TrayWidgetOptio
+   buildDesktopIconIndex();
+ }
+
++void TrayWidget::focusItemWindow(const std::string& itemId) {
++  if (m_platform == nullptr) {
++    return;
++  }
++
++  const TrayItemInfo* item = nullptr;
++  for (const auto& candidate : m_items) {
++    if (candidate.id == itemId) {
++      item = &candidate;
++      break;
++    }
++  }
++  if (item == nullptr) {
++    return;
++  }
++
++  const auto runningApps = app_identity::resolveRunningApps(m_platform->runningAppIds(), desktopEntries());
++  const auto itemTokens = tray::pinMatchCandidates(*item);
++  const auto itemContains = [&itemTokens](std::string_view value) {
++    if (value.size() < 3) {
++      return false;
++    }
++    const std::string needle = StringUtils::toLower(std::string(value));
++    return std::ranges::any_of(itemTokens, [&needle](const std::string& token) {
++      return StringUtils::toLower(token).contains(needle);
++    });
++  };
++  for (const auto& running : runningApps) {
++    if (!tray::tokenMatchesItem(running.runningLower, *item)
++        && !tray::tokenMatchesItem(running.entry.id, *item)
++        && !tray::tokenMatchesItem(running.entry.startupWmClass, *item)
++        && !itemContains(running.runningLower)
++        && !itemContains(running.entry.nameLower)) {
++      continue;
++    }
++    const std::string wmClassLower =
++        running.entry.startupWmClassLower.empty() ? running.runningLower : running.entry.startupWmClassLower;
++    auto windows = m_platform->windowsForApp(running.runningLower, wmClassLower);
++    if (!windows.empty()) {
++      m_platform->activateToplevelInfo(windows.back());
++      return;
++    }
++  }
++}
++
+ std::string TrayWidget::resolveFromTrayThemePath(std::string_view themePath, std::string_view iconName) {
+   if (themePath.empty() || iconName.empty()) {
+     return {};
+@@ -772,6 +827,7 @@ void TrayWidget::rebuild(Renderer& renderer) {
+       const auto [x, y] = trayPointerCoords(*areaPtr, data);
+       if (data.button == BTN_LEFT) {
+         (void)m_tray->activateItem(itemId, x, y);
++        focusItemWindow(itemId);
+         if (m_itemActivated) {
+           m_itemActivated();
+         }
+diff --git a/src/shell/bar/widgets/tray_widget.h b/src/shell/bar/widgets/tray_widget.h
+index 16570b4..d21b973 100644
+--- a/src/shell/bar/widgets/tray_widget.h
++++ b/src/shell/bar/widgets/tray_widget.h
+@@ -16,12 +16,14 @@
+ class ConfigService;
++class CompositorPlatform;
+ class Flex;
+ class Image;
+ class InputArea;
+ class Glyph;
+
+ struct TrayWidgetOptions {
+   std::vector<std::string> hiddenItems;
+   std::vector<std::string> pinnedItems;
++  CompositorPlatform* platform = nullptr;
+   bool drawerMode = false;
+   std::function<void()> itemActivated;
+   std::string barPosition = "top";
+@@ -45,6 +47,7 @@ private:
+   void buildDesktopIconIndex();
+   [[nodiscard]] std::string resolveIconPath(const TrayItemInfo& item);
+   [[nodiscard]] std::string resolveFromTrayThemePath(std::string_view themePath, std::string_view iconName);
++  void focusItemWindow(const std::string& itemId);
+   void syncState(Renderer& renderer);
+   void rebuild(Renderer& renderer);
+   [[nodiscard]] std::string iconForItem(const TrayItemInfo& item) const;
+@@ -58,6 +61,7 @@ private:
+   [[nodiscard]] std::optional<ColorSpec> currentAppIconColorizeTint() const;
+
+   ConfigService& m_config;
++  CompositorPlatform* m_platform = nullptr;
+   TrayService* m_tray = nullptr;
+   Flex* m_container = nullptr;
+   IconResolver m_iconResolver;
