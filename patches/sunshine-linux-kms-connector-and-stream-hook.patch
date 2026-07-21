@@ -41,11 +41,68 @@
 +          display_names.emplace_back(std::to_string(count));
 +        }
 +        ++count;
+--- a/src/nvhttp.cpp
++++ b/src/nvhttp.cpp
+@@ -826,0 +827 @@
++    bool streaming_prepared {false};
+@@ -840,0 +842,4 @@
++
++      if (streaming_prepared) {
++        platf::streaming_will_stop();
++      }
+@@ -873,0 +879,8 @@
++      streaming_prepared = true;
++      if (!platf::streaming_will_prepare()) {
++        tree.put("root.<xmlattr>.status_code", 503);
++        tree.put("root.<xmlattr>.status_message", "Failed to prepare the host display for streaming");
++        tree.put("root.gamesession", 0);
++
++        return;
++      }
+@@ -927,0 +941 @@
++    streaming_prepared = false;
+@@ -936,0 +951 @@
++    bool streaming_prepared {false};
+@@ -946,0 +962,4 @@
++
++      if (streaming_prepared) {
++        platf::streaming_will_stop();
++      }
+@@ -979,0 +999,8 @@
++      streaming_prepared = true;
++      if (!platf::streaming_will_prepare()) {
++        tree.put("root.resume", 0);
++        tree.put("root.<xmlattr>.status_code", 503);
++        tree.put("root.<xmlattr>.status_message", "Failed to prepare the host display for streaming");
++
++        return;
++      }
+@@ -1021,0 +1049 @@
++    streaming_prepared = false;
+--- a/src/platform/common.h
++++ b/src/platform/common.h
+@@ -629,0 +630 @@
++  bool streaming_will_prepare();
 --- a/src/platform/linux/misc.cpp
 +++ b/src/platform/linux/misc.cpp
 @@ -11,0 +12 @@
 +#include <cstdlib>
-@@ -417 +418,8 @@
+@@ -411,0 +413,14 @@
++  bool streaming_will_prepare() {
++    const char *command = std::getenv("SUNSHINE_STREAM_START_COMMAND");
++    if (command == nullptr || *command == '\0') {
++      return true;
++    }
++
++    if (const int status = std::system(command); status != 0) {
++      BOOST_LOG(warning) << "Stream-start command exited with status ["sv << status << ']';
++      return false;
++    }
++
++    return true;
++  }
++
+@@ -417 +432,8 @@
 -    // Nothing to do
 +    const char *command = std::getenv("SUNSHINE_STREAM_STOP_COMMAND");
 +    if (command == nullptr || *command == '\0') {
@@ -55,3 +112,11 @@
 +    if (const int status = std::system(command); status != 0) {
 +      BOOST_LOG(warning) << "Stream-stop command exited with status ["sv << status << ']';
 +    }
+--- a/src/rtsp.cpp
++++ b/src/rtsp.cpp
+@@ -29,0 +30 @@
++#include "platform/common.h"
+@@ -514,0 +516,3 @@
++            if (session_count() == 0) {
++              platf::streaming_will_stop();
++            }

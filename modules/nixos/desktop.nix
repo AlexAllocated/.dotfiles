@@ -79,8 +79,8 @@ let
     }).overrideAttrs
       (oldAttrs: {
         # Linux KMS normally exposes volatile numeric plane indexes. Accept a
-        # stable connector name instead and notify our display policy when the
-        # final streaming client disconnects.
+        # stable connector name instead and notify our display policy before
+        # encoder probing and after the final streaming client disconnects.
         patches = (oldAttrs.patches or [ ]) ++ [
           ../../patches/sunshine-linux-kms-connector-and-stream-hook.patch
         ];
@@ -443,7 +443,7 @@ let
       import_graphical_environment
       selected=""
       # The persistent daemon validates its encoder before accepting clients,
-      # so briefly bring up the dummy for that probe. The global prep command
+      # so briefly bring up the dummy for that probe. The pre-probe stream hook
       # repeats this before each real stream; the last-client hook turns it off.
       if [[ -n "$configured" ]]; then
         ${ipadDisplaySessionOn}/bin/ipad-display-session-on || true
@@ -793,7 +793,7 @@ in
         openFirewall = true;
         # Keep CUDA interop available as a fallback without enabling CUDA
         # globally. The local KMS patch selects the iPad by stable connector
-        # name and exposes a final-client-disconnected hook.
+        # name and exposes pre-probe and final-client-disconnected hooks.
         package = sunshinePackage;
         settings = {
           sunshine_name = "CHEV-DESKTOP";
@@ -808,14 +808,6 @@ in
           cert = "credentials/cacert.pem";
           pkey = "credentials/cakey.pem";
           system_tray = !sunshineKms;
-        }
-        // lib.optionalAttrs (sunshineKms && cfg.ipadDisplay.connector != null) {
-          global_prep_cmd = builtins.toJSON [
-            {
-              do = "${ipadDisplaySessionOn}/bin/ipad-display-session-on";
-              undo = "${ipadDisplaySessionOff}/bin/ipad-display-session-off";
-            }
-          ];
         }
         // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
           output_name = cfg.ipadDisplay.connector;
@@ -954,6 +946,7 @@ in
         DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus";
         PULSE_SERVER = "unix:/run/user/1000/pulse/native";
         XDG_SEAT = "seat0";
+        SUNSHINE_STREAM_START_COMMAND = lib.getExe ipadDisplaySessionOn;
         SUNSHINE_STREAM_STOP_COMMAND = lib.getExe ipadDisplaySessionOff;
       };
       serviceConfig = {
