@@ -338,6 +338,13 @@ let
     # Machine output policy generated from dotfiles.compositors.outputs.
     ${mangoOutputs}
 
+    # Work around mangowm/mango#647. WezTerm can reject Mango's first tiled
+    # configure on fractionally scaled Wayland outputs, leaving its buffer at
+    # the initial 80x24 size inside a correctly sized tile. Advertising a
+    # fake-maximized state makes WezTerm honor the compositor's dimensions
+    # without changing Mango's layout.
+    windowrule=force_fakemaximize:1,appid:org.wezfurlong.wezterm
+
     # Familiar aliases layered over Mango's complete upstream starter config.
     bind=SUPER,Return,spawn,wezterm start
     bind=SUPER,space,spawn,dotfiles-shell-action launcher
