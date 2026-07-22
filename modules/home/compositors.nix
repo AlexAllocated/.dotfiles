@@ -17,6 +17,9 @@ let
   noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
     builtins.readFile ../../patches/noctalia-focus-existing-windows.patch
   );
+  noctaliaNixosNvmlPatch = pkgs.writeText "noctalia-nixos-nvml.patch" (
+    builtins.readFile ../../patches/noctalia-nixos-nvml.patch
+  );
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   wallpaper = config.dotfiles.wallpaper;
   wallpaperPaths = {
@@ -483,10 +486,14 @@ in
       package =
         inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs
           (oldAttrs: {
-            patches = (oldAttrs.patches or [ ]) ++ [ noctaliaFocusPatch ];
+            patches = (oldAttrs.patches or [ ]) ++ [
+              noctaliaFocusPatch
+              noctaliaNixosNvmlPatch
+            ];
           });
       systemd.enable = false;
       settings = {
+        system.monitor.gpu_poll_seconds = 2.0;
         shell = {
           telemetry_enabled = false;
           # Noctalia sessions use the small compositor-specific service below.
@@ -505,6 +512,37 @@ in
           mode = "dark";
           source = "builtin";
           builtin = "Gruvbox";
+        };
+        bar.default = {
+          end = [
+            "media"
+            "tray"
+            "notifications"
+            "clipboard"
+            "network"
+            "bluetooth"
+            "volume"
+            "brightness"
+            "battery"
+            "cpu_temperature"
+            "gpu_temperature"
+            "control-center"
+            "session"
+          ];
+        };
+        widget = {
+          cpu_temperature = {
+            type = "sysmon";
+            stat = "cpu_temp";
+            display = "text";
+            glyph = "cpu-temperature";
+          };
+          gpu_temperature = {
+            type = "sysmon";
+            stat = "gpu_temp";
+            display = "text";
+            glyph = "gpu-usage";
+          };
         };
         idle.behavior = {
           lock = {
@@ -573,6 +611,9 @@ in
       };
       Service = {
         ExecStart = lib.getExe desktopShellProcess;
+        # Applications launched from Noctalia remain in its cgroup. Only stop
+        # the shell itself so those applications cannot block a shell restart.
+        KillMode = "process";
         Restart = "on-failure";
         RestartSec = 1;
         Slice = "session.slice";
