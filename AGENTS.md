@@ -33,6 +33,7 @@
 ## Testing Guidelines
 
 - For Nix changes, run `nix flake check --all-systems` or `dotctl check` once Nix is available.
+- On the native NixOS workstation, finish an approved configuration change by building and switching to the complete intended `chev-desktop` generation, then verify the affected live behavior. Do not activate from a partial clean tree that omits related pending configuration. Never reboot without Alex's explicit approval.
 - For the WSL target, run `sudo nixos-rebuild build --flake .#wsl` or `sudo nixos-rebuild boot --flake .#wsl`.
 - For the standalone Linux target, run `home-manager build --flake .#linux`.
 - For container image changes, run `nix build .#docker-pocket-knife` and, when practical, `nix build .#docker-linux`.
