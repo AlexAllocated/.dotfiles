@@ -1,11 +1,13 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
 }:
 let
   cfg = config.dotfiles.compositors;
+  mangoPackage = import ../../lib/mango-package.nix { inherit inputs pkgs; };
   systemctl = lib.getExe' pkgs.systemd "systemctl";
 
   # Plasma ships its X11 and Wayland launchers in one derivation. Present a
@@ -509,6 +511,7 @@ in
 
       mango = {
         enable = true;
+        package = mangoPackage;
         # The explicitly named Noctalia session below replaces Mango's generic
         # upstream chooser entry.
         addLoginEntry = false;
@@ -523,6 +526,14 @@ in
       # This is an application-compatibility server inside Wayland sessions,
       # not a selectable X11 desktop session.
       xwayland.enable = true;
+    };
+
+    # This service does not inherit Home Manager's interactive PATH. Keep the
+    # chooser executable store-absolute so Mango capture always gets a picker.
+    xdg.portal.wlr.settings.screencast = {
+      chooser_type = "dmenu";
+      chooser_cmd = "${lib.getExe pkgs.fuzzel} -d -l 10 -p 'Select a source to share: ' --only-match";
+      max_fps = 60;
     };
 
     # The dispatcher remembers the selected target and is the one SDDM

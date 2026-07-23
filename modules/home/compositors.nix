@@ -20,6 +20,7 @@ let
   noctaliaNixosNvmlPatch = pkgs.writeText "noctalia-nixos-nvml.patch" (
     builtins.readFile ../../patches/noctalia-nixos-nvml.patch
   );
+  mangoPackage = import ../../lib/mango-package.nix { inherit inputs pkgs; };
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   wallpaper = config.dotfiles.wallpaper;
   wallpaperPaths = {
@@ -577,6 +578,7 @@ in
 
     wayland.windowManager.mango = {
       enable = true;
+      package = mangoPackage;
       systemd = {
         enable = true;
         # Assigning this option replaces the module default, so repeat the
