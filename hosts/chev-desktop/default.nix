@@ -15,6 +15,7 @@
     inputs.mango.nixosModules.mango
     inputs.noctalia.nixosModules.default
     ../../modules/nixos/desktop.nix
+    ../../modules/nixos/audio.nix
     ../../modules/nixos/compositors.nix
     ../../modules/nixos/migration-tools.nix
   ]
