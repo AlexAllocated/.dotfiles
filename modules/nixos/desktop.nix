@@ -1116,6 +1116,7 @@ in
       polychromatic
       razerOnboard
       slack
+      spotify
       teamsWebApp
       usbutils
       vim
