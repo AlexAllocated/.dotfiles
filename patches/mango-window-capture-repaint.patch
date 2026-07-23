@@ -1,0 +1,30 @@
+diff --git a/src/mango.c b/src/mango.c
+--- a/src/mango.c
++++ b/src/mango.c
+@@ -5328,15 +5328,25 @@ void printstatus(enum ipc_watch_type type) {
+ void handle_session_destroy(struct wl_listener *listener, void *data) {
+ 	struct capture_session_tracker *tracker =
+ 		wl_container_of(listener, tracker, session_destroy);
++	struct wlr_ext_image_capture_source_v1 *source = tracker->session->source;
+ 	active_capture_count--;
+ 	wl_list_remove(&tracker->session_destroy.link);
+ 
+ 	Client *c = NULL;
+ 	wl_list_for_each(c, &clients, link) {
++		if (c->image_capture_source == source && !c->iskilling && c->mon &&
++			c->scene && c->scene->node.enabled && VISIBLEON(c, c->mon)) {
++			/* Restore the physical output as this surface's frame-pacing
++			 * output after the isolated capture scene is disabled. */
++			wlr_scene_node_set_enabled(&c->scene->node, false);
++			wlr_scene_node_set_enabled(&c->scene->node, true);
++		}
++
+ 		if (c->shield_when_capture && !c->iskilling && VISIBLEON(c, c->mon)) {
+ 			arrange(c->mon, false, false);
+ 		}
+ 	}
+ 
++	request_fresh_all_monitors();
+ 	wlr_log(WLR_DEBUG, "Capture session ended, active count: %d",
+ 			active_capture_count);
+ 	free(tracker);

@@ -9,5 +9,11 @@ let
   scenefx = inputs.mango.inputs.scenefx.packages.${system}.default.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [ ../patches/scenefx-xrgb8888-screencopy.patch ];
   });
+  mango = inputs.mango.packages.${system}.mango.override { inherit scenefx; };
 in
-inputs.mango.packages.${system}.mango.override { inherit scenefx; }
+mango.overrideAttrs (old: {
+  patches = (old.patches or [ ]) ++ [
+    ../patches/mango-subsurface-window-capture.patch
+    ../patches/mango-window-capture-repaint.patch
+  ];
+})

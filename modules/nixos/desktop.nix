@@ -35,6 +35,7 @@ let
     postBuild = ''
       wrapProgram $out/opt/Discord/Discord \
         --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib \
+        --suffix VK_ADD_DRIVER_FILES : /run/opengl-driver/share/vulkan/icd.d \
         --add-flags --password-store=basic
     '';
     inherit (pkgs.discord) meta passthru;

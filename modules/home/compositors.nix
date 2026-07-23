@@ -566,6 +566,25 @@ in
       };
     };
 
+    # Discord's in-app autostart toggle writes the resolved package executable
+    # into this file. That bypasses the workstation's NVIDIA wrapper after a
+    # package update, leaving Niri's DMA-BUF screen-cast stream unnegotiated.
+    xdg.configFile."autostart/discord.desktop" = {
+      # A Home Manager backup would still match the XDG autostart generator's
+      # desktop-file glob and launch the stale executable alongside this one.
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Discord
+        Comment=All-in-one cross-platform voice and text chat for gamers
+        Icon=discord
+        Exec=/run/current-system/sw/bin/discord
+        Terminal=false
+        X-GNOME-Autostart-enabled=true
+      '';
+    };
+
     xdg.configFile."niri/config.kdl".text = ''
       // Output policy is generated from dotfiles.compositors.outputs.
       ${niriOutputs}

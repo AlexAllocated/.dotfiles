@@ -8,6 +8,18 @@
 let
   cfg = config.dotfiles.compositors;
   mangoPackage = import ../../lib/mango-package.nix { inherit inputs pkgs; };
+  niriPackage = pkgs.niri.overrideAttrs (oldAttrs: {
+    patches = (oldAttrs.patches or [ ]) ++ [
+      # Niri 26.04 advertises only DMA-BUF buffers, while Discord requests
+      # ordinary shared-memory frames. Backport upstream's SHM fallback so
+      # Discord works without replacing the GNOME portal and losing Niri's
+      # per-window capture support.
+      (pkgs.fetchurl {
+        url = "https://github.com/niri-wm/niri/compare/dd1c3bcb9f1ef416df33ffa22d1d9bcee1398e7d...2ab59b90d55afbbe362a63e2a061afe4b524d8c4.diff";
+        hash = "sha256-gkQnj931BC5/ttf81UVYOi0VRQvXzJN3CA8osUA7iXU=";
+      })
+    ];
+  });
   systemctl = lib.getExe' pkgs.systemd "systemctl";
 
   # Plasma ships its X11 and Wayland launchers in one derivation. Present a
@@ -504,6 +516,7 @@ in
     programs = {
       niri = {
         enable = true;
+        package = niriPackage;
         # Dolphin remains the desktop file manager; use the GTK portal instead
         # of pulling Nautilus into the workstation merely for file pickers.
         useNautilus = false;

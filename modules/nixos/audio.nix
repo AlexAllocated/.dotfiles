@@ -590,95 +590,6 @@ let
     };
   };
 
-  # Select this source in Discord only when friends should hear the microphone
-  # plus Game and Music. Comms is intentionally excluded to prevent echo.
-  chatMix = {
-    name = "libpipewire-module-loopback";
-    flags = [ "nofail" ];
-    args = {
-      "node.description" = "Chat Mix";
-      "audio.channels" = 2;
-      "audio.position" = stereo;
-
-      "capture.props" = {
-        "node.name" = "creator.bus.chat";
-        "node.description" = "Chat Mix Input";
-        "media.class" = "Audio/Sink";
-        "node.virtual" = true;
-        "priority.session" = 50;
-      };
-
-      "playback.props" = {
-        "node.name" = "creator.mic.chat";
-        "node.description" = "Chat Mix";
-        "media.class" = "Audio/Source";
-        "node.virtual" = true;
-        "priority.session" = 50;
-      };
-    };
-  };
-
-  mkChatRoute =
-    {
-      id,
-      source,
-      captureSink ? false,
-      mono ? false,
-      remixCapture ? false,
-    }:
-    {
-      name = "libpipewire-module-loopback";
-      flags = [ "nofail" ];
-      args = {
-        "node.description" = "Chat route ${id}";
-        "audio.position" = if mono then [ "MONO" ] else stereo;
-
-        "capture.props" = {
-          "node.name" = "creator.route.chat-${id}.capture";
-          "target.object" = source;
-          "node.passive" = true;
-          "node.dont-fallback" = true;
-          "stream.dont-remix" = !remixCapture;
-        }
-        // (
-          if captureSink then
-            {
-              "stream.capture.sink" = true;
-            }
-          else
-            { }
-        );
-
-        "playback.props" = {
-          "node.name" = "creator.route.chat-${id}.playback";
-          "target.object" = "creator.bus.chat";
-          "node.passive" = true;
-          "node.dont-fallback" = true;
-          # Upmix the mono microphone into the stereo chat bus.
-          "stream.dont-remix" = false;
-        };
-      };
-    };
-
-  chatRoutes = [
-    (mkChatRoute {
-      id = "clean-mic";
-      source = "creator.mic.clean";
-      mono = true;
-    })
-    (mkChatRoute {
-      id = "game";
-      source = "creator.bus.game";
-      captureSink = true;
-      # Game advertises 7.1 so the stereo chat source needs a downmix.
-      remixCapture = true;
-    })
-    (mkChatRoute {
-      id = "music";
-      source = "creator.bus.music";
-      captureSink = true;
-    })
-  ];
 in
 {
   environment.systemPackages = [ spatialAudioControl ];
@@ -965,9 +876,7 @@ in
           priority = 50;
         })
         cleanMic
-        chatMix
-      ]
-      ++ chatRoutes;
+      ];
     };
 
     # Only known communications and music clients enter a bus automatically.
