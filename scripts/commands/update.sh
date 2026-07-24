@@ -2,7 +2,7 @@
 
 run_neovim_automation() {
 	if command_exists mise; then
-		mise exec -- nvim "$@"
+		mise exec -C "$REPO_ROOT" -- nvim "$@"
 	else
 		nvim "$@"
 	fi
