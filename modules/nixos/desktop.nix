@@ -100,6 +100,7 @@ let
       iconUrl,
       iconHash,
       startupWMClass,
+      categories ? [ "Office" ],
     }:
     let
       icon = pkgs.fetchurl {
@@ -125,10 +126,10 @@ let
           desktopName
           comment
           startupWMClass
+          categories
           ;
         exec = "${launcher}/bin/${name} %U";
         icon = icon;
-        categories = [ "Office" ];
         terminal = false;
       };
     in
@@ -156,6 +157,34 @@ let
     iconUrl = "https://teams.microsoft.com/favicon.ico";
     iconHash = "sha256-OX7d9E4b9+VXsLT1Fz2pXY/YMrby8Q1uQcF9xTnVqCI=";
     startupWMClass = "Microsoft Teams";
+  };
+  twitchWebApp = mkChromeWebApp {
+    name = "twitch";
+    desktopName = "Twitch";
+    comment = "Watch live streams and chat";
+    url = "https://www.twitch.tv/";
+    iconUrl = "https://upload.wikimedia.org/wikipedia/commons/d/d3/Twitch_Glitch_Logo_Purple.svg";
+    iconHash = "sha256-fRisDEuDaFX5E9UeiOl8s88uDeq+iyHvXHRKXb5A4Hg=";
+    startupWMClass = "Twitch";
+    categories = [
+      "AudioVideo"
+      "Video"
+      "Network"
+    ];
+  };
+  youtubeWebApp = mkChromeWebApp {
+    name = "youtube";
+    desktopName = "YouTube";
+    comment = "Watch videos and live streams";
+    url = "https://www.youtube.com/";
+    iconUrl = "https://www.gstatic.com/youtube/img/branding/favicon/favicon_192x192_v2.png";
+    iconHash = "sha256-Ngx9QctP6rxSmceeB9DlH3+RD5OBEiCl2Cond5Kz6TU=";
+    startupWMClass = "YouTube";
+    categories = [
+      "AudioVideo"
+      "Video"
+      "Network"
+    ];
   };
   ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {
     clean = true;
@@ -1227,17 +1256,20 @@ in
       mangohud
       nvtopPackages.nvidia
       pciutils
+      plex-desktop
       pulseaudio
       polychromatic
       razerOnboard
       slack
       spotify
       teamsWebApp
+      twitchWebApp
       usbutils
       vim
       vulkan-tools
       wget
       wl-clipboard
+      youtubeWebApp
     ];
 
     assertions = [
