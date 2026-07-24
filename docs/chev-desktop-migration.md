@@ -24,18 +24,18 @@ Sunshine pairing secrets. No secret is embedded in the ISO or repository.
 nix build path:.#chev-installer-iso
 ls -lh result/iso/
 
-# Builds the ISO, verifies its NIXOS_ISO volume ID and classic findiso-capable
-# initrd, stages the EFI/kernel files plus the unchanged ISO as a FAT32 file,
-# and compares the copied ISO, GRUB config, and EFI loader byte-for-byte.
+# Builds the ISO, verifies its NIXOS_ISO volume ID, mirrors its filesystem into
+# a NIXOS_ISO-labeled FAT32 image, and compares the copied squashfs, GRUB
+# config, and EFI loader byte-for-byte.
 nix build path:.#chev-installer-fat32-check
 ```
 
-The image volume ID is `NIXOS_ISO`. The installer ISO deliberately uses the
-classic stage-1 initrd because it implements `findiso=`. The internal FAT32
-partition stores the unchanged ISO as `nixos-chev-internal.iso`, plus the
-extracted `EFI` and `boot` directories needed to start it. Its copied GRUB
-config adds a literal `findiso=/nixos-chev-internal.iso` argument to every
-Linux entry. A read-only OVMF rehearsal can boot the built ISO without exposing
+The image volume ID is `NIXOS_ISO`. The installer uses the supported systemd
+initrd and mounts `/iso` by that label with filesystem auto-detection. The
+internal FAT32 partition therefore mirrors the complete extracted ISO
+filesystem under the same label, while the original ISO remains directly
+bootable as ISO9660. Neither path relies on the deprecated classic initrd or
+`findiso=`. A read-only OVMF rehearsal can boot the built ISO without exposing
 any host disk:
 
 ```sh

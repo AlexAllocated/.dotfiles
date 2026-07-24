@@ -8,12 +8,21 @@
   imports = [ ./migration-tools.nix ];
 
   boot = {
-    # The internal installer stores the verified ISO as a regular file on its
-    # FAT32 ESP. The classic stage-1 initrd implements the generated GRUB
-    # findiso= path; the systemd initrd currently ignores that argument and
-    # attempts to mount the FAT volume itself as ISO9660.
-    initrd.systemd.enable = lib.mkForce false;
+    # The internal installer mirrors the ISO filesystem onto a FAT32
+    # partition with the same NIXOS_ISO label. The systemd initrd can mount
+    # either that partition or the original ISO once /iso uses auto detection.
+    initrd = {
+      availableKernelModules = [ "vfat" ];
+      systemd.enable = true;
+    };
     zfs.forceImportRoot = false;
+  };
+
+  lib.isoFileSystems."/iso" = lib.mkForce {
+    device = "/dev/disk/by-label/NIXOS_ISO";
+    fsType = "auto";
+    neededForBoot = true;
+    noCheck = true;
   };
 
   networking = {

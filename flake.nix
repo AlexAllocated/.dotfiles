@@ -348,13 +348,11 @@
               {
                 nativeBuildInputs = with pkgs; [
                   coreutils
-                  cpio
                   dosfstools
                   findutils
                   gnugrep
                   mtools
                   xorriso
-                  zstd
                 ];
               }
               ''
@@ -371,31 +369,25 @@
                   exit 1
                 }
                 test -f extracted/EFI/BOOT/BOOTX64.EFI
-
-                iso_bytes="$(stat --format '%s' "$iso_path")"
-                ((iso_bytes < 4294967295)) || {
-                  echo "ISO is too large to store as one FAT32 file: $iso_bytes bytes" >&2
-                  exit 1
-                }
-
-                initrd_path="$(find extracted/boot/nix/store -path '*/initrd' -type f -print -quit)"
-                test -n "$initrd_path"
-                mkdir initrd-tree
-                (cd initrd-tree && zstd -dc "../$initrd_path" | cpio -idm --quiet)
-                init_link="$(readlink initrd-tree/init)"
-                [[ "$init_link" == /nix/store/* ]]
-                init_script="initrd-tree$init_link"
-                test -f "$init_script"
-                grep -F 'findiso=*' "$init_script"
-                grep -F 'isoPath=' "$init_script"
+                test -f extracted/nix-store.squashfs
+                test "${
+                  if self.nixosConfigurations.chev-installer.config.boot.initrd.systemd.enable then
+                    "systemd"
+                  else
+                    "scripted"
+                }" = systemd
+                test "${
+                  self.nixosConfigurations.chev-installer.config.fileSystems."/iso".device
+                }" = /dev/disk/by-label/NIXOS_ISO
+                test "${self.nixosConfigurations.chev-installer.config.fileSystems."/iso".fsType}" = auto
 
                 mkdir staged
-                cp -a extracted/EFI extracted/boot staged/
-                cp "$iso_path" staged/nixos-chev-internal.iso
-                chmod u+w staged/EFI/BOOT
-                chmod u+w staged/EFI/BOOT/grub.cfg
-                sed -i '/^[[:space:]]*linux / s# init=# findiso=/nixos-chev-internal.iso init=#' staged/EFI/BOOT/grub.cfg
-                grep -F 'findiso=/nixos-chev-internal.iso' staged/EFI/BOOT/grub.cfg
+                cp -a extracted/. staged/
+                test ! -e staged/nixos-chev-internal.iso
+                if grep -R -F 'findiso=/nixos-chev-internal.iso' staged/EFI/BOOT; then
+                  echo "GRUB still references the deprecated nested ISO layout" >&2
+                  exit 1
+                fi
 
                 payload_bytes="$(du -sb staged | cut -f1)"
                 image_bytes=$((payload_bytes + payload_bytes / 4 + 128 * 1024 * 1024))
@@ -407,10 +399,10 @@
                 mkdir copied
                 mcopy -i fat32.img ::/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
                 mcopy -i fat32.img ::/EFI/BOOT/grub.cfg copied/grub.cfg
-                mcopy -i fat32.img ::/nixos-chev-internal.iso copied/nixos-chev-internal.iso
+                mcopy -i fat32.img ::/nix-store.squashfs copied/nix-store.squashfs
                 cmp staged/EFI/BOOT/BOOTX64.EFI copied/BOOTX64.EFI
                 cmp staged/EFI/BOOT/grub.cfg copied/grub.cfg
-                cmp staged/nixos-chev-internal.iso copied/nixos-chev-internal.iso
+                cmp staged/nix-store.squashfs copied/nix-store.squashfs
                 touch "$out"
               '';
         }
