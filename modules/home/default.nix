@@ -14,6 +14,7 @@
     ./wallpaper.nix
     ./plasma.nix
     ./compositors.nix
+    ./gaming.nix
     ./razer.nix
     ./windows.nix
   ];

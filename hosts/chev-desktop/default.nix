@@ -93,6 +93,10 @@
       };
       dotfiles.profile = profile;
       dotfiles.wallpaper.ipad.connector = config.dotfiles.desktop.ipadDisplay.connector;
+      dotfiles.gaming = {
+        steamLibrary = "/data/games/SteamLibrary";
+        haloCampaignEvolved.enable = true;
+      };
       dotfiles.compositors.outputs = {
         DP-1 = {
           mode = "3440x1440@160";

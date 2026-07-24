@@ -1050,7 +1050,13 @@ in
           default_area = "navbar";
         };
       };
-      gamemode.enable = true;
+      gamemode = {
+        enable = true;
+        settings.general = {
+          desiredgov = "performance";
+          disable_splitlock = 1;
+        };
+      };
       gamescope.enable = true;
       nix-ld.enable = true;
       obs-studio = {
@@ -1090,6 +1096,23 @@ in
         "wheel"
       ];
     };
+
+    # GameMode's upstream helper policies default to denying every caller.
+    # Permit only the declared desktop user to change the CPU governor and
+    # split-lock mitigation through GameMode's exact, packaged helpers.
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (
+          subject.user == ${builtins.toJSON cfg.user}
+          && (
+            action.id == "com.feralinteractive.GameMode.governor-helper"
+            || action.id == "com.feralinteractive.GameMode.procsys-helper"
+          )
+        ) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
 
     environment.systemPackages = with pkgs; [
       age
