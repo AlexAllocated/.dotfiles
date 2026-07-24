@@ -554,16 +554,16 @@ let
         nodes = [
           {
             type = "ladspa";
-            name = "deepfilter";
-            plugin = "libdeep_filter_ladspa";
-            label = "deep_filter_mono";
-            # A medium limit removes room/computer noise without making speech
-            # sound unnaturally gated. This is the one knob worth tuning later.
-            control."Attenuation Limit (dB)" = 24.0;
+            name = "rnnoise";
+            plugin = "librnnoise_ladspa";
+            label = "noise_suppressor_mono";
+            # Keep the gate conservative enough to preserve quiet speech while
+            # removing the steady computer and room noise around the desk.
+            control."VAD Threshold (%)" = 50.0;
           }
         ];
-        inputs = [ "deepfilter:Audio In" ];
-        outputs = [ "deepfilter:Audio Out" ];
+        inputs = [ "rnnoise:Input" ];
+        outputs = [ "rnnoise:Output" ];
       };
 
       # The Yeti presents duplicate stereo capture channels. Process only FL
@@ -864,7 +864,7 @@ in
   };
 
   services.pipewire = {
-    extraLadspaPackages = [ pkgs.deepfilternet ];
+    extraLadspaPackages = [ pkgs.rnnoise-plugin ];
 
     extraConfig.pipewire."90-creator-audio" = {
       "context.modules" = [

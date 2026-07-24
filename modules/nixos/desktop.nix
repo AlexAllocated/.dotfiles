@@ -29,12 +29,17 @@ let
     name = "discord-nvidia-${pkgs.discord.version}";
     paths = [ pkgs.discord ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
-    # Discord probes CUDA/NVENC for hardware-accelerated screen sharing by
-    # dlopening the NVIDIA driver libraries at runtime. Plasma auto-login has
-    # no PAM password with which to unlock KWallet, so avoid its setup prompt.
+    # Discord's native voice module loads libva itself before it advertises the
+    # Linux VA-API WebRTC decoder. Expose both libva and the NVIDIA driver,
+    # while retaining CUDA/NVENC for hardware-accelerated screen sharing.
+    # Plasma auto-login has no PAM password with which to unlock KWallet, so
+    # avoid its setup prompt.
     postBuild = ''
       wrapProgram $out/opt/Discord/Discord \
-        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib \
+        --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libva ]}:/run/opengl-driver/lib" \
+        --set LIBVA_DRIVER_NAME nvidia \
+        --set LIBVA_DRIVERS_PATH /run/opengl-driver/lib/dri \
+        --set NVD_BACKEND direct \
         --suffix VK_ADD_DRIVER_FILES : /run/opengl-driver/share/vulkan/icd.d \
         --add-flags --password-store=basic
     '';
