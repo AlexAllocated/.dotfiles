@@ -77,3 +77,119 @@ index fe30411..3e460e6 100644
      const DesktopAction* chosen = nullptr;
      if (!result.desktopActionId.empty()) {
        for (const auto& action : entry.actions) {
+diff --git a/src/app/application_ui.cpp b/src/app/application_ui.cpp
+index 9efe97e..6477094 100644
+--- a/src/app/application_ui.cpp
++++ b/src/app/application_ui.cpp
+@@ -659,4 +659,6 @@
+ void Application::initNotificationAndOsd() {
+-  m_notificationToast.initialize(m_wayland, &m_configService, &m_notificationManager, &m_renderContext, &m_httpClient);
++  m_notificationToast.initialize(
++      m_wayland, &m_configService, &m_notificationManager, &m_compositorPlatform, &m_renderContext, &m_httpClient
++  );
+   m_configService.addReloadCallback([this]() { m_notificationToast.onConfigReload(); });
+   auto applyNotificationFilterConfig = [this]() {
+diff --git a/src/shell/notification/notification_toast.h b/src/shell/notification/notification_toast.h
+index 0942550..e29ca44 100644
+--- a/src/shell/notification/notification_toast.h
++++ b/src/shell/notification/notification_toast.h
+@@ -14,3 +14,4 @@
++class CompositorPlatform;
+ class ConfigService;
+ class HttpClient;
+ class Input;
+@@ -40,6 +41,6 @@ public:
+   void initialize(
+       WaylandConnection& wayland, ConfigService* config, NotificationManager* notifications,
+-      RenderContext* renderContext, HttpClient* httpClient = nullptr
++      CompositorPlatform* platform, RenderContext* renderContext, HttpClient* httpClient = nullptr
+   );
+   void onConfigReload();
+   void onOutputChange();
+@@ -56,6 +57,7 @@ private:
+   struct PopupEntry {
+     uint32_t notificationId = 0;
+     std::string appName;
++    std::optional<std::string> desktopEntry;
+     std::string summary;
+     std::string body;
+     std::vector<std::string> actions;
+@@ -189,5 +191,6 @@ private:
+   WaylandConnection* m_wayland = nullptr;
+   ConfigService* m_config = nullptr;
+   NotificationManager* m_notifications = nullptr;
++  CompositorPlatform* m_platform = nullptr;
+   RenderContext* m_renderContext = nullptr;
+   HttpClient* m_httpClient = nullptr;
+diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
+index 79c4ca7..52005cc 100644
+--- a/src/shell/notification/notification_toast.cpp
++++ b/src/shell/notification/notification_toast.cpp
+@@ -3,3 +3,4 @@
++#include "compositors/compositor_platform.h"
+ #include "config/config_service.h"
+ #include "config/config_types.h"
+ #include "core/deferred_call.h"
+@@ -501,9 +502,10 @@
+ void NotificationToast::initialize(
+-    WaylandConnection& wayland, ConfigService* config, NotificationManager* notifications, RenderContext* renderContext,
+-    HttpClient* httpClient
++    WaylandConnection& wayland, ConfigService* config, NotificationManager* notifications,
++    CompositorPlatform* platform, RenderContext* renderContext, HttpClient* httpClient
+ ) {
+   m_wayland = &wayland;
+   m_config = config;
+   m_notifications = notifications;
++  m_platform = platform;
+   m_renderContext = renderContext;
+   m_httpClient = httpClient;
+@@ -612,6 +614,7 @@
+         const int prevToastBodyLines = m_entries[i].toastBodyLines;
+         const bool previouslyPlaced = hasPlacement(m_entries[i]);
+         m_entries[i].appName = notificationDisplayAppName(n);
++        m_entries[i].desktopEntry = n.desktopEntry;
+         m_entries[i].summary = n.summary;
+         m_entries[i].body = n.body;
+         m_entries[i].actions = n.actions;
+@@ -828,6 +831,7 @@
+   PopupEntry entry;
+   entry.notificationId = n.id;
+   entry.appName = notificationDisplayAppName(n);
++  entry.desktopEntry = n.desktopEntry;
+   entry.summary = n.summary;
+   entry.body = n.body;
+   entry.actions = n.actions;
+@@ -2184,17 +2188,31 @@
+   auto viewport = std::make_unique<InputArea>();
++  std::string notificationAppId = StringUtils::toLower(entry.desktopEntry.value_or(entry.appName));
++  if (notificationAppId.ends_with(".desktop")) {
++    notificationAppId.resize(notificationAppId.size() - std::string_view(".desktop").size());
++  }
+   viewport->setAcceptedButtons(InputArea::buttonMask({BTN_LEFT, BTN_RIGHT}));
+-  viewport->setOnClick([this, id = entry.notificationId,
++  viewport->setOnClick([this, id = entry.notificationId, appId = std::move(notificationAppId),
+                         hasDefaultAction = !entry.actions.empty()
+                             && entry.actions.size() >= 2
+                             && entry.actions[0] == "default"](const InputArea::PointerData& data) {
+     if (data.button == BTN_RIGHT) {
+       requestClose(id, CloseReason::Dismissed);
+     } else if (data.button == BTN_LEFT && hasDefaultAction) {
+       if (m_notifications != nullptr) {
+-        if (!m_notifications->invokeAction(id, "default", true)) {
++        const bool invoked = m_notifications->invokeAction(id, "default", true);
++        if (!invoked) {
+           kLog.warn("notification toast: failed to invoke default action for #{}", id);
++        } else if (m_platform != nullptr && !StringUtils::isBlank(appId)) {
++          auto windows = m_platform->windowsForApp(appId, appId);
++          if (!windows.empty()) {
++            const auto preferred =
++                std::ranges::find_if(windows.rbegin(), windows.rend(), [](const ToplevelInfo& window) {
++                  return StringUtils::toLower(window.title) != "picture-in-picture";
++                });
++            m_platform->activateToplevelInfo(preferred != windows.rend() ? *preferred : windows.back());
++          }
+         }
+       }
+     }
+   });
+   viewport->setCursorShape(WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT);

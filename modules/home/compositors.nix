@@ -89,6 +89,17 @@ let
 
   niriOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderNiriOutput cfg.outputs);
   mangoOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderMangoOutput cfg.outputs);
+  niriSharedConfig = builtins.readFile (sourceRoot + "/wayland/niri.kdl");
+  niriConfigWithAltAliases = lib.concatMapStringsSep "\n" (
+    line:
+    let
+      modBinding = builtins.match "([[:space:]]*)Mod\\+(.*)" line;
+    in
+    if modBinding == null then
+      line
+    else
+      "${line}\n${builtins.elemAt modBinding 0}Alt+${builtins.elemAt modBinding 1}"
+  ) (lib.splitString "\n" niriSharedConfig);
 
   desktopShellProcess = pkgs.writeShellApplication {
     name = "dotfiles-desktop-shell-process";
@@ -592,7 +603,9 @@ in
       spawn-at-startup ${builtins.toJSON (lib.getExe startDesktopShell)}
       spawn-at-startup ${builtins.toJSON (lib.getExe startPolkitAgent)}
 
-      ${builtins.readFile (sourceRoot + "/wayland/niri.kdl")}
+      // Every compositor Mod binding also accepts Alt. Explicit Super chords
+      // keep their literal modifiers so multi-modifier bindings remain unique.
+      ${niriConfigWithAltAliases}
     '';
 
     wayland.windowManager.mango = {

@@ -1,7 +1,22 @@
 local wezterm = require("wezterm")
 local config = require("config")
+local act = wezterm.action
 
 config.mouse_bindings = {
+	-- Keep one wheel step predictable instead of scaling it by the raw
+	-- high-resolution wheel delta reported by the mouse.
+	{
+		event = { Down = { streak = 1, button = { WheelUp = 1 } } },
+		mods = "NONE",
+		action = act.ScrollByLine(-5),
+		alt_screen = false,
+	},
+	{
+		event = { Down = { streak = 1, button = { WheelDown = 1 } } },
+		mods = "NONE",
+		action = act.ScrollByLine(5),
+		alt_screen = false,
+	},
 	-- Copy and paste with right click depending on selection.
 	{
 		event = { Down = { streak = 1, button = "Right" } },
