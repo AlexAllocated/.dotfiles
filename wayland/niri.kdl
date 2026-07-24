@@ -13,8 +13,9 @@ input {
 }
 
 layout {
-    gaps 12
-    center-focused-column "never"
+    gaps 48
+    center-focused-column "on-overflow"
+    always-center-single-column
 
     preset-column-widths {
         proportion 0.33333
