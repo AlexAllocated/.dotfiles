@@ -33,18 +33,22 @@ let
   renderNiriOutput =
     name: output:
     let
-      body =
-        if !output.enable then
-          "  off"
-        else
-          lib.concatStringsSep "\n" (
-            lib.optional (output.mode != null) "  mode ${builtins.toJSON output.mode}"
-            ++ [ "  scale ${toString output.scale}" ]
-            ++ lib.optional output.focusAtStartup "  focus-at-startup"
-            ++ lib.optional (output.position != null) (
-              "  position x=${toString output.position.x} y=${toString output.position.y}"
+      body = lib.concatStringsSep "\n" (
+        (
+          if !output.enable then
+            [ "  off" ]
+          else
+            (
+              lib.optional (output.mode != null) "  mode ${builtins.toJSON output.mode}"
+              ++ [ "  scale ${toString output.scale}" ]
+              ++ lib.optional output.focusAtStartup "  focus-at-startup"
+              ++ lib.optional (output.position != null) (
+                "  position x=${toString output.position.x} y=${toString output.position.y}"
+              )
             )
-          );
+        )
+        ++ lib.optional (output.niriGaps != null) "  layout { gaps ${toString output.niriGaps}; }"
+      );
     in
     ''
       output ${builtins.toJSON name} {
@@ -475,6 +479,11 @@ in
               default = false;
               description = "Whether niri should focus this output when the session starts.";
             };
+            niriGaps = lib.mkOption {
+              type = lib.types.nullOr lib.types.number;
+              default = null;
+              description = "Optional Niri gaps override in logical pixels for this output.";
+            };
           };
         }
       );
@@ -700,8 +709,9 @@ in
     assertions = lib.mapAttrsToList (name: output: {
       assertion =
         builtins.match "^[A-Za-z0-9._-]+$" name != null
-        && (output.mode == null || builtins.match "^[0-9]+x[0-9]+(@[0-9.]+)?$" output.mode != null);
-      message = "dotfiles.compositors.outputs.${name} has an unsafe connector name or mode";
+        && (output.mode == null || builtins.match "^[0-9]+x[0-9]+(@[0-9.]+)?$" output.mode != null)
+        && (output.niriGaps == null || output.niriGaps >= 0);
+      message = "dotfiles.compositors.outputs.${name} has an unsafe connector name, mode, or Niri gaps value";
     }) cfg.outputs;
   };
 }

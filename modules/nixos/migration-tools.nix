@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  migrationPkgs ? toolPkgs,
   pkgs,
   toolPkgs ? pkgs,
   ...
@@ -8,7 +9,7 @@
 let
   cfg = config.dotfiles.migrationTools;
   source = toString cfg.source;
-  codexPackage = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
+  codexPackage = if builtins.hasAttr "codex" migrationPkgs then migrationPkgs.codex else pkgs.codex;
   rescueWebFont =
     pkgs.runCommand "bigblue-terminal-webfont" { nativeBuildInputs = [ pkgs.woff2 ]; }
       ''

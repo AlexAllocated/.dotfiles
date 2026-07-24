@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    migration-nixpkgs.url = "github:NixOS/nixpkgs/421eebfd0ec7bccd4abe826ce62d7e6e83129493";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -39,6 +40,7 @@
       self,
       nixpkgs,
       nixpkgs-unstable,
+      migration-nixpkgs,
       home-manager,
       nixos-wsl,
       nix-darwin,
@@ -68,6 +70,13 @@
       mkToolPkgs =
         system:
         import nixpkgs-unstable {
+          inherit system;
+          config.allowUnfree = true;
+        };
+
+      mkMigrationPkgs =
+        system:
+        import migration-nixpkgs {
           inherit system;
           config.allowUnfree = true;
         };
@@ -203,6 +212,7 @@
           self
           user
           ;
+        migrationPkgs = mkMigrationPkgs system;
         toolPkgs = mkToolPkgs system;
       };
 

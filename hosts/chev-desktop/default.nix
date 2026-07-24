@@ -112,6 +112,7 @@
           enable = false;
           mode = "2732x2048@60";
           scale = 1.75;
+          niriGaps = 24;
           # Keep the invisible remote desktop beside, rather than on top of,
           # the LG and leave startup focus on the physical monitor.
           position = {
