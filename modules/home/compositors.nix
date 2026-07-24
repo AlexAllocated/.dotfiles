@@ -640,8 +640,23 @@ in
     systemd.user.services.dotfiles-desktop-shell = {
       Unit = {
         Description = "Selected shell for experimental Wayland sessions";
-        PartOf = [ "graphical-session.target" ];
-        After = [ "graphical-session-pre.target" ];
+        # Noctalia 5.0 beta does not yet rebuild its device registry after
+        # PipeWire or WirePlumber restarts. Refresh the shell with the audio
+        # services so its output picker cannot retain dead pre-restart nodes.
+        PartOf = [
+          "graphical-session.target"
+          "pipewire.service"
+          "wireplumber.service"
+        ];
+        After = [
+          "graphical-session-pre.target"
+          "pipewire.service"
+          "wireplumber.service"
+        ];
+        Wants = [
+          "pipewire.service"
+          "wireplumber.service"
+        ];
       };
       Service = {
         ExecStart = lib.getExe desktopShellProcess;
