@@ -6,6 +6,17 @@
   ...
 }:
 let
+  firefoxImageMimeTypes = [
+    "image/avif"
+    "image/bmp"
+    "image/gif"
+    "image/jpeg"
+    "image/png"
+    "image/svg+xml"
+    "image/tiff"
+    "image/webp"
+    "image/x-icon"
+  ];
   firefoxExternalLinkHandler = pkgs.writeShellApplication {
     name = "dotfiles-open-firefox-link";
     runtimeInputs = [
@@ -159,19 +170,23 @@ in
             "WebBrowser"
           ];
           mimeType = [
+            "application/xhtml+xml"
             "text/html"
             "x-scheme-handler/http"
             "x-scheme-handler/https"
-          ];
+          ]
+          ++ firefoxImageMimeTypes;
         };
       };
       mimeApps = lib.mkIf (profile == "nixos-desktop") {
         enable = true;
         defaultApplications = {
+          "application/xhtml+xml" = [ "firefox-focused.desktop" ];
           "text/html" = [ "firefox-focused.desktop" ];
           "x-scheme-handler/http" = [ "firefox-focused.desktop" ];
           "x-scheme-handler/https" = [ "firefox-focused.desktop" ];
-        };
+        }
+        // lib.genAttrs firefoxImageMimeTypes (_: [ "firefox-focused.desktop" ]);
       };
     };
 
