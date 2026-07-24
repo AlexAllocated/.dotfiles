@@ -2,7 +2,26 @@
 
 run_neovim_automation() {
 	if command_exists mise; then
-		mise exec -C "$REPO_ROOT" -- nvim "$@"
+		local nvim_xdg_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+		local nvim_xdg_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+		local nvim_xdg_data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+		local nvim_xdg_state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+
+		# The update candidate gives Neovim an isolated XDG environment. Keep
+		# those paths away from Mise itself so it can read the persistent trust
+		# database, then restore them only for the Neovim child process.
+		env \
+			-u XDG_CACHE_HOME \
+			-u XDG_CONFIG_HOME \
+			-u XDG_DATA_HOME \
+			-u XDG_STATE_HOME \
+			mise exec -C "$REPO_ROOT" -- \
+			env \
+			XDG_CACHE_HOME="$nvim_xdg_cache_home" \
+			XDG_CONFIG_HOME="$nvim_xdg_config_home" \
+			XDG_DATA_HOME="$nvim_xdg_data_home" \
+			XDG_STATE_HOME="$nvim_xdg_state_home" \
+			nvim "$@"
 	else
 		nvim "$@"
 	fi
