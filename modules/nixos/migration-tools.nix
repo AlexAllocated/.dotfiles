@@ -222,7 +222,6 @@ in
     ];
 
     environment.systemPackages = [
-      codexPackage
       resumeMigration
       checkpointMigration
       pkgs.tmux
@@ -231,7 +230,10 @@ in
       exportMachineManifest
       validateMachineManifest
     ]
-    ++ lib.optional cfg.installCommand installChevDesktop
+    ++ lib.optionals cfg.installCommand [
+      codexPackage
+      installChevDesktop
+    ]
     ++ lib.optionals cfg.rescue.enable [
       rescueRemoteOn
       rescueRemoteOff
