@@ -83,13 +83,9 @@ The installer provides:
   immediately. The installer rescue profile prevents sleep, sends WebSocket
   keepalives, uses a mobile viewport with larger text and an embedded
   BigBlueTerm Nerd Font.
-  The native `chev-desktop` profile temporarily starts the same unauthenticated
-  service at boot on port 7681 and attaches every browser to the dedicated
-  `recovery` tmux session. Its tmux server is a separate system service, so a
-  browser or ttyd restart cannot kill the shell or Codex process. Mouse reporting
-  and the terminal alternate screen are disabled for that session so normal
-  touch scrolling reaches browser scrollback. Attach locally with
-  `tmux -S /run/chev-ttyd-rescue-tmux/tmux.sock attach -t recovery`.
+  The installed `chev-desktop` profile does not expose ttyd. Local and SSH
+  clients instead share one system-owned tmux server, so compositor, terminal,
+  and user-service restarts cannot kill its shells or Codex processes.
 - `reboot-windows`: after the operator types `WINDOWS`, select the unique
   Windows entry through systemd-boot or UEFI `BootNext`, then reboot.
 - `recover-windows-fallback`: after an interrupted `bootctl`, validate the
@@ -270,11 +266,15 @@ ipad-display-off --restore-output DP-1
 ```
 
 The native profile runs one system-owned Sunshine service beneath SDDM and the
-graphical sessions. Normal desktop startup leaves the dummy disabled, so the
-pointer and workspaces cannot disappear into an invisible second display.
-Sunshine enables and sizes DP-2 before a Moonlight stream starts, then disables
-it when the final client disconnects. The greeter may retain the dummy because
-it has no user desktop or pointer layout and doing so preserves remote login.
+graphical sessions. Sunshine enables and sizes DP-2 before a Moonlight stream
+starts, verifies that both DRM and the active compositor actually attached it,
+then disables it when the final client disconnects and another display remains
+active. The compositor-level check also prevents Sunshine's encoder probe from
+winning the NVIDIA DRM-device race during a graphical-session handoff. If the
+LG is disconnected or asleep, the dummy remains enabled rather than leaving
+the compositor headless; this preserves remote recovery and avoids asking the
+NVIDIA driver to recreate Niri's final DRM output. The greeter may retain the
+dummy for the same recovery reason.
 
 The pinned Sunshine build accepts the stable Linux connector name `DP-2`
 instead of the upstream KMS plane-list number. That matters because the dummy's

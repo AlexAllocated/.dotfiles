@@ -252,6 +252,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.gnused
+      pkgs.jq
       pkgs.niri
       pkgs.systemd
       pkgs.wlr-randr
@@ -259,10 +260,42 @@ let
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
 
+      drm_connector_ready() {
+        local directory
+        for directory in /sys/class/drm/card*-"$connector"; do
+          [[ -r "$directory/enabled" && -r "$directory/status" ]] || continue
+          [[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]] \
+            && return 0
+        done
+        return 1
+      }
+
+      session_output_ready() {
+        local desktop="$1"
+        drm_connector_ready || return 1
+
+        case "$desktop" in
+          niri)
+            [[ -n "''${NIRI_SOCKET:-}" && -S "''${NIRI_SOCKET:-}" ]] || return 1
+            niri msg --json outputs 2>/dev/null \
+              | jq -e --arg connector "$connector" \
+                '.[$connector] != null and .[$connector].current_mode != null' \
+                >/dev/null
+            ;;
+          KDE | Mango | mango)
+            return 0
+            ;;
+          *)
+            return 1
+            ;;
+        esac
+      }
+
       manager_variable() {
-        systemctl --user show-environment \
+        systemctl --user show-environment 2>/dev/null \
           | sed -n "s/^$1=//p" \
-          | head -n 1
+          | head -n 1 \
+          || true
       }
 
       import_manager_variable() {
@@ -271,45 +304,66 @@ let
         [[ -z "$value" ]] || export "$name=$value"
       }
 
-      for variable in \
-        WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
-        MANGO_INSTANCE_SIGNATURE; do
-        import_manager_variable "$variable"
-      done
+      refresh_graphical_environment() {
+        unset \
+          WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
+          MANGO_INSTANCE_SIGNATURE
+        for variable in \
+          WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
+          MANGO_INSTANCE_SIGNATURE; do
+          import_manager_variable "$variable"
+        done
+      }
 
+      unknown_attempts=0
       for attempt in $(seq 1 30); do
+        refresh_graphical_environment
         desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
+        if session_output_ready "$desktop"; then
+          exit 0
+        fi
+
         case "$desktop" in
           KDE)
-            if ${ipadDisplayOn}/bin/ipad-display-on; then
-              exit 0
-            fi
+            ${ipadDisplayOn}/bin/ipad-display-on || true
             ;;
           niri)
-            if niri msg output "$connector" on \
-              && niri msg output "$connector" mode 2732x2048@60.001 \
+            # Store the complete output configuration before enabling it so
+            # Niri submits one coherent modeset instead of reconnecting after
+            # each property update.
+            niri msg output "$connector" mode 2732x2048@60.001 \
               && niri msg output "$connector" scale 1.75 \
-              && niri msg output "$connector" position set 3440 0; then
-              exit 0
-            fi
+              && niri msg output "$connector" position set 3440 0 \
+              && niri msg output "$connector" on \
+              || true
             ;;
           Mango | mango)
-            if wlr-randr --output "$connector" --on \
-              --mode 2732x2048@60.001Hz --scale 1.75 --pos 3440,0; then
-              exit 0
-            fi
+            wlr-randr --output "$connector" --on \
+              --mode 2732x2048@60.001Hz --scale 1.75 --pos 3440,0 \
+              || true
             ;;
           *)
             # Unknown shells may still inherit an already active output from
             # SDDM. That is sufficient for KMS capture and avoids guessing at
-            # an unsupported compositor's control protocol.
-            for enabled_file in /sys/class/drm/card*-"$connector"/enabled; do
-              [[ -r "$enabled_file" && "$(<"$enabled_file")" == enabled ]] && exit 0
-            done
+            # an unsupported compositor's control protocol. Require several
+            # stable observations so a briefly empty user-manager environment
+            # during a desktop handoff cannot race Sunshine ahead of the new
+            # compositor.
+            ((unknown_attempts += 1))
+            if ((unknown_attempts >= 5)) && drm_connector_ready; then
+              exit 0
+            fi
             ;;
         esac
 
-        printf 'Graphical output control is not ready (%s, attempt %s/30); retrying.\n' \
+        # Compositor IPC only confirms that the request was accepted. Niri in
+        # particular can report success before an NVIDIA atomic commit fails.
+        # Sunshine must not probe KMS until both DRM and the active compositor
+        # confirm that the output exists.
+        if session_output_ready "$desktop"; then
+          exit 0
+        fi
+        printf 'Graphical output is not active in the compositor yet (%s, attempt %s/30); retrying.\n' \
           "''${desktop:-unknown}" "$attempt" >&2
         sleep 1
       done
@@ -330,6 +384,27 @@ let
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
 
+      connector_ready() {
+        local wanted="$1" directory
+        for directory in /sys/class/drm/card*-"$wanted"; do
+          [[ -r "$directory/enabled" && -r "$directory/status" ]] || continue
+          [[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]] \
+            && return 0
+        done
+        return 1
+      }
+
+      other_output_ready() {
+        local directory
+        for directory in /sys/class/drm/card*-*; do
+          [[ "$directory" == *-"$connector" ]] && continue
+          [[ -r "$directory/enabled" && -r "$directory/status" ]] || continue
+          [[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]] \
+            && return 0
+        done
+        return 1
+      }
+
       manager_variable() {
         systemctl --user show-environment \
           | sed -n "s/^$1=//p" \
@@ -347,6 +422,11 @@ let
         MANGO_INSTANCE_SIGNATURE; do
         import_manager_variable "$variable"
       done
+
+      if connector_ready "$connector" && ! other_output_ready; then
+        printf 'Keeping %s enabled because it is the last active DRM output.\n' "$connector"
+        exit 0
+      fi
 
       desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
       case "$desktop" in
@@ -448,18 +528,18 @@ let
 
       import_graphical_environment
       selected=""
+      configured_ready=0
       # The persistent daemon validates its encoder before accepting clients,
       # so briefly bring up the dummy for that probe. The pre-probe stream hook
-      # repeats this before each real stream; the last-client hook turns it off.
+      # repeats this before each real stream; the last-client hook turns it off
+      # only when another active display can keep the compositor out of a
+      # headless DRM state.
       if [[ -n "$configured" ]]; then
-        ${ipadDisplaySessionOn}/bin/ipad-display-session-on || true
-        for _ in $(seq 1 30); do
-          if connector_state "$configured"; then
-            selected="$configured"
-            break
-          fi
-          sleep 1
-        done
+        if ${ipadDisplaySessionOn}/bin/ipad-display-session-on \
+          && connector_state "$configured"; then
+          configured_ready=1
+          selected="$configured"
+        fi
       fi
 
       if [[ -z "$selected" && -n "$fallback" ]] && connector_state "$fallback"; then
@@ -469,8 +549,12 @@ let
         for directory in /sys/class/drm/card*-*; do
           [[ -r "$directory/enabled" && "$(<"$directory/enabled")" == enabled ]] || continue
           [[ -r "$directory/status" && "$(<"$directory/status")" == connected ]] || continue
-          selected="''${directory##*/}"
-          selected="''${selected#card*-}"
+          candidate="''${directory##*/}"
+          candidate="''${candidate#card*-}"
+          if [[ "$candidate" == "$configured" && "$configured_ready" != 1 ]]; then
+            continue
+          fi
+          selected="$candidate"
           break
         done
       fi
@@ -496,7 +580,8 @@ let
       trap cleanup EXIT INT TERM
 
       # Encoder probing completes before Sunshine opens its HTTPS listener.
-      # Once it is ready, remove the idle dummy from the compositor layout.
+      # Once it is ready, remove the idle dummy from the compositor layout when
+      # another active display can safely remain.
       for _ in $(seq 1 60); do
         kill -0 "$sunshine_pid" 2>/dev/null || break
         if ss -Hln sport = :47990 | grep -q .; then

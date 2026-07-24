@@ -35,11 +35,9 @@
       enable = true;
       source = self.outPath;
       rescue = {
-        enable = true;
+        enable = false;
         user = user;
-        autoStart = true;
         durableTmux = true;
-        preventSleep = false;
       };
     };
   };
@@ -47,6 +45,46 @@
   # The dispatcher remembers Alex's chosen desktop across logins and boots.
   # It defaults—and automatically falls back—to the proven Plasma session.
   services.displayManager.defaultSession = "dotfiles-desktop";
+
+  # Termius and other SSH clients enter through the fixed wired-LAN address.
+  # Authentication is device-key-only; the user's public keys remain in the
+  # standard machine-local ~/.ssh/authorized_keys rather than this repository.
+  services.openssh = {
+    enable = true;
+    startWhenNeeded = false;
+    openFirewall = false;
+    ports = [ 22 ];
+    listenAddresses = [
+      {
+        addr = "192.168.0.117";
+        port = 22;
+      }
+    ];
+    settings = {
+      AllowAgentForwarding = false;
+      AllowTcpForwarding = false;
+      AllowUsers = [ user ];
+      AuthenticationMethods = "publickey";
+      ClientAliveCountMax = 3;
+      ClientAliveInterval = 60;
+      KbdInteractiveAuthentication = false;
+      LogLevel = "VERBOSE";
+      MaxAuthTries = 3;
+      PasswordAuthentication = false;
+      PermitEmptyPasswords = false;
+      PermitRootLogin = "no";
+      PermitTunnel = false;
+      PubkeyAuthentication = true;
+      X11Forwarding = false;
+    };
+  };
+
+  systemd.services.sshd = {
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" ];
+  };
+
+  networking.firewall.interfaces.eno1.allowedTCPPorts = [ 22 ];
 
   networking.networkmanager = {
     # Prevent NetworkManager from racing this declared profile with another

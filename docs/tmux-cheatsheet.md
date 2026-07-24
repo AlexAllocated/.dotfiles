@@ -53,6 +53,10 @@ press `q` to close it.
 Detach before closing the GUI when practical. Closing a terminal normally
 detaches it too, but `C-b d` makes the intention explicit.
 
+On `chev-desktop`, local and SSH shells use one system-owned tmux server.
+`main` is the usual workspace. Its sessions survive switching among Plasma,
+Niri, and Mango, logging out, closing WezTerm, and restarting user services.
+
 ## Windows (durable tabs)
 
 | Goal                            | Key               |
@@ -110,5 +114,6 @@ the terminal emulator's own selection instead.
 - `exit` or `Ctrl+D` ends the shell in the current pane. The last pane ends its
   window; the last window ends the session.
 - `tmux kill-session -t main` deliberately terminates the entire named session.
-- tmux survives terminal, browser, SSH, and Sunshine disconnects, but it does
-  **not** survive a reboot. Automatic reboot restoration is not enabled.
+- On `chev-desktop`, tmux survives terminal, browser, SSH, Sunshine,
+  compositor, and user-service disconnects or restarts. It does **not** survive
+  a reboot; automatic reboot restoration is not enabled.

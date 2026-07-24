@@ -10,6 +10,36 @@ let
   nativeLinux = pkgs.stdenv.hostPlatform.isLinux && cfg.profile != "nixos-wsl";
   plasmaDesktop = cfg.profile == "nixos-desktop";
   terminalFont = pkgs.nerd-fonts.bigblue-terminal;
+  canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
+  canonicalTmuxClient = pkgs.writeShellApplication {
+    name = "tmux";
+    text = ''
+      # Commands inside an existing pane must continue to address that pane's
+      # server. Outside tmux, use the workstation's system-owned server unless
+      # the caller deliberately selected another server with -L or -S.
+      if [[ -n "''${TMUX:-}" ]]; then
+        exec ${pkgs.tmux}/bin/tmux "$@"
+      fi
+
+      explicit_socket=false
+      OPTIND=1
+      while getopts ':2CDhlNuVvc:f:L:S:T:' option; do
+        case "$option" in
+          L | S)
+            explicit_socket=true
+            ;;
+          *)
+            ;;
+        esac
+      done
+
+      if [[ "$explicit_socket" == true ]]; then
+        exec ${pkgs.tmux}/bin/tmux "$@"
+      fi
+
+      exec ${pkgs.tmux}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
+    '';
+  };
 in
 {
   imports = [ ./core.nix ];
@@ -87,6 +117,7 @@ in
     # match upstream documentation and tutorials.
     programs.tmux = {
       enable = true;
+      package = if plasmaDesktop then canonicalTmuxClient else pkgs.tmux;
       mouse = true;
       terminal = "tmux-256color";
       historyLimit = 50000;
@@ -108,6 +139,20 @@ in
       ];
       extraConfig = builtins.readFile (sourceRoot + "/tmux/tmux.conf");
     };
+
+    # The system-owned tmux process deliberately survives NixOS switches, so
+    # apply new personal defaults in place without restarting it.
+    home.activation.canonicalTmuxConfiguration = lib.mkIf plasmaDesktop (
+      lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        tmux=${lib.getExe pkgs.tmux}
+        socket=/run/chev-ttyd-rescue-tmux/tmux.sock
+
+        if [[ -S "$socket" ]]; then
+          run "$tmux" -S "$socket" source-file "$HOME/.config/tmux/tmux.conf"
+          run "$tmux" -S "$socket" set-option -s exit-empty off
+        fi
+      ''
+    );
 
     # Keep Alacritty installed as the fast, deliberately minimal alternative
     # even though WezTerm owns the native Linux terminal defaults.

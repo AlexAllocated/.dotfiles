@@ -10,6 +10,7 @@ let
   cfg = config.dotfiles.migrationTools;
   source = toString cfg.source;
   codexPackage = if builtins.hasAttr "codex" migrationPkgs then migrationPkgs.codex else pkgs.codex;
+  canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
   rescueWebFont =
     pkgs.runCommand "bigblue-terminal-webfont" { nativeBuildInputs = [ pkgs.woff2 ]; }
       ''
@@ -20,6 +21,185 @@ let
         mkdir -p "$out"
         mv BigBlueTerm437NerdFont-Regular.woff2 "$out/bigblue.woff2"
       '';
+
+  rescueWebStyle = ''
+    @font-face {
+      font-family: "BigBlueTerm437 Nerd Font";
+      src: url(data:font/woff2;base64,CHEV_BIGBLUE_FONT_DATA) format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: block;
+    }
+
+    :root {
+      --chev-viewport-left: 0px;
+      --chev-viewport-top: 0px;
+      --chev-viewport-width: 100vw;
+      --chev-viewport-height: 100dvh;
+    }
+
+    html {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      overscroll-behavior: none;
+      background: #1d2021;
+    }
+
+    body {
+      position: fixed !important;
+      top: var(--chev-viewport-top) !important;
+      left: var(--chev-viewport-left) !important;
+      right: auto !important;
+      bottom: auto !important;
+      box-sizing: border-box;
+      width: var(--chev-viewport-width) !important;
+      height: var(--chev-viewport-height) !important;
+      min-height: 0 !important;
+      max-height: var(--chev-viewport-height) !important;
+      margin: 0 !important;
+      padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+      overflow: hidden !important;
+      overscroll-behavior: none;
+      background: #1d2021;
+    }
+
+    #terminal-container {
+      box-sizing: border-box !important;
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      max-height: 100% !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+
+    #terminal-container .terminal {
+      box-sizing: border-box !important;
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      padding: 5px !important;
+    }
+
+    .xterm {
+      height: 100% !important;
+      font-family: "BigBlueTerm437 Nerd Font", monospace;
+    }
+
+    .xterm-viewport {
+      touch-action: pan-y;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+  '';
+
+  rescueWebScript = ''
+    (() => {
+      "use strict";
+
+      let fitFrame = 0;
+      let wheelRemainder = 0;
+
+      const fitTerminal = () => {
+        if (fitFrame) {
+          window.cancelAnimationFrame(fitFrame);
+        }
+
+        fitFrame = window.requestAnimationFrame(() => {
+          fitFrame = 0;
+          if (window.term && typeof window.term.fit === "function") {
+            window.term.fit();
+          }
+        });
+      };
+
+      const syncVisualViewport = () => {
+        const viewport = window.visualViewport;
+        const root = document.documentElement;
+        const left = viewport ? viewport.offsetLeft : 0;
+        const top = viewport ? viewport.offsetTop : 0;
+        const width = viewport ? viewport.width : window.innerWidth;
+        const height = viewport ? viewport.height : window.innerHeight;
+
+        root.style.setProperty("--chev-viewport-left", Math.round(left) + "px");
+        root.style.setProperty("--chev-viewport-top", Math.round(top) + "px");
+        root.style.setProperty("--chev-viewport-width", Math.floor(width) + "px");
+        root.style.setProperty("--chev-viewport-height", Math.floor(height) + "px");
+        fitTerminal();
+      };
+
+      const scrollTerminal = (event) => {
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest(".xterm")) {
+          return;
+        }
+
+        // xterm turns wheel input into Up/Down when the active buffer has no
+        // scrollback. Stop that at the capture phase, but retain real xterm
+        // scrollback whenever it exists.
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        const terminal = window.term;
+        if (!terminal || !terminal.buffer || !terminal.buffer.active) {
+          return;
+        }
+
+        if (!(terminal.buffer.active.baseY > 0)) {
+          wheelRemainder = 0;
+          return;
+        }
+
+        let lines = event.deltaY;
+        if (event.deltaMode === WheelEvent.DOM_DELTA_PIXEL) {
+          const screen = document.querySelector(".xterm-screen");
+          const measuredRowHeight =
+            screen && terminal.rows > 0 ? screen.clientHeight / terminal.rows : 0;
+          const fallbackRowHeight =
+            terminal.options.fontSize * terminal.options.lineHeight;
+          lines /= Math.max(measuredRowHeight || fallbackRowHeight, 1);
+        } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+          lines *= terminal.rows;
+        }
+
+        wheelRemainder += lines;
+        const wholeLines =
+          wheelRemainder < 0
+            ? Math.ceil(wheelRemainder)
+            : Math.floor(wheelRemainder);
+        if (wholeLines !== 0) {
+          wheelRemainder -= wholeLines;
+          terminal.scrollLines(wholeLines);
+        }
+      };
+
+      document.addEventListener("wheel", scrollTerminal, {
+        capture: true,
+        passive: false,
+      });
+      window.addEventListener("resize", syncVisualViewport);
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncVisualViewport);
+        window.visualViewport.addEventListener("scroll", syncVisualViewport);
+      }
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(fitTerminal);
+      }
+
+      syncVisualViewport();
+    })();
+  '';
 
   mkTool =
     {
@@ -36,6 +216,36 @@ let
         exec ${pkgs.bash}/bin/bash ${source}/${script} ${arguments} "$@"
       '';
     };
+
+  canonicalTmuxClient = pkgs.writeShellApplication {
+    name = "tmux";
+    text = ''
+      # Preserve the server selected by an existing pane. This lets the one
+      # pre-migration local server be detached cleanly without redirecting its
+      # management commands elsewhere.
+      if [[ -n "''${TMUX:-}" ]]; then
+        exec ${pkgs.tmux}/bin/tmux "$@"
+      fi
+
+      explicit_socket=false
+      OPTIND=1
+      while getopts ':2CDhlNuVvc:f:L:S:T:' option; do
+        case "$option" in
+          L | S)
+            explicit_socket=true
+            ;;
+          *)
+            ;;
+        esac
+      done
+
+      if [[ "$explicit_socket" == true ]]; then
+        exec ${pkgs.tmux}/bin/tmux "$@"
+      fi
+
+      exec ${pkgs.tmux}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
+    '';
+  };
 
   resumeMigration = mkTool {
     name = "resume-migration";
@@ -199,7 +409,7 @@ in
       durableTmux = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Attach web clients to a dedicated tmux session that survives browser disconnects.";
+        description = "Run a system-owned tmux server independently of graphical and user sessions.";
       };
       preventSleep = lib.mkOption {
         type = lib.types.bool;
@@ -216,15 +426,17 @@ in
         message = "The migration ISO is pinned to Codex 0.144.4; update and retest the capsule resume contract before changing it.";
       }
       {
-        assertion = !cfg.rescue.enable || builtins.hasAttr cfg.rescue.user config.users.users;
-        message = "The ttyd rescue user must be declared in users.users.";
+        assertion =
+          !(cfg.rescue.enable || cfg.rescue.durableTmux)
+          || builtins.hasAttr cfg.rescue.user config.users.users;
+        message = "The ttyd rescue and durable tmux user must be declared in users.users.";
       }
     ];
 
     environment.systemPackages = [
       resumeMigration
       checkpointMigration
-      pkgs.tmux
+      (if cfg.rescue.durableTmux then canonicalTmuxClient else pkgs.tmux)
       rebootWindows
       recoverWindowsFallback
       exportMachineManifest
@@ -262,9 +474,14 @@ in
           };
         };
 
-    systemd.services.chev-ttyd-rescue-tmux = lib.mkIf (cfg.rescue.enable && cfg.rescue.durableTmux) {
-      description = "Durable tmux server for ttyd recovery access";
-      wantedBy = lib.optionals cfg.rescue.autoStart [ "multi-user.target" ];
+    systemd.services.chev-ttyd-rescue-tmux = lib.mkIf cfg.rescue.durableTmux {
+      description = "Canonical durable tmux server";
+      wantedBy = [ "multi-user.target" ];
+      # A generation switch may replace this unit's script or tmux package,
+      # but its sessions are live user state. Pick up those changes on the next
+      # boot instead of terminating every shell during routine activation.
+      restartIfChanged = false;
+      unitConfig.X-StopOnRemoval = false;
       path = [
         pkgs.bash
         pkgs.coreutils
@@ -276,44 +493,43 @@ in
         Group = "users";
         RuntimeDirectory = "chev-ttyd-rescue-tmux";
         RuntimeDirectoryMode = "0750";
+        RuntimeDirectoryPreserve = "yes";
+        # The tmux server and its panes are the durable workload. Service
+        # supervision may be refreshed without signaling those child
+        # processes or unlinking their socket.
+        KillMode = "process";
         Restart = "always";
         RestartSec = 1;
         ExecStart = pkgs.writeShellScript "chev-ttyd-rescue-tmux-start" ''
           set -eu
           tmux=${pkgs.tmux}/bin/tmux
           socket="$RUNTIME_DIRECTORY/tmux.sock"
-          session=recovery
           home=/home/${cfg.rescue.user}
 
-          cleanup() {
-            "$tmux" -S "$socket" kill-server 2>/dev/null || true
+          server_running() {
+            "$tmux" -N -S "$socket" display-message -p '#{pid}' >/dev/null 2>&1
           }
-          trap cleanup EXIT
           trap 'exit 0' INT TERM
 
-          # Keep supervising the named session. A user may intentionally kill
-          # a tmux server while experimenting; the recovery endpoint must not
-          # remain healthy-looking while its attach target is gone.
+          # Keep the server available without manufacturing an immortal user
+          # session. exit-empty=off lets the final real session disappear while
+          # preserving the canonical socket for the next client.
           while :; do
-            if ! "$tmux" -S "$socket" has-session -t "=$session" 2>/dev/null; then
-              "$tmux" -S "$socket" -f /dev/null new-session -d -s "$session" -c "$home"
-              if [ -r "$home/.config/tmux/tmux.conf" ]; then
-                if ! "$tmux" -S "$socket" source-file "$home/.config/tmux/tmux.conf"; then
-                  printf '%s\n' 'The personal tmux config did not load cleanly; continuing with recovery-safe defaults.' >&2
-                fi
-              fi
-              "$tmux" -S "$socket" set-option -g mouse off
-              "$tmux" -S "$socket" set-option -g alternate-screen off
-              "$tmux" -S "$socket" set-option -g history-limit 100000
-              "$tmux" -S "$socket" rename-window -t "=$session:0" rescue
+            if ! server_running; then
+              "$tmux" -S "$socket" -f /dev/null start-server \; set-option -s exit-empty off
             fi
+            if [ -r "$home/.config/tmux/tmux.conf" ]; then
+              if ! "$tmux" -S "$socket" source-file "$home/.config/tmux/tmux.conf"; then
+                printf '%s\n' 'The personal tmux config did not load cleanly; continuing with durable defaults.' >&2
+              fi
+            fi
+            "$tmux" -S "$socket" set-option -s exit-empty off
 
-            while "$tmux" -S "$socket" has-session -t "=$session" 2>/dev/null; do
+            while server_running; do
               ${pkgs.coreutils}/bin/sleep 1
             done
           done
         '';
-        ExecStop = "${pkgs.tmux}/bin/tmux -S /run/chev-ttyd-rescue-tmux/tmux.sock kill-server";
       };
     };
 
@@ -342,6 +558,8 @@ in
           index_path="$runtime_directory/index.html"
           temporary_index="$index_path.tmp"
           marked_index="$index_path.marked"
+          styled_index="$index_path.styled"
+          scripted_index="$index_path.scripted"
           generator_port=17681
           generator_log="$runtime_directory/index-generator.log"
 
@@ -350,9 +568,40 @@ in
               ${pkgs.coreutils}/bin/kill "$generator_pid" 2>/dev/null || true
               wait "$generator_pid" 2>/dev/null || true
             fi
-            ${pkgs.coreutils}/bin/rm -f "$temporary_index" "$marked_index"
+            ${pkgs.coreutils}/bin/rm -f \
+              "$temporary_index" \
+              "$marked_index" \
+              "$styled_index" \
+              "$scripted_index"
           }
           trap cleanup EXIT INT TERM
+
+          replace_marker() {
+            input_path="$1"
+            marker="$2"
+            replacement="$3"
+            output_path="$4"
+
+            ${pkgs.gawk}/bin/awk \
+              -v RS="$marker" \
+              -v replacement="$replacement" \
+              '
+                NR == 1 {
+                  leading = $0
+                  next
+                }
+                NR == 2 {
+                  trailing = $0
+                  next
+                }
+                { duplicate = 1 }
+                END {
+                  if (NR != 2 || duplicate) exit 1
+                  printf "%s%s%s", leading, replacement, trailing
+                }
+              ' \
+              "$input_path" >"$output_path"
+          }
 
           ${pkgs.ttyd}/bin/ttyd \
             --interface 127.0.0.1 \
@@ -363,15 +612,34 @@ in
             if ${pkgs.curl}/bin/curl --fail --silent --show-error --max-time 1 \
               "http://127.0.0.1:$generator_port/" \
               | ${pkgs.gnused}/bin/sed \
-                -e 's|<meta charset="UTF-8">|<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>@font-face{font-family:"BigBlueTerm437 Nerd Font";src:url(data:font/woff2;base64,CHEV_BIGBLUE_FONT_DATA) format("woff2");font-weight:400;font-style:normal;font-display:block}html,body{position:fixed;inset:0;width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none;background:#1d2021}body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}.xterm{font-family:"BigBlueTerm437 Nerd Font",monospace}.xterm-viewport{touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}</style>|' \
+                -e 's|<meta charset="UTF-8">|<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>CHEV_RECOVERY_STYLE</style>|' \
                 -e 's|<title>ttyd - Terminal</title>|<title>Hive Recovery Terminal</title>|' \
+                -e 's|</body>|<script>CHEV_RECOVERY_SCRIPT</script></body>|' \
                 >"$marked_index"; then
               break
             fi
             ${pkgs.coreutils}/bin/sleep 0.1
           done
-          [ -s "$marked_index" ] && ${pkgs.gnugrep}/bin/grep -Fq CHEV_BIGBLUE_FONT_DATA "$marked_index" || {
+          [ -s "$marked_index" ] \
+            && ${pkgs.gnugrep}/bin/grep -Fq CHEV_RECOVERY_STYLE "$marked_index" \
+            && ${pkgs.gnugrep}/bin/grep -Fq CHEV_RECOVERY_SCRIPT "$marked_index" || {
             printf '%s\\n' 'Unable to generate the mobile ttyd index.' >&2
+            exit 1
+          }
+
+          replace_marker \
+            "$marked_index" \
+            CHEV_RECOVERY_STYLE \
+            ${lib.escapeShellArg rescueWebStyle} \
+            "$styled_index"
+          replace_marker \
+            "$styled_index" \
+            CHEV_RECOVERY_SCRIPT \
+            ${lib.escapeShellArg rescueWebScript} \
+            "$scripted_index"
+
+          ${pkgs.gnugrep}/bin/grep -Fq CHEV_BIGBLUE_FONT_DATA "$scripted_index" || {
+            printf '%s\\n' 'The generated ttyd index is missing its webfont marker.' >&2
             exit 1
           }
           ${pkgs.gawk}/bin/awk -v RS=CHEV_BIGBLUE_FONT_DATA '
@@ -383,7 +651,13 @@ in
               next
             }
             { printf "%s", $0 }
-          ' "$marked_index" >"$temporary_index"
+          ' "$scripted_index" >"$temporary_index"
+          ${pkgs.gnugrep}/bin/grep -Fq -- '--chev-viewport-height' "$temporary_index" \
+            && ${pkgs.gnugrep}/bin/grep -Fq 'stopImmediatePropagation' "$temporary_index" \
+            && ! ${pkgs.gnugrep}/bin/grep -Fq CHEV_ "$temporary_index" || {
+            printf '%s\\n' 'The generated ttyd index failed frontend validation.' >&2
+            exit 1
+          }
           ${pkgs.coreutils}/bin/mv -f "$temporary_index" "$index_path"
         '';
         ExecStart = "${pkgs.writeShellScript "chev-ttyd-rescue" ''
@@ -427,7 +701,7 @@ in
             --ping-interval 15 \
             ${
               if cfg.rescue.durableTmux then
-                "${pkgs.tmux}/bin/tmux -S /run/chev-ttyd-rescue-tmux/tmux.sock attach-session -t =recovery"
+                "${pkgs.tmux}/bin/tmux -S ${canonicalTmuxSocket} new-session -A -s recovery"
               else
                 "${pkgs.bashInteractive}/bin/bash --login"
             }
