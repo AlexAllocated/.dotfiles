@@ -11,6 +11,11 @@ let
   source = toString cfg.source;
   codexPackage = if builtins.hasAttr "codex" migrationPkgs then migrationPkgs.codex else pkgs.codex;
   canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
+  durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {
+    # The system-owned server must not place panes in transient scopes owned
+    # by a graphical user manager that is intentionally recycled on logout.
+    configureFlags = (oldAttrs.configureFlags or [ ]) ++ [ "--disable-cgroups" ];
+  });
   rescueWebFont =
     pkgs.runCommand "bigblue-terminal-webfont" { nativeBuildInputs = [ pkgs.woff2 ]; }
       ''
@@ -224,7 +229,7 @@ let
       # pre-migration local server be detached cleanly without redirecting its
       # management commands elsewhere.
       if [[ -n "''${TMUX:-}" ]]; then
-        exec ${pkgs.tmux}/bin/tmux "$@"
+        exec ${durableTmuxPackage}/bin/tmux "$@"
       fi
 
       explicit_socket=false
@@ -240,10 +245,10 @@ let
       done
 
       if [[ "$explicit_socket" == true ]]; then
-        exec ${pkgs.tmux}/bin/tmux "$@"
+        exec ${durableTmuxPackage}/bin/tmux "$@"
       fi
 
-      exec ${pkgs.tmux}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
+      exec ${durableTmuxPackage}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
     '';
   };
 
@@ -262,9 +267,9 @@ let
       openssl
       python3
       rsync
-      tmux
       util-linux
       codexPackage
+      durableTmuxPackage
     ];
   };
 
@@ -485,7 +490,7 @@ in
       path = [
         pkgs.bash
         pkgs.coreutils
-        pkgs.tmux
+        durableTmuxPackage
       ];
       serviceConfig = {
         Type = "simple";
@@ -502,7 +507,7 @@ in
         RestartSec = 1;
         ExecStart = pkgs.writeShellScript "chev-ttyd-rescue-tmux-start" ''
           set -eu
-          tmux=${pkgs.tmux}/bin/tmux
+          tmux=${durableTmuxPackage}/bin/tmux
           socket="$RUNTIME_DIRECTORY/tmux.sock"
           home=/home/${cfg.rescue.user}
 
@@ -701,7 +706,7 @@ in
             --ping-interval 15 \
             ${
               if cfg.rescue.durableTmux then
-                "${pkgs.tmux}/bin/tmux -S ${canonicalTmuxSocket} new-session -A -s recovery"
+                "${durableTmuxPackage}/bin/tmux -S ${canonicalTmuxSocket} new-session -A -s recovery"
               else
                 "${pkgs.bashInteractive}/bin/bash --login"
             }

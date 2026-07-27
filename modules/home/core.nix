@@ -185,6 +185,7 @@ in
           "text/html" = [ "firefox-focused.desktop" ];
           "x-scheme-handler/http" = [ "firefox-focused.desktop" ];
           "x-scheme-handler/https" = [ "firefox-focused.desktop" ];
+          "x-scheme-handler/discord" = [ "vesktop.desktop" ];
         }
         // lib.genAttrs firefoxImageMimeTypes (_: [ "firefox-focused.desktop" ]);
       };

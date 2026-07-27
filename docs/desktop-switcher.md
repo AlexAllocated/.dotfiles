@@ -16,13 +16,15 @@ switcher never reboots the computer automatically.
 desktop-switch --list
 desktop-switch --status
 desktop-switch niri
+desktop-switch niri-noctalia
 desktop-switch mango
 desktop-switch plasma
 ```
 
-The compositor short names select their Noctalia sessions. Every explicit
-target is also available:
+The `niri` short name selects Niri with DMS, while `mango` selects Mango with
+Noctalia. Every explicit target is also available:
 
+- `niri-dms`
 - `niri-noctalia`
 - `mango-noctalia`
 - `plasma`

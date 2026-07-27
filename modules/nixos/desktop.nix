@@ -30,8 +30,10 @@ let
     paths = [ pkgs.discord ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     # Discord's native voice module loads libva itself before it advertises the
-    # Linux VA-API WebRTC decoder. Expose both libva and the NVIDIA driver,
-    # while retaining CUDA/NVENC for hardware-accelerated screen sharing.
+    # Linux VA-API encoder. Expose both libva and the NVIDIA driver, while
+    # retaining CUDA/NVENC for hardware-accelerated screen sharing. Keep
+    # Discord native on Wayland so its PipeWire source picker and frame
+    # presentation do not fall through XWayland.
     # Plasma auto-login has no PAM password with which to unlock KWallet, so
     # avoid its setup prompt.
     postBuild = ''
@@ -41,9 +43,27 @@ let
         --set LIBVA_DRIVERS_PATH /run/opengl-driver/lib/dri \
         --set NVD_BACKEND direct \
         --suffix VK_ADD_DRIVER_FILES : /run/opengl-driver/share/vulkan/icd.d \
+        --add-flags "--ozone-platform=wayland" \
+        --add-flags "--enable-features=WaylandWindowDecorations,WebRTCPipeWireCapturer" \
+        --add-flags "--enable-wayland-ime=true" \
         --add-flags --password-store=basic
     '';
     inherit (pkgs.discord) meta passthru;
+  };
+  vesktopWayland = pkgs.symlinkJoin {
+    name = "vesktop-wayland-${pkgs.vesktop.version}";
+    paths = [ pkgs.vesktop ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    # Keep Vesktop on the browser-style WebRTC path that played incoming
+    # streams smoothly and exposed Niri's PipeWire source picker.
+    postBuild = ''
+      wrapProgram $out/bin/vesktop \
+        --set NIXOS_OZONE_WL 1 \
+        --add-flags "--ozone-platform=wayland" \
+        --add-flags "--enable-features=WaylandWindowDecorations,WebRTCPipeWireCapturer" \
+        --add-flags "--enable-wayland-ime=true"
+    '';
+    inherit (pkgs.vesktop) meta passthru;
   };
   razerQdHidSource = pkgs.fetchFromGitHub {
     owner = "AlexAllocated";
@@ -52,12 +72,122 @@ let
     hash = "sha256-5po6knQogtjHLauDo2pa0QVQQG9oCiX4OHseSESTriw=";
   };
   razerOnboardPython = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.hidapi ]);
-  razerOnboard = pkgs.writeShellApplication {
-    name = "razer-onboard";
+  razerProfileDirectory = ../../razer/input-remapper-2/presets + "/Razer Razer Basilisk V3 Pro 35K";
+  razerProfileDirect = pkgs.writeShellApplication {
+    name = "razer-profile-direct";
     runtimeInputs = [ razerOnboardPython ];
     text = ''
       export PYTHONPATH=${razerQdHidSource}/public/py
-      exec ${razerOnboardPython}/bin/python3 ${../../scripts/nixos/razer-onboard.py} "$@"
+      exec ${razerOnboardPython}/bin/python3 ${../../scripts/nixos/razer-onboard.py} \
+        --profiles-dir ${lib.escapeShellArg (toString razerProfileDirectory)} \
+        --state-file /home/${cfg.user}/.local/state/razer-profile/current \
+        "$@"
+    '';
+  };
+  razerProfile = pkgs.writeShellApplication {
+    name = "razer-profile";
+    runtimeInputs = [
+      pkgs.systemd
+      razerProfileDirect
+    ];
+    text = ''
+      needs_hardware=false
+      for argument in "$@"; do
+        case "$argument" in
+          apply-profile|reapply-profile|reset-onboard|dump)
+            needs_hardware=true
+            ;;
+        esac
+      done
+
+      openrazer_was_active=false
+      user_systemctl=(systemctl --machine=${cfg.user}@.host --user)
+      if [[ "$needs_hardware" == true ]] \
+        && "''${user_systemctl[@]}" is-active --quiet openrazer-daemon.service 2>/dev/null; then
+        "''${user_systemctl[@]}" stop openrazer-daemon.service
+        openrazer_was_active=true
+      fi
+
+      restore_openrazer() {
+        if [[ "$openrazer_was_active" == true ]]; then
+          "''${user_systemctl[@]}" start openrazer-daemon.service || true
+        fi
+      }
+      trap restore_openrazer EXIT
+
+      razer-profile-direct "$@"
+    '';
+  };
+  razerProfileSync = pkgs.writeShellApplication {
+    name = "razer-profile-sync";
+    runtimeInputs = [
+      pkgs.coreutils
+      razerProfile
+    ];
+    text = ''
+      while ! razer-profile --attempts 3 reapply-profile; do
+        printf '%s\n' \
+          'Razer Basilisk is unavailable; keeping its selected profile pending and retrying in 30 seconds.' >&2
+        sleep 30
+      done
+    '';
+  };
+  razerProfileTrayPython = pkgs.python3.withPackages (pythonPackages: [
+    pythonPackages.pygobject3
+  ]);
+  razerProfileTray = pkgs.writeShellApplication {
+    name = "razer-profile-tray";
+    runtimeInputs = [
+      pkgs.libnotify
+      razerProfileTrayPython
+    ];
+    text = ''
+      export GI_TYPELIB_PATH=${
+        lib.makeSearchPath "lib/girepository-1.0" (
+          map lib.getLib [
+            pkgs.at-spi2-core
+            pkgs.gdk-pixbuf
+            pkgs.glib
+            pkgs.gobject-introspection-unwrapped
+            pkgs.gtk3
+            pkgs.harfbuzz
+            pkgs.libayatana-appindicator
+            pkgs.pango
+          ]
+        )
+      }
+      export XDG_DATA_DIRS=${pkgs.adwaita-icon-theme}/share:${pkgs.gtk3}/share:''${XDG_DATA_DIRS:-}
+      exec ${razerProfileTrayPython}/bin/python3 \
+        ${../../scripts/nixos/razer-profile-tray.py} \
+        --controller ${lib.getExe razerProfile} \
+        "$@"
+    '';
+  };
+  migrateDockerDataRoot = pkgs.writeShellApplication {
+    name = "migrate-docker-data-root";
+    runtimeInputs = with pkgs; [
+      coreutils
+      findutils
+      gawk
+      rsync
+      systemd
+      util-linux
+    ];
+    text = ''
+      exec ${pkgs.bash}/bin/bash ${../../scripts/nixos/migrate-docker-data-root.sh} "$@"
+    '';
+  };
+  finalizeDockerDataRoot = pkgs.writeShellApplication {
+    name = "finalize-docker-data-root";
+    runtimeInputs = with pkgs; [
+      coreutils
+      docker
+      findutils
+      gawk
+      util-linux
+    ];
+    text = ''
+      exec ${pkgs.bash}/bin/bash ${../../scripts/nixos/finalize-docker-data-root.sh} "$@"
     '';
   };
   # nixpkgs is one Lan Mouse release behind. Version 0.11 adds the
@@ -344,7 +474,6 @@ let
         done
       }
 
-      unknown_attempts=0
       for attempt in $(seq 1 30); do
         refresh_graphical_environment
         desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
@@ -372,16 +501,9 @@ let
               || true
             ;;
           *)
-            # Unknown shells may still inherit an already active output from
-            # SDDM. That is sufficient for KMS capture and avoids guessing at
-            # an unsupported compositor's control protocol. Require several
-            # stable observations so a briefly empty user-manager environment
-            # during a desktop handoff cannot race Sunshine ahead of the new
-            # compositor.
-            ((unknown_attempts += 1))
-            if ((unknown_attempts >= 5)) && drm_connector_ready; then
-              exit 0
-            fi
+            # Do not treat an SDDM modeset as a ready graphical session. The
+            # compositor must publish its environment and confirm the output
+            # before Sunshine is allowed to acquire KMS resources.
             ;;
         esac
 
@@ -514,6 +636,7 @@ let
       configured=${lib.escapeShellArg ipadConnector}
       fallback=${lib.escapeShellArg cfg.sunshine.fallbackConnector}
       runtime_config="''${RUNTIME_DIRECTORY:?systemd did not provide RUNTIME_DIRECTORY}/sunshine.conf"
+      session_record="$RUNTIME_DIRECTORY/seat-session"
 
       connector_directory() {
         local connector="$1"
@@ -597,6 +720,8 @@ let
       printf 'Starting persistent KMS Sunshine on stable connector %s.\n' "$selected"
 
       session="$(active_session)"
+      printf '%s\n' "$session" >"$session_record"
+      chmod 0600 "$session_record"
       ${lib.getExe config.services.sunshine.package} "$runtime_config" &
       sunshine_pid=$!
       cleanup() {
@@ -649,10 +774,65 @@ in
       description = "Display name of the primary workstation user.";
     };
 
+    hostName = lib.mkOption {
+      type = lib.types.str;
+      default = "chev-desktop";
+      description = "Network hostname of this native NixOS workstation.";
+    };
+
+    cpuVendor = lib.mkOption {
+      type = lib.types.enum [
+        "amd"
+        "intel"
+      ];
+      default = "intel";
+      description = "CPU vendor whose redistributable microcode should be enabled.";
+    };
+
+    autoLogin = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether the primary user should be logged into the graphical session automatically.";
+    };
+
+    lanInterface = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = "eno1";
+      description = "Wired LAN interface receiving workstation-only firewall rules, or null until discovered.";
+    };
+
     efiPartuuid = lib.mkOption {
       type = lib.types.str;
       default = "UNCONFIGURED-EFI-PARTUUID";
       description = "Windows ESP PARTUUID generated from the validated migration manifest.";
+    };
+
+    storage = {
+      rootLabel = lib.mkOption {
+        type = lib.types.str;
+        default = "NIXROOT";
+        description = "Btrfs label containing the workstation root subvolumes.";
+      };
+      bootLabel = lib.mkOption {
+        type = lib.types.str;
+        default = "NIXBOOT";
+        description = "Filesystem label of the XBOOTLDR partition.";
+      };
+      efiDevice = lib.mkOption {
+        type = lib.types.str;
+        default = "/dev/disk/by-partuuid/${cfg.efiPartuuid}";
+        description = "Stable device path for the EFI System Partition.";
+      };
+      swapSizeMiB = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 8 * 1024;
+        description = "Encrypted Btrfs swapfile size in MiB.";
+      };
+      requireGeneratedEfiPartuuid = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Warn when the legacy Chev ESP PARTUUID has not been generated.";
+      };
     };
 
     ipadDisplay.connector = lib.mkOption {
@@ -663,6 +843,11 @@ in
     };
 
     sunshine = {
+      name = lib.mkOption {
+        type = lib.types.str;
+        default = "CHEV-DESKTOP";
+        description = "Name advertised to Sunshine clients.";
+      };
       mode = lib.mkOption {
         type = lib.types.enum [
           "plasma"
@@ -713,11 +898,13 @@ in
     };
 
     networking = {
-      hostName = "chev-desktop";
+      hostName = cfg.hostName;
       networkmanager.enable = true;
       # Lan Mouse is a TLS-authenticated, peer-to-peer software KVM. Limit
       # its discovery/input port to the wired home-LAN interface.
-      firewall.interfaces.eno1.allowedUDPPorts = [ 4242 ];
+      firewall.interfaces = lib.optionalAttrs (cfg.lanInterface != null) {
+        ${cfg.lanInterface}.allowedUDPPorts = [ 4242 ];
+      };
     };
 
     time.timeZone = "America/Denver";
@@ -771,7 +958,7 @@ in
 
     fileSystems = {
       "/" = {
-        device = "/dev/disk/by-label/NIXROOT";
+        device = "/dev/disk/by-label/${cfg.storage.rootLabel}";
         fsType = "btrfs";
         options = [
           "compress=zstd"
@@ -780,7 +967,7 @@ in
         ];
       };
       "/home" = {
-        device = "/dev/disk/by-label/NIXROOT";
+        device = "/dev/disk/by-label/${cfg.storage.rootLabel}";
         fsType = "btrfs";
         options = [
           "compress=zstd"
@@ -789,7 +976,7 @@ in
         ];
       };
       "/nix" = {
-        device = "/dev/disk/by-label/NIXROOT";
+        device = "/dev/disk/by-label/${cfg.storage.rootLabel}";
         fsType = "btrfs";
         neededForBoot = true;
         options = [
@@ -799,7 +986,7 @@ in
         ];
       };
       "/swap" = {
-        device = "/dev/disk/by-label/NIXROOT";
+        device = "/dev/disk/by-label/${cfg.storage.rootLabel}";
         fsType = "btrfs";
         options = [
           "noatime"
@@ -807,7 +994,7 @@ in
         ];
       };
       "/boot" = {
-        device = "/dev/disk/by-label/NIXBOOT";
+        device = "/dev/disk/by-label/${cfg.storage.bootLabel}";
         fsType = "vfat";
         options = [
           "fmask=0077"
@@ -815,7 +1002,7 @@ in
         ];
       };
       "/efi" = {
-        device = "/dev/disk/by-partuuid/${cfg.efiPartuuid}";
+        device = cfg.storage.efiDevice;
         fsType = "vfat";
         options = [
           "fmask=0077"
@@ -824,16 +1011,19 @@ in
       };
     };
 
-    warnings = lib.optional (cfg.efiPartuuid == "UNCONFIGURED-EFI-PARTUUID") ''
-      chev-desktop is being evaluated without its generated ESP PARTUUID. The
-      confirmation-gated installer writes hosts/chev-desktop/hardware-generated.nix
-      from the validated machine manifest before nixos-install runs.
-    '';
+    warnings =
+      lib.optional
+        (cfg.storage.requireGeneratedEfiPartuuid && cfg.efiPartuuid == "UNCONFIGURED-EFI-PARTUUID")
+        ''
+          chev-desktop is being evaluated without its generated ESP PARTUUID. The
+          confirmation-gated installer writes hosts/chev-desktop/hardware-generated.nix
+          from the validated machine manifest before nixos-install runs.
+        '';
 
     swapDevices = [
       {
         device = "/swap/swapfile";
-        size = 8 * 1024;
+        size = cfg.storage.swapSizeMiB;
       }
     ];
     zramSwap = {
@@ -844,7 +1034,14 @@ in
     hardware = {
       enableRedistributableFirmware = true;
       firmware = [ ipadEdidFirmware ];
-      cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+      cpu = {
+        amd.updateMicrocode = lib.mkDefault (
+          cfg.cpuVendor == "amd" && config.hardware.enableRedistributableFirmware
+        );
+        intel.updateMicrocode = lib.mkDefault (
+          cfg.cpuVendor == "intel" && config.hardware.enableRedistributableFirmware
+        );
+      };
       openrazer = {
         enable = true;
         users = [ cfg.user ];
@@ -885,7 +1082,7 @@ in
         wayland.enable = true;
       };
       displayManager.autoLogin = {
-        enable = true;
+        enable = cfg.autoLogin;
         user = cfg.user;
       };
       desktopManager.plasma6.enable = true;
@@ -916,7 +1113,7 @@ in
         # name and exposes pre-probe and final-client-disconnected hooks.
         package = sunshinePackage;
         settings = {
-          sunshine_name = "CHEV-DESKTOP";
+          sunshine_name = cfg.sunshine.name;
           capture = if sunshineKms then "kms" else "kwin";
           # Vulkan Video is hardware accelerated on the RTX 3090 Ti and has
           # already sustained the exact 2732x2048 iPad mode. Unlike NVENC's
@@ -986,18 +1183,34 @@ in
     ];
 
     # The Phantom Green accepts the Basilisk V3 button protocol on interface
-    # zero, which browsers cannot address through WebHID. Apply a volatile
-    # Linux-only layer after boot and whenever either transport reconnects.
-    # Its onboard Windows profile remains untouched.
+    # zero, which browsers cannot address through WebHID. Reapply the selected
+    # recovered Synapse layout after boot and whenever either transport
+    # reconnects; the tray selector writes the same direct hardware layer. A
+    # powered-off wireless mouse leaves its receiver present but cannot answer
+    # profile commands, so keep the work pending in an asynchronous service
+    # instead of failing an otherwise successful NixOS activation.
     systemd.services.razer-basilisk-linux-bindings = {
-      description = "Apply volatile Linux bindings to the Razer Basilisk Phantom Green";
+      description = "Reapply the selected Razer Basilisk profile";
       wantedBy = [ "multi-user.target" ];
       after = [ "systemd-udev-settle.service" ];
       serviceConfig = {
-        Type = "oneshot";
+        Type = "simple";
         ExecStartPre = "${lib.getExe' pkgs.coreutils "sleep"} 1";
-        ExecStart = "${lib.getExe razerOnboard} --attempts 20 apply-linux";
-        TimeoutStartSec = 30;
+        ExecStart = lib.getExe razerProfileSync;
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+    };
+
+    systemd.user.services.razer-profile-tray = {
+      description = "Razer Basilisk profile tray selector";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      serviceConfig = {
+        ExecStart = lib.getExe razerProfileTray;
+        Restart = "on-failure";
+        RestartSec = 2;
       };
     };
 
@@ -1152,12 +1365,23 @@ in
       _1password.enable = true;
       _1password-gui = {
         enable = true;
-        polkitPolicyOwners = [ "alex" ];
+        polkitPolicyOwners = [ cfg.user ];
       };
       zsh.enable = true;
       firefox = {
         enable = true;
         policies.DontCheckDefaultBrowser = true;
+        policies.Preferences."ui.key.menuAccessKeyFocuses" = {
+          Status = "locked";
+          Value = false;
+        };
+        # Alt is a first-class compositor modifier in Niri. Disable Firefox's
+        # menu access key entirely so neither bare Alt nor Alt+letter chords
+        # can reveal or focus the hidden menu bar.
+        policies.Preferences."ui.key.menuAccessKey" = {
+          Status = "locked";
+          Value = 0;
+        };
         policies.ExtensionSettings."{d634138d-c276-4fc8-924b-40a0ea21d284}" = {
           installation_mode = "normal_installed";
           install_url = "https://addons.mozilla.org/firefox/downloads/latest/1password-x-password-manager/latest.xpi";
@@ -1235,7 +1459,9 @@ in
       audacity
       curl
       discordNvidia
+      vesktopWayland
       flameshot
+      finalizeDockerDataRoot
       gimp
       git
       gparted
@@ -1254,12 +1480,13 @@ in
       libimobiledevice
       libva-utils
       mangohud
+      migrateDockerDataRoot
       nvtopPackages.nvidia
       pciutils
       plex-desktop
       pulseaudio
       polychromatic
-      razerOnboard
+      razerProfile
       slack
       spotify
       teamsWebApp

@@ -14,6 +14,7 @@ let
     else
       config.dotfiles.source;
   noctaliaPackage = config.programs.noctalia.package;
+  dmsPackage = pkgs.dms-shell;
   noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
     builtins.readFile ../../patches/noctalia-focus-existing-windows.patch
   );
@@ -107,28 +108,65 @@ let
 
   desktopShellProcess = pkgs.writeShellApplication {
     name = "dotfiles-desktop-shell-process";
-    runtimeInputs = [ noctaliaPackage ];
-    text = "exec noctalia";
+    runtimeInputs = [
+      dmsPackage
+      noctaliaPackage
+    ];
+    text = ''
+      case "''${DOTFILES_DESKTOP_SHELL:-noctalia}" in
+        dms) exec dms run --session ;;
+        noctalia) exec noctalia ;;
+        *)
+          printf 'Unknown desktop shell: %s\n' "$DOTFILES_DESKTOP_SHELL" >&2
+          exit 64
+          ;;
+      esac
+    '';
   };
+
+  resolveDesktopShell = ''
+    selected_shell="''${DOTFILES_DESKTOP_SHELL:-}"
+    if [[ -z "$selected_shell" ]]; then
+      selected_shell="$(${systemctl} --user show-environment \
+        | ${lib.getExe pkgs.gnused} -n 's/^DOTFILES_DESKTOP_SHELL=//p' \
+        | ${lib.getExe' pkgs.coreutils "head"} -n 1)"
+    fi
+    selected_shell="''${selected_shell:-noctalia}"
+  '';
 
   shellAction = pkgs.writeShellApplication {
     name = "dotfiles-shell-action";
-    runtimeInputs = [ noctaliaPackage ];
+    runtimeInputs = [
+      dmsPackage
+      noctaliaPackage
+      pkgs.systemd
+    ];
     text = ''
+      ${resolveDesktopShell}
       action="''${1:-}"
 
-      case "$action" in
-        launcher) exec noctalia msg panel-toggle launcher ;;
-        control-center) exec noctalia msg panel-toggle control-center ;;
-        notifications) exec noctalia msg panel-toggle control-center notifications ;;
-        settings) exec noctalia msg settings-toggle ;;
-        session-menu) exec noctalia msg panel-toggle session ;;
-        volume-up) exec noctalia msg volume-up 3 ;;
-        volume-down) exec noctalia msg volume-down 3 ;;
-        volume-mute) exec noctalia msg volume-mute ;;
-        mic-mute) exec noctalia msg mic-mute ;;
+      case "$selected_shell:$action" in
+        noctalia:launcher) exec noctalia msg panel-toggle launcher ;;
+        noctalia:control-center) exec noctalia msg panel-toggle control-center ;;
+        noctalia:notifications) exec noctalia msg panel-toggle control-center notifications ;;
+        noctalia:settings) exec noctalia msg settings-toggle ;;
+        noctalia:session-menu) exec noctalia msg panel-toggle session ;;
+        noctalia:volume-up) exec noctalia msg volume-up 3 ;;
+        noctalia:volume-down) exec noctalia msg volume-down 3 ;;
+        noctalia:volume-mute) exec noctalia msg volume-mute ;;
+        noctalia:mic-mute) exec noctalia msg mic-mute ;;
+
+        dms:launcher) exec dms ipc call spotlight toggle ;;
+        dms:control-center) exec dms ipc call control-center toggle ;;
+        dms:notifications) exec dms ipc call notifications toggle ;;
+        dms:settings) exec dms ipc call settings focusOrToggle ;;
+        dms:session-menu) exec dms ipc call powermenu toggle ;;
+        dms:volume-up) exec dms ipc call audio increment 3 ;;
+        dms:volume-down) exec dms ipc call audio decrement 3 ;;
+        dms:volume-mute) exec dms ipc call audio mute ;;
+        dms:mic-mute) exec dms ipc call audio micmute ;;
         *)
-          printf 'Unsupported desktop-shell action: %s\n' "$action" >&2
+          printf 'Unsupported desktop-shell action: %s (%s)\n' "$action" "$selected_shell" >&2
           exit 64
           ;;
       esac
@@ -166,7 +204,15 @@ let
   startPolkitAgent = pkgs.writeShellApplication {
     name = "dotfiles-start-compositor-polkit";
     runtimeInputs = [ pkgs.systemd ];
-    text = "systemctl --user start dotfiles-compositor-polkit.service";
+    text = ''
+      ${resolveDesktopShell}
+      if [[ "$selected_shell" == noctalia ]]; then
+        systemctl --user start dotfiles-compositor-polkit.service
+      else
+        # DMS includes its own authentication agent.
+        systemctl --user stop dotfiles-compositor-polkit.service >/dev/null 2>&1 || true
+      fi
+    '';
   };
 
   niriFollowPrimaryOutput = pkgs.writeShellApplication {
@@ -535,8 +581,15 @@ in
           builtin = "Gruvbox";
         };
         bar.default = {
+          start = [
+            "launcher"
+            "wallpaper"
+            "workspaces"
+            "cpu_temperature"
+            "gpu_temperature"
+          ];
+          center = [ "media" ];
           end = [
-            "media"
             "tray"
             "notifications"
             "clipboard"
@@ -545,13 +598,30 @@ in
             "volume"
             "brightness"
             "battery"
-            "cpu_temperature"
-            "gpu_temperature"
             "control-center"
             "session"
+            "clock_spacer"
+            "clock"
           ];
         };
         widget = {
+          clock_spacer = {
+            type = "spacer";
+            length = 12;
+          };
+          network = {
+            type = "network";
+            show_label = false;
+          };
+          volume = {
+            type = "volume";
+            show_label = false;
+          };
+          tray = {
+            type = "tray";
+            drawer = true;
+            drawer_columns = 3;
+          };
           cpu_temperature = {
             type = "sysmon";
             stat = "cpu_temp";
@@ -586,20 +656,89 @@ in
       };
     };
 
-    # Discord's in-app autostart toggle writes the resolved package executable
-    # into this file. That bypasses the workstation's NVIDIA wrapper after a
-    # package update, leaving Niri's DMA-BUF screen-cast stream unnegotiated.
+    # DMS owns its mutable appearance settings. Preserve anything changed in
+    # its UI while carrying over this workstation's no-idle-lock/no-suspend
+    # policy and seeding the declarative wallpaper for every known output.
+    home.activation.dmsWorkstationDefaults = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      settings_dir=${lib.escapeShellArg "${config.xdg.configHome}/DankMaterialShell"}
+      settings_file="$settings_dir/settings.json"
+      run ${lib.getExe' pkgs.coreutils "mkdir"} -p "$settings_dir"
+
+      if [[ -s "$settings_file" ]] \
+        && ${lib.getExe pkgs.jq} -e 'type == "object"' "$settings_file" >/dev/null 2>&1; then
+        settings_input="$settings_file"
+      else
+        settings_input=${pkgs.writeText "dms-empty-settings.json" "{}"}
+      fi
+
+      settings_tmp="$(${lib.getExe' pkgs.coreutils "mktemp"} "$settings_dir/.settings.json.XXXXXX")"
+      trap '${lib.getExe' pkgs.coreutils "rm"} -f -- "$settings_tmp"' EXIT
+      ${lib.getExe pkgs.jq} '
+        .powerMenuActions = ["reboot", "logout", "poweroff", "lock", "restart"]
+        | .acMonitorTimeout = 0
+        | .acLockTimeout = 0
+        | .acSuspendTimeout = 0
+        | .batteryMonitorTimeout = 0
+        | .batteryLockTimeout = 0
+        | .batterySuspendTimeout = 0
+      ' "$settings_input" > "$settings_tmp"
+      run ${lib.getExe' pkgs.coreutils "chmod"} 0600 "$settings_tmp"
+      run ${lib.getExe' pkgs.coreutils "mv"} -T "$settings_tmp" "$settings_file"
+      trap - EXIT
+
+      session_dir=${lib.escapeShellArg "${config.xdg.stateHome}/DankMaterialShell"}
+      session_file="$session_dir/session.json"
+      run ${lib.getExe' pkgs.coreutils "mkdir"} -p "$session_dir"
+
+      if [[ -s "$session_file" ]] \
+        && ${lib.getExe pkgs.jq} -e 'type == "object"' "$session_file" >/dev/null 2>&1; then
+        session_input="$session_file"
+      else
+        session_input=${pkgs.writeText "dms-empty-session.json" "{}"}
+      fi
+
+      session_tmp="$(${lib.getExe' pkgs.coreutils "mktemp"} "$session_dir/.session.json.XXXXXX")"
+      trap '${lib.getExe' pkgs.coreutils "rm"} -f -- "$session_tmp"' EXIT
+      ${lib.getExe pkgs.jq} \
+        --argjson wallpapers ${lib.escapeShellArg (builtins.toJSON wallpaperPaths)} \
+        --argjson fillModes ${
+          lib.escapeShellArg (builtins.toJSON (lib.mapAttrs (_: _: "Fill") wallpaperPaths))
+        } '
+          .configVersion = (.configVersion // 3)
+          | .perMonitorWallpaper = true
+          | .monitorWallpapers = ((.monitorWallpapers // {}) + $wallpapers)
+          | .monitorWallpaperFillModes = ((.monitorWallpaperFillModes // {}) + $fillModes)
+        ' "$session_input" > "$session_tmp"
+      run ${lib.getExe' pkgs.coreutils "chmod"} 0600 "$session_tmp"
+      run ${lib.getExe' pkgs.coreutils "mv"} -T "$session_tmp" "$session_file"
+      trap - EXIT
+    '';
+
+    # Keep the official client installed as a fallback, but prevent its in-app
+    # autostart toggle from launching it alongside Vesktop.
     xdg.configFile."autostart/discord.desktop" = {
-      # A Home Manager backup would still match the XDG autostart generator's
-      # desktop-file glob and launch the stale executable alongside this one.
       force = true;
       text = ''
         [Desktop Entry]
         Type=Application
-        Name=Discord
-        Comment=All-in-one cross-platform voice and text chat for gamers
+        Name=Discord (official fallback)
         Icon=discord
         Exec=/run/current-system/sw/bin/discord
+        Terminal=false
+        Hidden=true
+        X-GNOME-Autostart-enabled=false
+      '';
+    };
+
+    xdg.configFile."autostart/vesktop.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Vesktop
+        Comment=Discord client with improved Linux and Wayland support
+        Icon=vesktop
+        Exec=/run/current-system/sw/bin/vesktop
         Terminal=false
         X-GNOME-Autostart-enabled=true
       '';

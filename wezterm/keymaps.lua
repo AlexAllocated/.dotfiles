@@ -1,7 +1,12 @@
 local wezterm = require("wezterm")
 local config = require("config")
+local clipboard = require("clipboard")
 
 config.keys = {
+	-- Keep plain Ctrl+V available to terminal applications such as Codex,
+	-- which uses it for image paste. Ctrl+Shift+V owns text paste.
+	{ key = "v", mods = "CTRL|SHIFT", action = clipboard.paste },
+
 	-- Show Debug Overlay
 	{ key = "D", mods = "CTRL|SHIFT|ALT", action = wezterm.action.ShowDebugOverlay },
 

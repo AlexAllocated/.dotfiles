@@ -71,4 +71,23 @@ if vim.fn.has("wsl") == 1 then
 	-- 	},
 	-- 	cache_enabled = 0,
 	-- }
+elseif
+	vim.fn.has("unix") == 1
+	and vim.fn.executable("dotfiles-clipboard-copy") == 1
+	and vim.fn.executable("dotfiles-clipboard-paste") == 1
+then
+	-- The desktop uses Ctrl+V consistently, so make both Vim's + clipboard
+	-- register and its * primary-selection register update Wayland CLIPBOARD.
+	vim.g.clipboard = {
+		name = "WaylandClipboard",
+		copy = {
+			["+"] = "dotfiles-clipboard-copy",
+			["*"] = "dotfiles-clipboard-copy",
+		},
+		paste = {
+			["+"] = "dotfiles-clipboard-paste",
+			["*"] = "dotfiles-clipboard-paste",
+		},
+		cache_enabled = false,
+	}
 end

@@ -11,6 +11,13 @@ let
   plasmaDesktop = cfg.profile == "nixos-desktop";
   terminalFont = pkgs.nerd-fonts.bigblue-terminal;
   canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
+  durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {
+    # Upstream's systemd integration places every pane in a transient scope in
+    # the caller's user manager. This workstation deliberately keeps one tmux
+    # server across graphical logouts, so those scopes would make the daemon
+    # survive while its shells are killed with the outgoing desktop session.
+    configureFlags = (oldAttrs.configureFlags or [ ]) ++ [ "--disable-cgroups" ];
+  });
   canonicalTmuxClient = pkgs.writeShellApplication {
     name = "tmux";
     text = ''
@@ -18,7 +25,7 @@ let
       # server. Outside tmux, use the workstation's system-owned server unless
       # the caller deliberately selected another server with -L or -S.
       if [[ -n "''${TMUX:-}" ]]; then
-        exec ${pkgs.tmux}/bin/tmux "$@"
+        exec ${durableTmuxPackage}/bin/tmux "$@"
       fi
 
       explicit_socket=false
@@ -34,10 +41,50 @@ let
       done
 
       if [[ "$explicit_socket" == true ]]; then
-        exec ${pkgs.tmux}/bin/tmux "$@"
+        exec ${durableTmuxPackage}/bin/tmux "$@"
       fi
 
-      exec ${pkgs.tmux}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
+      exec ${durableTmuxPackage}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
+    '';
+  };
+  desktopClipboardCopy = pkgs.writeShellApplication {
+    name = "dotfiles-clipboard-copy";
+    runtimeInputs = with pkgs; [
+      coreutils
+      gnused
+      systemd
+      wl-clipboard
+    ];
+    text = ''
+      runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$(${lib.getExe' pkgs.coreutils "id"} -u)}"
+      export XDG_RUNTIME_DIR="$runtime_dir"
+      if [[ -z "''${WAYLAND_DISPLAY:-}" || ! -S "$runtime_dir/$WAYLAND_DISPLAY" ]]; then
+        WAYLAND_DISPLAY="$(${lib.getExe' pkgs.systemd "systemctl"} --user show-environment \
+          | ${lib.getExe pkgs.gnused} -n 's/^WAYLAND_DISPLAY=//p' \
+          | ${lib.getExe' pkgs.coreutils "head"} -n 1)"
+        export WAYLAND_DISPLAY
+      fi
+      exec ${lib.getExe' pkgs.wl-clipboard "wl-copy"} --type text/plain "$@"
+    '';
+  };
+  desktopClipboardPaste = pkgs.writeShellApplication {
+    name = "dotfiles-clipboard-paste";
+    runtimeInputs = with pkgs; [
+      coreutils
+      gnused
+      systemd
+      wl-clipboard
+    ];
+    text = ''
+      runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$(${lib.getExe' pkgs.coreutils "id"} -u)}"
+      export XDG_RUNTIME_DIR="$runtime_dir"
+      if [[ -z "''${WAYLAND_DISPLAY:-}" || ! -S "$runtime_dir/$WAYLAND_DISPLAY" ]]; then
+        WAYLAND_DISPLAY="$(${lib.getExe' pkgs.systemd "systemctl"} --user show-environment \
+          | ${lib.getExe pkgs.gnused} -n 's/^WAYLAND_DISPLAY=//p' \
+          | ${lib.getExe' pkgs.coreutils "head"} -n 1)"
+        export WAYLAND_DISPLAY
+      fi
+      exec ${lib.getExe' pkgs.wl-clipboard "wl-paste"} --no-newline "$@"
     '';
   };
 in
@@ -46,11 +93,26 @@ in
 
   config = {
     home.packages = lib.optionals nativeLinux [
+      desktopClipboardCopy
+      desktopClipboardPaste
       pkgs.wezterm
       terminalFont
     ];
     home.sessionVariables = lib.mkIf nativeLinux {
       TERMINAL = "wezterm";
+    };
+
+    # Wayland clipboard contents are owned by the process that copied them.
+    # Retain both selections after short-lived helpers, tmux copy commands, or
+    # applications exit so Noctalia history is not the only surviving copy.
+    systemd.user.services.wl-clip-persist = lib.mkIf nativeLinux {
+      Unit.Description = "Persist Wayland clipboard selections";
+      Service = {
+        ExecStart = "${lib.getExe pkgs.wl-clip-persist} --clipboard both --reconnect-tries INF";
+        Restart = "on-failure";
+        RestartSec = 1;
+      };
+      Install.WantedBy = [ "default.target" ];
     };
 
     xdg.terminal-exec = lib.mkIf nativeLinux {
@@ -137,14 +199,27 @@ in
           '';
         }
       ];
-      extraConfig = builtins.readFile (sourceRoot + "/tmux/tmux.conf");
+      extraConfig =
+        builtins.readFile (sourceRoot + "/tmux/tmux.conf")
+        + lib.optionalString nativeLinux ''
+          # Keep the desktop clipboard authoritative even when this canonical
+          # server also has SSH clients.
+          set -s copy-command '${lib.getExe desktopClipboardCopy}'
+        ''
+        + lib.optionalString plasmaDesktop ''
+          # Mouse reporting prevents WezTerm from reclaiming a right-click once
+          # tmux receives it. Read the system clipboard and bracketed-paste it
+          # directly into the pane that was clicked.
+          bind-key -T root MouseDown3Pane run-shell -b \
+            '${lib.getExe desktopClipboardPaste} | ${lib.getExe durableTmuxPackage} -S ${lib.escapeShellArg canonicalTmuxSocket} load-buffer -b dotfiles-system-clipboard - && ${lib.getExe durableTmuxPackage} -S ${lib.escapeShellArg canonicalTmuxSocket} paste-buffer -b dotfiles-system-clipboard -d -p -t "#{mouse_pane}"'
+        '';
     };
 
     # The system-owned tmux process deliberately survives NixOS switches, so
     # apply new personal defaults in place without restarting it.
     home.activation.canonicalTmuxConfiguration = lib.mkIf plasmaDesktop (
       lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-        tmux=${lib.getExe pkgs.tmux}
+        tmux=${lib.getExe durableTmuxPackage}
         socket=/run/chev-ttyd-rescue-tmux/tmux.sock
 
         if [[ -S "$socket" ]]; then

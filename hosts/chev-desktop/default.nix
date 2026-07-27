@@ -194,4 +194,14 @@
       ExecStart = "${pkgs.e2fsprogs}/bin/chattr +C /data/games";
     };
   };
+
+  # Keep container layers and named volumes off the constrained system SSD.
+  # The one-time migration copies and verifies /var/lib/docker before this
+  # data-root is activated; the existing 2 TB filesystem is not reformatted.
+  virtualisation.docker.daemon.settings.data-root = "/data/docker";
+  systemd.services.docker = {
+    after = [ "data.mount" ];
+    requires = [ "data.mount" ];
+    unitConfig.ConditionPathIsMountPoint = "/data";
+  };
 }

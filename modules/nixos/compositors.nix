@@ -21,6 +21,7 @@ let
     ];
   });
   systemctl = lib.getExe' pkgs.systemd "systemctl";
+  loginctl = lib.getExe' pkgs.systemd "loginctl";
 
   # Plasma ships its X11 and Wayland launchers in one derivation. Present a
   # small filtered package to SDDM so the chooser stays Wayland-only without
@@ -72,6 +73,41 @@ let
       clear_session_state
       ${systemctl} --user set-environment \
         DOTFILES_DESKTOP_SHELL=${lib.escapeShellArg shell}
+
+      # Persistent Sunshine belongs to the preceding seat session until its
+      # KMS wrapper notices the logind handoff and exits. Starting the next
+      # compositor during that short overlap can leave it permanently
+      # headless with EBUSY. Nudge the old, same-user wrapper and wait for
+      # systemd to replace it before the compositor opens DRM.
+      sunshine_session_file=/run/sunshine/seat-session
+      current_seat_session="$(${loginctl} show-seat seat0 --property ActiveSession --value 2>/dev/null || true)"
+      recorded_sunshine_session=""
+      if [[ -r "$sunshine_session_file" ]]; then
+        recorded_sunshine_session="$(<"$sunshine_session_file")"
+      fi
+      if [[ -n "$current_seat_session" \
+        && -n "$recorded_sunshine_session" \
+        && "$current_seat_session" != "$recorded_sunshine_session" ]]; then
+        old_sunshine_pid="$(${systemctl} show sunshine.service --property MainPID --value 2>/dev/null || true)"
+        if [[ "$old_sunshine_pid" =~ ^[1-9][0-9]*$ ]] \
+          && kill -0 "$old_sunshine_pid" 2>/dev/null; then
+          printf 'Waiting for Sunshine from seat session %s before starting %s.\n' \
+            "$recorded_sunshine_session" ${lib.escapeShellArg id}
+          kill -TERM "$old_sunshine_pid" 2>/dev/null || true
+          for _attempt in {1..300}; do
+            running_sunshine_pid="$(${systemctl} show sunshine.service --property MainPID --value 2>/dev/null || true)"
+            if [[ "$running_sunshine_pid" != "$old_sunshine_pid" ]]; then
+              break
+            fi
+            sleep 0.05
+          done
+          running_sunshine_pid="$(${systemctl} show sunshine.service --property MainPID --value 2>/dev/null || true)"
+          if [[ "$running_sunshine_pid" == "$old_sunshine_pid" ]]; then
+            printf 'Sunshine did not release DRM within fifteen seconds; refusing to start a headless compositor.\n' >&2
+            exit 75
+          fi
+        fi
+      fi
 
       compositor_pid=""
       cleanup() {
@@ -136,6 +172,13 @@ let
 
   experimentalSessionSpecs = [
     {
+      id = "niri-dms";
+      name = "Niri + DMS";
+      desktopNames = "niri";
+      shell = "dms";
+      command = niriCommand;
+    }
+    {
       id = "niri-noctalia";
       name = "Niri + Noctalia";
       desktopNames = "niri";
@@ -164,6 +207,10 @@ let
       label = "Niri + Noctalia";
       command = experimentalLaunchers.niri-noctalia;
     };
+    niri-dms = {
+      label = "Niri + DMS";
+      command = experimentalLaunchers.niri-dms;
+    };
     mango-noctalia = {
       label = "Mango + Noctalia";
       command = experimentalLaunchers.mango-noctalia;
@@ -171,6 +218,7 @@ let
   };
   desktopTargetOrder = [
     "plasma"
+    "niri-dms"
     "niri-noctalia"
     "mango-noctalia"
   ];
@@ -375,7 +423,7 @@ let
       Targets:
       ${desktopTargetHelp}
 
-      Short aliases: niri, mango
+      Short aliases: niri (DMS), mango (Noctalia)
 
       Switching ends the current graphical login. Save application work first.
       Sunshine remains running; Moonlight may need one reconnect during handoff.
@@ -384,7 +432,7 @@ let
 
       canonicalize() {
         case "$1" in
-          niri) printf '%s\n' niri-noctalia ;;
+          niri) printf '%s\n' niri-dms ;;
           mango) printf '%s\n' mango-noctalia ;;
           ${lib.concatStringsSep " | " desktopTargetOrder}) printf '%s\n' "$1" ;;
           *) return 1 ;;
@@ -528,6 +576,12 @@ in
         # The explicitly named Noctalia session below replaces Mango's generic
         # upstream chooser entry.
         addLoginEntry = false;
+      };
+
+      dms-shell = {
+        enable = true;
+        # The session selector owns startup so DMS and Noctalia can coexist.
+        systemd.enable = false;
       };
 
       noctalia = {

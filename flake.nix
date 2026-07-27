@@ -21,6 +21,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Keep the experimental compositor stack pinned independently from the
     # stable workstation base. Mango's modern socket protocol is shared by
     # both shell experiments below.
@@ -44,6 +49,7 @@
       home-manager,
       nixos-wsl,
       nix-darwin,
+      lanzaboote,
       ...
     }:
     let
@@ -287,6 +293,25 @@
         ];
       };
 
+      nixosConfigurations.tracer = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = (mkSpecialArgs "x86_64-linux" "alx") // {
+          profile = "nixos-desktop";
+        };
+        modules = [ ./hosts/tracer ];
+      };
+
+      nixosConfigurations.tracer-rescue = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = (mkSpecialArgs "x86_64-linux" "alx") // {
+          profile = "tracer-rescue";
+        };
+        modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-graphical-base.nix"
+          ./modules/nixos/tracer-rescue.nix
+        ];
+      };
+
       nixosConfigurations.wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
@@ -338,6 +363,7 @@
         compositors = ./modules/nixos/compositors.nix;
         desktop = ./modules/nixos/desktop.nix;
         migration-tools = ./modules/nixos/migration-tools.nix;
+        tracer-tools = ./modules/nixos/tracer-tools.nix;
         wsl = ./modules/nixos/wsl.nix;
       };
 
@@ -353,6 +379,34 @@
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
           chev-installer-iso = self.nixosConfigurations.chev-installer.config.system.build.isoImage;
+          tracer-rescue-iso = self.nixosConfigurations.tracer-rescue.config.system.build.isoImage;
+          tracer-rescue-media = pkgs.writeShellApplication {
+            name = "prepare-tracer-rescue";
+            runtimeInputs = with pkgs; [
+              btrfs-progs
+              coreutils
+              cryptsetup
+              dosfstools
+              e2fsprogs
+              findutils
+              gawk
+              git
+              gnugrep
+              gptfdisk
+              jq
+              parted
+              python3
+              rsync
+              systemd
+              util-linux
+              xorriso
+            ];
+            text = ''
+              export TRACER_RESCUE_ISO=${self.nixosConfigurations.tracer-rescue.config.system.build.isoImage}
+              export TRACER_DOTFILES_SOURCE=${self.outPath}
+              exec ${pkgs.bash}/bin/bash ${self}/scripts/nixos/prepare-tracer-rescue.sh "$@"
+            '';
+          };
           chev-installer-fat32-check =
             pkgs.runCommand "chev-installer-fat32-check"
               {
@@ -451,6 +505,36 @@
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
           profile-api = mkDarwinProfileCheck pkgs pkgs.stdenv.hostPlatform.system;
+        }
+        // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          tracer-contract = pkgs.runCommand "tracer-contract" { } ''
+            test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.networking.hostName} = tracer
+            test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.dotfiles.desktop.user} = alx
+            test ${
+              if self.nixosConfigurations.tracer.config.services.displayManager.autoLogin.enable then
+                "enabled"
+              else
+                "disabled"
+            } = disabled
+            test ${
+              nixpkgs.lib.escapeShellArg
+                self.nixosConfigurations.tracer.config.boot.initrd.luks.devices."tracer-root".device
+            } = /dev/disk/by-partlabel/TRACER_CRYPT
+            test ${
+              nixpkgs.lib.escapeShellArg
+                self.nixosConfigurations.tracer-rescue.config.boot.initrd.luks.devices."tracer-rescue-persist".device
+            } = /dev/disk/by-partlabel/TRACER_RESCUE_CRYPT
+            test ${
+              nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer-rescue.config.fileSystems."/home".device
+            } = /dev/mapper/tracer-rescue-persist
+            test ${
+              if self.nixosConfigurations.tracer-rescue.config.services.displayManager.autoLogin.enable then
+                "enabled"
+              else
+                "disabled"
+            } = enabled
+            touch "$out"
+          '';
         }
       );
 

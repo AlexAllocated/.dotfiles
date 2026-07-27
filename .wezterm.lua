@@ -42,7 +42,10 @@ config.front_end = "WebGpu" -- ["OpenGL", "Software", "WebGpu"]
 config.hide_mouse_cursor_when_typing = true
 config.hide_tab_bar_if_only_one_tab = true
 -- config.macos_window_background_blur = 0
-config.max_fps = 240
+-- Wayland compositors pace frames to the active output (160 Hz on the LG and
+-- 60 Hz on the iPad dummy). Keep the client-side fallback ceiling aligned
+-- with the fastest configured output for backends where max_fps is honored.
+config.max_fps = 160
 config.mouse_wheel_scrolls_tabs = false
 config.native_macos_fullscreen_mode = true
 config.scrollback_lines = 10000
