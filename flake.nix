@@ -507,6 +507,19 @@
           profile-api = mkDarwinProfileCheck pkgs pkgs.stdenv.hostPlatform.system;
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          firefox-wayland-wrapper =
+            let
+              workstation = self.nixosConfigurations.chev-desktop.config;
+              firefoxPackage = workstation.programs.firefox.package;
+              externalHandler = workstation.home-manager.users.alex.xdg.desktopEntries.firefox-focused.exec;
+            in
+            pkgs.runCommand "firefox-wayland-wrapper" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
+              grep -Fq gsettings-desktop-schemas ${firefoxPackage}/bin/firefox
+              grep -Fq gtk+3 ${firefoxPackage}/bin/firefox
+              handler="$(printf '%s' ${nixpkgs.lib.escapeShellArg externalHandler} | cut -d' ' -f1)"
+              grep -Fq /run/current-system/sw/bin/firefox "$handler"
+              touch "$out"
+            '';
           tracer-contract = pkgs.runCommand "tracer-contract" { } ''
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.networking.hostName} = tracer
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.dotfiles.desktop.user} = alx

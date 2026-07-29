@@ -57,9 +57,13 @@ config.webgpu_power_preference = "HighPerformance"
 -- config.webgpu_preferred_adapter = wezterm.gui.enumerate_gpus()[2]
 config.window_background_opacity = 0.9
 config.window_close_confirmation = "AlwaysPrompt"
+-- Terminal rows are whole cells. Keep any unavoidable vertical remainder at
+-- the bottom, away from tmux's top-anchored status line.
+config.window_content_alignment = { horizontal = "Left", vertical = "Top" }
 config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
--- config.window_padding = { left = 10, right = 10, top = 25, bottom = 10 }
-config.window_padding = { left = 0, right = 0, top = 10, bottom = 0 }
+-- Leave the top status line flush with the window; whole-cell rounding is
+-- handled by the top alignment above and leaves only a bottom remainder.
+config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
 
 if wezterm.target_triple:match("windows") then
 	local available = {}

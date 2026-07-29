@@ -18,6 +18,9 @@ let
   noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
     builtins.readFile ../../patches/noctalia-focus-existing-windows.patch
   );
+  noctaliaWeztermNotificationsPatch = pkgs.writeText "noctalia-wezterm-notifications.patch" (
+    builtins.readFile ../../patches/noctalia-wezterm-notifications.patch
+  );
   noctaliaNixosNvmlPatch = pkgs.writeText "noctalia-nixos-nvml.patch" (
     builtins.readFile ../../patches/noctalia-nixos-nvml.patch
   );
@@ -34,6 +37,7 @@ let
   renderNiriOutput =
     name: output:
     let
+      layoutOverrides = lib.optional (output.niriGaps != null) "gaps ${toString output.niriGaps};";
       body = lib.concatStringsSep "\n" (
         (
           if !output.enable then
@@ -48,7 +52,9 @@ let
               )
             )
         )
-        ++ lib.optional (output.niriGaps != null) "  layout { gaps ${toString output.niriGaps}; }"
+        ++ lib.optional (layoutOverrides != [ ]) (
+          "  layout {\n${lib.concatMapStringsSep "\n" (line: "    ${line}") layoutOverrides}\n  }"
+        )
       );
     in
     ''
@@ -556,6 +562,7 @@ in
             patches = (oldAttrs.patches or [ ]) ++ [
               noctaliaFocusPatch
               noctaliaNixosNvmlPatch
+              noctaliaWeztermNotificationsPatch
             ];
           });
       systemd.enable = false;
@@ -587,8 +594,9 @@ in
             "workspaces"
             "cpu_temperature"
             "gpu_temperature"
+            "weather"
           ];
-          center = [ "media" ];
+          center = [ "clock" ];
           end = [
             "tray"
             "notifications"
@@ -600,15 +608,9 @@ in
             "battery"
             "control-center"
             "session"
-            "clock_spacer"
-            "clock"
           ];
         };
         widget = {
-          clock_spacer = {
-            type = "spacer";
-            length = 12;
-          };
           network = {
             type = "network";
             show_label = false;
@@ -634,7 +636,19 @@ in
             display = "text";
             glyph = "gpu-usage";
           };
+          weather = {
+            type = "weather";
+            show_condition = false;
+            show_temperature = true;
+          };
         };
+        weather = {
+          enabled = true;
+          effects = false;
+          refresh_minutes = 30;
+          unit = "imperial";
+        };
+        location.auto_locate = true;
         idle.behavior = {
           lock = {
             timeout = 600;
@@ -850,7 +864,7 @@ in
         builtins.match "^[A-Za-z0-9._-]+$" name != null
         && (output.mode == null || builtins.match "^[0-9]+x[0-9]+(@[0-9.]+)?$" output.mode != null)
         && (output.niriGaps == null || output.niriGaps >= 0);
-      message = "dotfiles.compositors.outputs.${name} has an unsafe connector name, mode, or Niri gaps value";
+      message = "dotfiles.compositors.outputs.${name} has an unsafe connector name, mode, or Niri layout value";
     }) cfg.outputs;
   };
 }

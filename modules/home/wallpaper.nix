@@ -20,13 +20,13 @@ in
 
     source = lib.mkOption {
       type = lib.types.path;
-      default = ../../assets/wallpapers/pixel-meadow-hex-gruvbox-3440x1440.png;
+      default = ../../assets/wallpapers/pixel-meadow-hive-3440x1440.png;
       description = "Source image installed as the workstation wallpaper.";
     };
 
     fileName = lib.mkOption {
       type = lib.types.strMatching "^[A-Za-z0-9._+-]+[.]png$";
-      default = "pixel-meadow-hex-gruvbox-3440x1440.png";
+      default = "pixel-meadow-hive-3440x1440.png";
       description = "Stable installed wallpaper filename.";
     };
 
@@ -65,13 +65,13 @@ in
 
       source = lib.mkOption {
         type = lib.types.path;
-        default = ../../assets/wallpapers/pixel-meadow-hex-gruvbox-2732x2048.png;
+        default = ../../assets/wallpapers/pixel-meadow-hive-2732x2048.png;
         description = "Source image installed as the iPad dummy wallpaper.";
       };
 
       fileName = lib.mkOption {
         type = lib.types.strMatching "^[A-Za-z0-9._+-]+[.]png$";
-        default = "pixel-meadow-hex-gruvbox-2732x2048.png";
+        default = "pixel-meadow-hive-2732x2048.png";
         description = "Stable installed filename for the iPad dummy wallpaper.";
       };
 

@@ -20,7 +20,6 @@ let
   firefoxExternalLinkHandler = pkgs.writeShellApplication {
     name = "dotfiles-open-firefox-link";
     runtimeInputs = [
-      pkgs.firefox
       pkgs.jq
       pkgs.niri
       pkgs.systemd
@@ -115,7 +114,10 @@ let
         browser_was_running=true
       fi
 
-      firefox --name firefox "$@" >/dev/null 2>&1 &
+      # The NixOS package is wrapped with the native-Wayland GTK schema
+      # contract. Use that canonical launcher instead of capturing a second
+      # Firefox package in this helper's private PATH.
+      /run/current-system/sw/bin/firefox --name firefox "$@" >/dev/null 2>&1 &
       launcher_pid=$!
 
       for _ in {1..40}; do

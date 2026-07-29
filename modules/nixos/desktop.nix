@@ -6,6 +6,27 @@
 }:
 let
   cfg = config.dotfiles.desktop;
+  firefoxGtkSchemaOverlay = _final: prev: {
+    firefox = prev.firefox.overrideAttrs (oldAttrs: {
+      # The 2026-07-25 Nixpkgs Firefox wrapper stopped exporting these schema
+      # roots. Firefox's native Wayland chrome then lost text and collapsed
+      # popup menus even though the same binary rendered correctly when the
+      # previous wrapper supplied them. Repair the runtime environment without
+      # disabling native Wayland, fractional scaling, or GPU acceleration.
+      # Firefox is constructed with buildCommand, so postFixup is not run.
+      # Extend its native wrapper arguments instead; this also keeps .override
+      # available for the NixOS Firefox module.
+      makeWrapperArgs = (oldAttrs.makeWrapperArgs or [ ]) ++ [
+        "--prefix"
+        "XDG_DATA_DIRS"
+        ":"
+        (lib.concatStringsSep ":" [
+          "${prev.gsettings-desktop-schemas}/share/gsettings-schemas/${prev.gsettings-desktop-schemas.name}"
+          "${prev.gtk3}/share/gsettings-schemas/${prev.gtk3.name}"
+        ])
+      ];
+    });
+  };
   sunshineKms = cfg.sunshine.mode == "kms";
   sunshineConfig =
     (pkgs.formats.keyValue { }).generate "sunshine.conf"
@@ -101,9 +122,19 @@ let
       done
 
       openrazer_was_active=false
+      polychromatic_tray_was_active=false
+      polychromatic_tray_unit='app-polychromatic\x2dautostart@autostart.service'
       user_systemctl=(systemctl --machine=${cfg.user}@.host --user)
+      if [[ "$EUID" -eq 0 ]]; then
+        user_busctl=(busctl --machine=${cfg.user}@.host --user)
+      else
+        user_busctl=(busctl --user)
+      fi
       if [[ "$needs_hardware" == true ]] \
         && "''${user_systemctl[@]}" is-active --quiet openrazer-daemon.service 2>/dev/null; then
+        if "''${user_systemctl[@]}" is-active --quiet "$polychromatic_tray_unit" 2>/dev/null; then
+          polychromatic_tray_was_active=true
+        fi
         "''${user_systemctl[@]}" stop openrazer-daemon.service
         openrazer_was_active=true
       fi
@@ -111,6 +142,16 @@ let
       restore_openrazer() {
         if [[ "$openrazer_was_active" == true ]]; then
           "''${user_systemctl[@]}" start openrazer-daemon.service || true
+          # Polychromatic caches OpenRazer D-Bus device proxies. They remain
+          # permanently stale if its XDG autostart tray survives the direct
+          # HID profile transaction and daemon restart.
+          if [[ "$polychromatic_tray_was_active" == true ]]; then
+            for _ in {1..20}; do
+              "''${user_busctl[@]}" status org.razer >/dev/null 2>&1 && break
+              ${lib.getExe' pkgs.coreutils "sleep"} 0.1
+            done
+            "''${user_systemctl[@]}" restart "$polychromatic_tray_unit" || true
+          fi
         fi
       }
       trap restore_openrazer EXIT
@@ -418,6 +459,13 @@ let
     ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
+      state_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/dotfiles-ipad-display"
+      pending_off="$state_dir/disable-pending"
+      mkdir -p -- "$state_dir"
+
+      # A new stream supersedes any disconnect cleanup that was waiting for a
+      # physical monitor to return.
+      rm -f -- "$pending_off"
 
       drm_connector_ready() {
         local directory
@@ -534,6 +582,18 @@ let
     ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
+      state_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/dotfiles-ipad-display"
+      pending_off="$state_dir/disable-pending"
+      wait_for_output=0
+      if [[ "''${1:-}" == --wait-for-output ]]; then
+        wait_for_output=1
+        shift
+      fi
+      (($# == 0)) || {
+        printf 'Usage: ipad-display-session-off [--wait-for-output]\n' >&2
+        exit 64
+      }
+      mkdir -p -- "$state_dir"
 
       connector_ready() {
         local wanted="$1" directory
@@ -568,42 +628,80 @@ let
         [[ -z "$value" ]] || export "$name=$value"
       }
 
-      for variable in \
-        WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
-        MANGO_INSTANCE_SIGNATURE; do
-        import_manager_variable "$variable"
-      done
+      refresh_graphical_environment() {
+        unset \
+          WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
+          MANGO_INSTANCE_SIGNATURE
+        for variable in \
+          WAYLAND_DISPLAY DISPLAY NIRI_SOCKET \
+          MANGO_INSTANCE_SIGNATURE; do
+          import_manager_variable "$variable"
+        done
+      }
 
-      if connector_ready "$connector" && ! other_output_ready; then
-        printf 'Keeping %s enabled because it is the last active DRM output.\n' "$connector"
+      disable_connector() {
+        local desktop
+        refresh_graphical_environment
+        desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
+        case "$desktop" in
+          KDE)
+            ${ipadDisplayOff}/bin/ipad-display-off
+            ;;
+          niri)
+            niri msg output "$connector" off
+            ;;
+          Mango | mango)
+            wlr-randr --output "$connector" --off
+            ;;
+          *)
+            # Wait for an actual user compositor rather than changing outputs
+            # underneath SDDM or an incomplete desktop handoff.
+            printf 'Deferring %s cleanup for graphical environment %s.\n' \
+              "$connector" "''${desktop:-unknown}"
+            return 1
+            ;;
+        esac
+
+        # Lan Mouse's layer-shell backend follows a newly enabled rightmost
+        # output, but 0.11.0 does not move its capture edge back when that
+        # output disappears. Recreate its capture surface after cleanup.
+        systemctl --user try-restart lan-mouse.service || true
+      }
+
+      if ((wait_for_output)); then
+        while [[ -e "$pending_off" ]]; do
+          if ! connector_ready "$connector"; then
+            rm -f -- "$pending_off"
+            exit 0
+          fi
+          if other_output_ready && disable_connector; then
+            rm -f -- "$pending_off"
+            printf 'Disabled deferred iPad dummy output %s.\n' "$connector"
+            exit 0
+          fi
+          sleep 1
+        done
         exit 0
       fi
 
-      desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
-      case "$desktop" in
-        KDE)
-          ${ipadDisplayOff}/bin/ipad-display-off
-          ;;
-        niri)
-          niri msg output "$connector" off
-          ;;
-        Mango | mango)
-          wlr-randr --output "$connector" --off
-          ;;
-        *)
-          # SDDM and unknown compositors keep the dummy alive so Sunshine can
-          # remain reachable at the greeter. There is no user desktop here in
-          # which the pointer could disappear into the output.
-          printf 'Leaving %s unchanged for graphical environment %s.\n' \
-            "$connector" "''${desktop:-unknown}"
-          ;;
-      esac
+      touch -- "$pending_off"
+      if ! connector_ready "$connector"; then
+        rm -f -- "$pending_off"
+        exit 0
+      fi
+      if other_output_ready && disable_connector; then
+        rm -f -- "$pending_off"
+        exit 0
+      fi
 
-      # Lan Mouse's layer-shell backend follows a newly enabled rightmost
-      # output, but 0.11.0 does not move its capture edge back when that output
-      # disappears. Recreate its capture surface after Sunshine removes the
-      # iPad dummy so the physical LG edge controls the Mac again.
-      systemctl --user try-restart lan-mouse.service || true
+      # The physical monitor may still be off when Moonlight disconnects.
+      # Keep the last DRM output alive, then finish cleanup asynchronously as
+      # soon as a physical output returns. A later stream removes the marker
+      # in ipad-display-session-on, which cancels this worker harmlessly.
+      unit="dotfiles-ipad-display-off-$(date +%s%N)"
+      systemd-run --user --quiet --collect --service-type=exec \
+        --unit="$unit" -- "$0" --wait-for-output
+      printf 'Keeping %s enabled until another DRM output becomes active.\n' "$connector"
     '';
   };
   sunshineSessionRun = pkgs.writeShellApplication {
@@ -867,6 +965,7 @@ in
 
   config = {
     system.stateVersion = "26.05";
+    nixpkgs.overlays = [ firefoxGtkSchemaOverlay ];
     nixpkgs.config.allowUnfree = true;
 
     nix.settings = {

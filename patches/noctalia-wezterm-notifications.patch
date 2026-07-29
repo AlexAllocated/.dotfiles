@@ -1,0 +1,48 @@
+diff --git a/src/dbus/notification/notification_service.cpp b/src/dbus/notification/notification_service.cpp
+index 1323a77..9121ad0 100644
+--- a/src/dbus/notification/notification_service.cpp
++++ b/src/dbus/notification/notification_service.cpp
+@@ -342,4 +342,25 @@ namespace notification_dbus {
+       const std::map<std::string, sdbus::Variant>& hints, int32_t expire_timeout
+   ) {
+-    const int32_t timeout = normalizeNotifyExpireTimeout(expire_timeout);
+-    const auto sanitizedActions = sanitizeNotifyActions(actions);
++    int32_t timeout = normalizeNotifyExpireTimeout(expire_timeout);
++    auto sanitizedActions = sanitizeNotifyActions(actions);
++    Urgency urgency = notifyUrgencyFromHints(hints);
++    auto desktopEntry = notifyDesktopEntryFromHints(hints);
++
++    // WezTerm currently marks every Linux terminal notification as critical,
++    // permanent, and actionless. That makes ordinary OSC notifications look
++    // like errors, prevents them from expiring, and gives notification shells
++    // no standard action to associate with focusing the terminal. Normalize
++    // only this known sender while leaving genuinely critical notifications
++    // from every other application untouched.
++    if (StringUtils::toLower(app_name) == "wezterm") {
++      urgency = Urgency::Normal;
++      if (timeout == 0) {
++        timeout = 8000;
++      }
++      if (sanitizedActions.empty()) {
++        sanitizedActions = {"default", "Show"};
++      }
++      if (!desktopEntry.has_value()) {
++        desktopEntry = "org.wezfurlong.wezterm";
++      }
++    }
+@@ -352,6 +373,6 @@ namespace notification_dbus {
+             .summary = StringUtils::sanitizeMarkup(StringUtils::truncateUtf8(summary, kMaxStringLen)),
+             .body = StringUtils::sanitizeMarkup(StringUtils::truncateUtf8(body, kMaxStringLen)),
+-            .urgency = notifyUrgencyFromHints(hints),
++            .urgency = urgency,
+             .timeout = timeout,
+             .origin = NotificationOrigin::External,
+             .transient = notifyTransientFromHints(hints),
+@@ -361,6 +382,6 @@ namespace notification_dbus {
+             .imageData = notifyImageDataFromHints(hints),
+             .category = notifyCategoryFromHints(hints),
+-            .desktopEntry = notifyDesktopEntryFromHints(hints),
++            .desktopEntry = std::move(desktopEntry),
+         }
+     );
+   }

@@ -570,12 +570,14 @@ let
       # and expose one proper mono communications source.
       "capture.props" = {
         "node.name" = "creator.filter.clean-mic.capture";
-        "target.object" = "creator.hardware.blue-yeti.mic";
         "audio.channels" = 1;
         "audio.position" = [ "FL" ];
         "stream.dont-remix" = true;
+        # Keep the filter itself independent of USB device lifetime. The
+        # event-driven creator-clean-mic-link service below supplies the exact
+        # passive Yeti link whenever both ports exist.
+        "node.autoconnect" = false;
         "node.passive" = true;
-        "node.dont-fallback" = true;
       };
 
       "playback.props" = {
@@ -588,6 +590,36 @@ let
         "priority.session" = 3000;
       };
     };
+  };
+
+  cleanMicLink = pkgs.writeShellApplication {
+    name = "creator-clean-mic-link";
+    runtimeInputs = [
+      pkgs.pipewire
+      pkgs.ripgrep
+    ];
+    text = ''
+      output='creator.hardware.blue-yeti.mic:capture_FL'
+      input='creator.filter.clean-mic.capture:input_FL'
+
+      reconcile() {
+        pw-link --output "$output" | rg --fixed-strings --line-regexp --quiet "$output" || return 0
+        pw-link --input "$input" | rg --fixed-strings --line-regexp --quiet "$input" || return 0
+
+        if [[ -z "$(pw-link --links "$output" "$input")" ]]; then
+          # Linger makes the link owned by PipeWire instead of this short-lived
+          # command; passive keeps RNNoise asleep until Clean Mic has a consumer.
+          pw-link --linger --passive "$output" "$input"
+        fi
+      }
+
+      # Monitoring inputs, outputs, and links emits the current graph first and
+      # then wakes this loop only when the graph changes. PipeWire disconnects
+      # cause the monitor to exit; systemd restarts us against the new daemon.
+      pw-link --monitor --output --input --links | while IFS= read -r _event; do
+        reconcile
+      done
+    '';
   };
 
 in
@@ -923,6 +955,21 @@ in
           actions.update-props."target.object" = "creator.mic.clean";
         }
       ];
+    };
+  };
+
+  systemd.user.services.creator-clean-mic-link = {
+    description = "Keep the Blue Yeti linked to the persistent Clean Mic filter";
+    wantedBy = [ "default.target" ];
+    after = [
+      "pipewire.service"
+      "wireplumber.service"
+    ];
+    partOf = [ "pipewire.service" ];
+    serviceConfig = {
+      ExecStart = "${cleanMicLink}/bin/creator-clean-mic-link";
+      Restart = "always";
+      RestartSec = "250ms";
     };
   };
 }

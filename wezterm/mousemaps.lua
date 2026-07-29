@@ -1,6 +1,5 @@
 local wezterm = require("wezterm")
 local config = require("config")
-local clipboard = require("clipboard")
 local act = wezterm.action
 
 config.mouse_bindings = {
@@ -28,7 +27,7 @@ config.mouse_bindings = {
 				window:perform_action(wezterm.action.CopyTo("ClipboardAndPrimarySelection"), pane)
 				window:perform_action(wezterm.action.ClearSelection, pane)
 			else
-				window:perform_action(clipboard.paste, pane)
+				window:perform_action(wezterm.action({ PasteFrom = "Clipboard" }), pane)
 			end
 		end),
 	},
