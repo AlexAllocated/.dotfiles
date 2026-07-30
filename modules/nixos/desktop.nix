@@ -994,6 +994,12 @@ in
         "nix-command"
         "flakes"
       ];
+      # Do not let several internally parallel C++/Rust builds multiply into
+      # hundreds of compiler processes. On this 32 GiB, 20-thread workstation,
+      # two derivations with eight cores each leave enough memory for the live
+      # desktop, Docker, and Nix evaluation without throttling non-Nix work.
+      max-jobs = 2;
+      cores = 8;
       trusted-users = [
         "root"
         cfg.user
