@@ -1,0 +1,15 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index fe19386..e1656d3 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -31,2 +31,3 @@
+ #include <QDir>
++#include <QGuiApplication>
+ #include <QLibraryInfo>
+@@ -179,2 +180,6 @@ void configureApp(bool gui, QTranslator& translator, QTranslator& qtTranslator)
+ {
++#if defined(Q_OS_LINUX)
++    // Publish the Wayland app ID before the first capture window is mapped.
++    QGuiApplication::setDesktopFileName(QStringLiteral("org.flameshot.Flameshot"));
++#endif
+     if (gui) {

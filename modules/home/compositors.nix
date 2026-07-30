@@ -594,9 +594,11 @@ in
             "workspaces"
             "cpu_temperature"
             "gpu_temperature"
+          ];
+          center = [
+            "clock"
             "weather"
           ];
-          center = [ "clock" ];
           end = [
             "tray"
             "notifications"
@@ -726,6 +728,19 @@ in
       run ${lib.getExe' pkgs.coreutils "chmod"} 0600 "$session_tmp"
       run ${lib.getExe' pkgs.coreutils "mv"} -T "$session_tmp" "$session_file"
       trap - EXIT
+    '';
+
+    # Flameshot 14 replaced the compositor-specific grim adapter with the
+    # standard screenshot portal. Migrate the mutable per-user config without
+    # taking ownership of the rest of Alex's Flameshot preferences.
+    home.activation.flameshotPortalMigration = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      config_file="$HOME/.config/flameshot/flameshot.ini"
+      if [[ -f "$config_file" ]]; then
+        $DRY_RUN_CMD ${lib.getExe pkgs.gnused} -i \
+          -e '/^useGrimAdapter=/d' \
+          -e '/^disabledGrimWarning=/d' \
+          "$config_file"
+      fi
     '';
 
     # Keep the official client installed as a fallback, but prevent its in-app

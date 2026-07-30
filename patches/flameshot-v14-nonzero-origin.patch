@@ -1,0 +1,15 @@
+From 09a954616c29db0d4b564682d70a80b3403d6074 Mon Sep 17 00:00:00 2001
+From: Flameshot contributors
+Subject: [PATCH] Fix capture when logical min/max coordinates are not zero
+
+Backport of upstream flameshot-org/flameshot#4735.
+
+diff --git a/src/utils/screengrabber.cpp b/src/utils/screengrabber.cpp
+index 8d08027..e62fa3b 100644
+--- a/src/utils/screengrabber.cpp
++++ b/src/utils/screengrabber.cpp
+@@ -492,2 +492,2 @@ QPixmap ScreenGrabber::cropToMonitor(const QPixmap& fullScreenshot,
+-    int minX = 0, minY = 0;
+-    int maxX = 0, maxY = 0;
++    int minX = INT_MAX, minY = INT_MAX;
++    int maxX = INT_MIN, maxY = INT_MIN;

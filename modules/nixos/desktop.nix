@@ -6,7 +6,7 @@
 }:
 let
   cfg = config.dotfiles.desktop;
-  firefoxGtkSchemaOverlay = _final: prev: {
+  workstationPackageOverlay = _final: prev: {
     firefox = prev.firefox.overrideAttrs (oldAttrs: {
       # The 2026-07-25 Nixpkgs Firefox wrapper stopped exporting these schema
       # roots. Firefox's native Wayland chrome then lost text and collapsed
@@ -24,6 +24,27 @@ let
           "${prev.gsettings-desktop-schemas}/share/gsettings-schemas/${prev.gsettings-desktop-schemas.name}"
           "${prev.gtk3}/share/gsettings-schemas/${prev.gtk3.name}"
         ])
+      ];
+    });
+    flameshot = prev.flameshot.overrideAttrs (_oldAttrs: {
+      # Version 13 spans one editor over global desktop coordinates and breaks
+      # its toolbar on a fractionally scaled output with a nonzero origin. V14
+      # captures one monitor at a time, normalizes child widgets to local
+      # coordinates, and uses the portal rather than the legacy grim adapter.
+      version = "14.0.0";
+      src = prev.fetchFromGitHub {
+        owner = "flameshot-org";
+        repo = "flameshot";
+        tag = "v14.0.0";
+        hash = "sha256-GnJ3nOJyyqQbCTMrTYhnQfEOXqCy0x3IapX/PsaZ3VI=";
+      };
+      patches = [
+        ../../patches/flameshot-v14-nix-dependencies.patch
+        ../../patches/flameshot-v14-wayland-app-id.patch
+        ../../patches/flameshot-v14-wayland-overlay.patch
+        # Stable v14 predates this two-line upstream fix for outputs whose
+        # logical origin is not (0, 0), such as the Sunshine iPad display.
+        ../../patches/flameshot-v14-nonzero-origin.patch
       ];
     });
   };
@@ -965,7 +986,7 @@ in
 
   config = {
     system.stateVersion = "26.05";
-    nixpkgs.overlays = [ firefoxGtkSchemaOverlay ];
+    nixpkgs.overlays = [ workstationPackageOverlay ];
     nixpkgs.config.allowUnfree = true;
 
     nix.settings = {

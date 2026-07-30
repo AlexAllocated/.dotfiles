@@ -52,6 +52,13 @@ window-rule {
     match app-id=r#"firefox$"# title="^Picture-in-Picture$"
     open-floating true
 }
+window-rule {
+    // Keep the full-output capture editor over the current view instead of
+    // inserting a new scrolling column and animating the workspace sideways.
+    match app-id=r#"^org\.flameshot\.Flameshot$"#
+    open-floating true
+    open-animation false
+}
 layer-rule {
     match namespace="^noctalia-wallpaper.*"
     place-within-backdrop true

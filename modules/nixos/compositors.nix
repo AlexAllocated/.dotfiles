@@ -18,10 +18,17 @@ let
         url = "https://github.com/niri-wm/niri/compare/dd1c3bcb9f1ef416df33ffa22d1d9bcee1398e7d...2ab59b90d55afbbe362a63e2a061afe4b524d8c4.diff";
         hash = "sha256-gkQnj931BC5/ttf81UVYOi0VRQvXzJN3CA8osUA7iXU=";
       })
+      ../../patches/niri-window-rule-open-animation.patch
     ];
   });
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   loginctl = lib.getExe' pkgs.systemd "loginctl";
+  niriPortalReady = pkgs.writeShellScript "dotfiles-niri-portal-ready" ''
+    # The portal broker chooses its exported interfaces only at startup. Make
+    # sure Niri's GNOME backend is already available, then refresh the broker
+    # after every new Niri graphical session.
+    exec ${systemctl} --user restart xdg-desktop-portal.service
+  '';
 
   # Plasma ships its X11 and Wayland launchers in one derivation. Present a
   # small filtered package to SDDM so the chooser stays Wayland-only without
@@ -601,6 +608,31 @@ in
       chooser_type = "dmenu";
       chooser_cmd = "${lib.getExe pkgs.fuzzel} -d -l 10 -p 'Select a source to share: ' --only-match";
       max_fps = 60;
+    };
+
+    # Name Niri's capture backend explicitly instead of relying on the generic
+    # fallback list. The readiness service below also prevents the broker from
+    # starting first and permanently omitting these interfaces after a desktop
+    # handoff.
+    xdg.portal.config.niri = {
+      "org.freedesktop.impl.portal.ScreenCast" = "gnome";
+      "org.freedesktop.impl.portal.Screenshot" = "gnome";
+    };
+
+    systemd.user.services.dotfiles-niri-portal-ready = {
+      description = "Expose Niri screenshot and screencast portals";
+      wantedBy = [ "niri.service" ];
+      partOf = [ "niri.service" ];
+      wants = [ "xdg-desktop-portal-gnome.service" ];
+      after = [
+        "graphical-session.target"
+        "xdg-desktop-portal-gnome.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = niriPortalReady;
+      };
     };
 
     # The dispatcher remembers the selected target and is the one SDDM

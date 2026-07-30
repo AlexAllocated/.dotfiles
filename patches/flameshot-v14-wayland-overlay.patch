@@ -1,0 +1,17 @@
+diff --git a/src/core/flameshot.cpp b/src/core/flameshot.cpp
+index d439968..9659486 100644
+--- a/src/core/flameshot.cpp
++++ b/src/core/flameshot.cpp
+@@ -172,3 +172,11 @@ CaptureWidget* Flameshot::gui(const CaptureRequest& req)
+ #else
+-        m_captureWindow->showFullScreen();
++        // The capture widget already has the selected output's exact geometry.
++        // Requesting compositor fullscreen makes tiling compositors insert it
++        // into their normal layout before presenting it. A regular Wayland
++        // toplevel lets the compositor keep it as an instant floating overlay.
++        if (QGuiApplication::platformName() == QStringLiteral("wayland")) {
++            m_captureWindow->show();
++        } else {
++            m_captureWindow->showFullScreen();
++        }
+ //        m_captureWindow->show(); // For CaptureWidget Debugging under Linux

@@ -1,0 +1,39 @@
+diff --git a/niri-config/src/window_rule.rs b/niri-config/src/window_rule.rs
+index 06798b3..6e08f2b 100644
+--- a/niri-config/src/window_rule.rs
++++ b/niri-config/src/window_rule.rs
+@@ -35,2 +35,4 @@ pub struct WindowRule {
+     #[knuffel(child, unwrap(argument))]
+     pub open_focused: Option<bool>,
++    #[knuffel(child, unwrap(argument))]
++    pub open_animation: Option<bool>,
+diff --git a/src/window/mod.rs b/src/window/mod.rs
+index abcd7d1..0aaebd7 100644
+--- a/src/window/mod.rs
++++ b/src/window/mod.rs
+@@ -73,2 +73,5 @@ pub struct ResolvedWindowRules {
+     /// Whether the window should open focused.
+     pub open_focused: Option<bool>,
++
++    /// Whether the window should use the compositor's opening animation.
++    pub open_animation: Option<bool>,
+@@ -259,0 +263,4 @@ impl ResolvedWindowRules {
++
++                if let Some(x) = rule.open_animation {
++                    resolved.open_animation = Some(x);
++                }
+diff --git a/src/handlers/compositor.rs b/src/handlers/compositor.rs
+index 61f3e69..94a978e 100644
+--- a/src/handlers/compositor.rs
++++ b/src/handlers/compositor.rs
+@@ -195,2 +195,3 @@ impl CompositorHandler for State {
+                     self.remove_default_dmabuf_pre_commit_hook(surface);
+                     let hook = add_mapped_toplevel_pre_commit_hook(toplevel);
++                    let animate_open = rules.open_animation != Some(false);
+                     let mapped = {
+@@ -237,2 +238,4 @@ impl CompositorHandler for State {
+                     if let Some(output) = output {
+-                        self.niri.layout.start_open_animation_for_window(&window);
++                        if animate_open {
++                            self.niri.layout.start_open_animation_for_window(&window);
++                        }
