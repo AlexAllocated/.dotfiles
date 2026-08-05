@@ -55,6 +55,11 @@ if ((EUID != 0)); then
 	exec sudo --preserve-env=TRACER_DOTFILES_SOURCE -- "$0" \
 		--disk "$disk" --expected-serial "$expected_serial" --target-root "$target_root"
 fi
+if [[ "${TRACER_INSTALL_PRIVATE_MOUNTS:-0}" != 1 ]]; then
+	export TRACER_INSTALL_PRIVATE_MOUNTS=1
+	exec unshare --mount --propagation private -- "$BASH" "$0" \
+		--disk "$disk" --expected-serial "$expected_serial" --target-root "$target_root"
+fi
 
 disk="$(readlink -f -- "$disk")"
 target_root="$(realpath -m -- "$target_root")"
