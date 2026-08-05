@@ -80,7 +80,10 @@ actual_transport="$(lsblk -dnro TRAN "$disk" | xargs)"
 }
 root_source="$(findmnt -nro SOURCE /)"
 root_source="${root_source%%\[*}"
-root_parent="$(lsblk -no PKNAME "$root_source" 2>/dev/null | head -n 1 | xargs)"
+root_parent=""
+if [[ -b "$root_source" ]]; then
+	root_parent="$(lsblk -no PKNAME "$root_source" | head -n 1 | xargs)"
+fi
 [[ -z "$root_parent" || "$disk" != "/dev/$root_parent" ]] || {
 	printf '%s\n' 'Refusing to install over the running root disk.' >&2
 	exit 1
