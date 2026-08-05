@@ -208,7 +208,12 @@ working_source="$invoking_home/.dotfiles"
 if [[ ! -d "$working_source/.git" ]]; then
 	working_source="${TRACER_DOTFILES_SOURCE:?TRACER_DOTFILES_SOURCE is not set}"
 fi
-nixos-install --root "$target_root" --flake "path:$working_source#tracer" --no-root-password
+nixos-install \
+	--root "$target_root" \
+	--flake "path:$working_source#tracer" \
+	--no-root-password \
+	--max-jobs 12 \
+	--cores 2
 
 # Carry the rescue environment's working Wi-Fi profiles into the installed
 # system without ever committing their credentials to the repository. This
