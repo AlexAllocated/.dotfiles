@@ -24,6 +24,14 @@ in
         "vfat"
         "xhci_pci"
       ];
+      kernelModules = lib.mkForce [
+        "dm_mod"
+        "loop"
+        "nls_cp437"
+        "nls_iso8859-1"
+        "overlay"
+        "vfat"
+      ];
       systemd.enable = true;
       luks.devices = lib.mkForce {
         tracer-rescue-persist = {
@@ -123,6 +131,7 @@ in
       };
     };
     xserver.videoDrivers = [ "nvidia" ];
+    xe-guest-utilities.enable = lib.mkForce false;
   };
   systemd.services.sshd.unitConfig.RequiresMountsFor = [ "/persist" ];
 

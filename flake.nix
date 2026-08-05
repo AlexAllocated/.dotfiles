@@ -387,7 +387,6 @@
               coreutils
               cryptsetup
               dosfstools
-              e2fsprogs
               findutils
               gawk
               git
@@ -399,12 +398,27 @@
               rsync
               systemd
               util-linux
-              xorriso
             ];
             text = ''
               export TRACER_RESCUE_ISO=${self.nixosConfigurations.tracer-rescue.config.system.build.isoImage}
               export TRACER_DOTFILES_SOURCE=${self.outPath}
               exec ${pkgs.bash}/bin/bash ${self}/scripts/nixos/prepare-tracer-rescue.sh "$@"
+            '';
+          };
+          tracer-rescue-media-refresh = pkgs.writeShellApplication {
+            name = "refresh-tracer-rescue";
+            runtimeInputs = with pkgs; [
+              coreutils
+              cryptsetup
+              dosfstools
+              findutils
+              gawk
+              gnugrep
+              util-linux
+            ];
+            text = ''
+              export TRACER_RESCUE_ISO=${self.nixosConfigurations.tracer-rescue.config.system.build.isoImage}
+              exec ${pkgs.bash}/bin/bash ${self}/scripts/nixos/refresh-tracer-rescue.sh "$@"
             '';
           };
           chev-installer-fat32-check =

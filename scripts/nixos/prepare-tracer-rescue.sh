@@ -145,7 +145,7 @@ mount_root="$(mktemp -d /run/tracer-rescue-media.XXXXXXXX)"
 mapper="tracer-rescue-persist-$$"
 cleanup() {
 	set +e
-	for mounted in "$mount_root/home" "$mount_root/state" "$mount_root/payload" "$mount_root/efi" "$mount_root/persist"; do
+	for mounted in "$mount_root/store" "$mount_root/home" "$mount_root/state" "$mount_root/payload" "$mount_root/efi" "$mount_root/persist"; do
 		mountpoint -q "$mounted" && umount "$mounted"
 	done
 	cryptsetup status "$mapper" >/dev/null 2>&1 && cryptsetup close "$mapper"
@@ -242,23 +242,42 @@ for partition in "$efi_device" "$payload_device" "$persist_device"; do
 done
 
 mkfs.fat -F 32 -n RESCUE_EFI "$efi_device"
-mkfs.ext4 -F -L NIXOS_ISO "$payload_device"
+wipefs --all "$payload_device"
+dd if="$iso_file" of="$payload_device" bs=16M conv=fsync status=progress
 printf '\nChoose the portable LUKS passphrase for Tracer rescue persistence.\n'
 cryptsetup luksFormat --type luks2 "$persist_device"
 cryptsetup open "$persist_device" "$mapper"
 mkfs.btrfs --force --label TRACER_RESCUE_PERSIST "/dev/mapper/$mapper"
 
-install -d "$mount_root"/{efi,payload,persist,home,state}
+install -d "$mount_root"/{efi,payload,store,persist,home,state}
 mount "$efi_device" "$mount_root/efi"
-mount "$payload_device" "$mount_root/payload"
-xorriso -osirrox on -indev "$iso_file" -extract / "$mount_root/payload"
+mount -o ro "$payload_device" "$mount_root/payload"
+mapfile -t boot_inits < <(grep -Eo 'init=/nix/store/[^[:space:]]+/init' \
+	"$mount_root/payload/EFI/BOOT/grub.cfg" | sort -u)
+if ((${#boot_inits[@]} != 1)); then
+	printf 'Expected exactly one boot closure in the rescue GRUB configuration, found %s.\n' \
+		"${#boot_inits[@]}" >&2
+	exit 1
+fi
+boot_closure="${boot_inits[0]#init=}"
+boot_closure="${boot_closure%/init}"
+mount -o ro,loop "$mount_root/payload/nix-store.squashfs" "$mount_root/store"
+test -x "$mount_root/store/${boot_closure#/nix/store/}/init" || {
+	printf 'GRUB requests a closure missing from nix-store.squashfs: %s\n' "$boot_closure" >&2
+	exit 1
+}
+umount "$mount_root/store"
 install -d "$mount_root/efi/EFI/BOOT"
 cp -a "$mount_root/payload/EFI/BOOT/." "$mount_root/efi/EFI/BOOT/"
 test -f "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
+cmp "$mount_root/payload/EFI/BOOT/grub.cfg" "$mount_root/efi/EFI/BOOT/grub.cfg"
 test -f "$mount_root/payload/EFI/nixos-installer-image"
 test -f "$mount_root/payload/nix-store.squashfs"
 sync -f "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
-sync -f "$mount_root/payload/nix-store.squashfs"
+sync
+umount "$mount_root/efi"
+mount -o ro "$efi_device" "$mount_root/efi"
+cmp "$mount_root/payload/EFI/BOOT/grub.cfg" "$mount_root/efi/EFI/BOOT/grub.cfg"
 umount "$mount_root/efi"
 umount "$mount_root/payload"
 
