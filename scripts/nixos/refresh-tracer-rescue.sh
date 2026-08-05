@@ -175,8 +175,9 @@ trap cleanup EXIT INT TERM
 install -d "$mount_root"/{efi,payload,store}
 
 wipefs --all "$payload_device"
-dd if="$iso_file" of="$payload_device" bs=16M conv=fsync status=progress
-mount -o ro "$payload_device" "$mount_root/payload"
+mkfs.ext4 -F -L NIXOS_ISO "$payload_device"
+mount "$payload_device" "$mount_root/payload"
+xorriso -osirrox on -indev "$iso_file" -extract / "$mount_root/payload"
 test -f "$mount_root/payload/boot/bzImage"
 test -f "$mount_root/payload/EFI/BOOT/BOOTX64.EFI"
 test -f "$mount_root/payload/EFI/nixos-installer-image"

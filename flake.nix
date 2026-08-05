@@ -387,6 +387,7 @@
               coreutils
               cryptsetup
               dosfstools
+              e2fsprogs
               findutils
               gawk
               git
@@ -398,6 +399,7 @@
               rsync
               systemd
               util-linux
+              xorriso
             ];
             text = ''
               export TRACER_RESCUE_ISO=${self.nixosConfigurations.tracer-rescue.config.system.build.isoImage}
@@ -411,10 +413,12 @@
               coreutils
               cryptsetup
               dosfstools
+              e2fsprogs
               findutils
               gawk
               gnugrep
               util-linux
+              xorriso
             ];
             text = ''
               export TRACER_RESCUE_ISO=${self.nixosConfigurations.tracer-rescue.config.system.build.isoImage}

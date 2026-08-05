@@ -279,7 +279,7 @@ done
 
 mkfs.fat -F 32 -n RESCUE_EFI "$efi_device"
 wipefs --all "$payload_device"
-dd if="$iso_file" of="$payload_device" bs=16M conv=fsync status=progress
+mkfs.ext4 -F -L NIXOS_ISO "$payload_device"
 printf '\nChoose the portable LUKS passphrase for Tracer rescue persistence.\n'
 cryptsetup luksFormat --type luks2 "$persist_device"
 cryptsetup open "$persist_device" "$mapper"
@@ -287,7 +287,8 @@ mkfs.btrfs --force --label TRACER_RESCUE_PERSIST "/dev/mapper/$mapper"
 
 install -d "$mount_root"/{efi,payload,store,persist,home,state}
 mount "$efi_device" "$mount_root/efi"
-mount -o ro "$payload_device" "$mount_root/payload"
+mount "$payload_device" "$mount_root/payload"
+xorriso -osirrox on -indev "$iso_file" -extract / "$mount_root/payload"
 mapfile -t boot_inits < <(grep -Eo 'init=/nix/store/[^[:space:]]+/init' \
 	"$mount_root/payload/EFI/BOOT/grub.cfg" | sort -u)
 if ((${#boot_inits[@]} != 1)); then

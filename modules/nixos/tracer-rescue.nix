@@ -26,6 +26,7 @@ in
       ];
       kernelModules = lib.mkForce [
         "dm_mod"
+        "ext4"
         "loop"
         "nls_cp437"
         "nls_iso8859-1"
