@@ -10,7 +10,9 @@ install_efi_boot_payload() {
 	local kernel_path initrd_path
 	local -a kernel_paths initrd_paths
 
-	mapfile -t kernel_paths < <(awk '$1 == "linux" { print $2 }' "$source_config" | sort -u)
+	mapfile -t kernel_paths < <(
+		awk '$1 == "linux" && $2 ~ /\/nix\/store\/.*\/bzImage$/ { print $2 }' "$source_config" | sort -u
+	)
 	mapfile -t initrd_paths < <(awk '$1 == "initrd" { print $2 }' "$source_config" | sort -u)
 	if ((${#kernel_paths[@]} != 1 || ${#initrd_paths[@]} != 1)); then
 		printf 'Expected one kernel and one initrd path in the rescue GRUB configuration.\n' >&2
@@ -31,11 +33,30 @@ install_efi_boot_payload() {
 		-e "s#${kernel_path}#/EFI/TRACER/bzImage#g" \
 		-e "s#${initrd_path}#/EFI/TRACER/initrd#g" \
 		"$source_config" >"$target_config"
+	# The ISO's BOOTX64.EFI embeds a bootstrap configuration that searches for
+	# the ISO marker and can bypass the adjacent grub.cfg. Build our own
+	# standalone loader so the FAT-resident kernel and initrd paths are the
+	# configuration the firmware actually executes.
+	grub-mkstandalone \
+		--format=x86_64-efi \
+		--output="$mount_root/efi/EFI/BOOT/BOOTX64.EFI" \
+		--disable-shim-lock \
+		--locales="" \
+		--themes="" \
+		--fonts="" \
+		--modules="part_gpt part_msdos fat search search_fs_file normal linux gfxterm png all_video" \
+		"boot/grub/grub.cfg=$target_config"
+	install -m 0644 "$target_config" "$source_config"
+	(
+		cd "$(dirname "$target_config")"
+		sha256sum "$(basename "$target_config")"
+	) >"$mount_root/efi/EFI/TRACER/grub.cfg.sha256"
 
-	test -f "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
+	test -s "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
 	grep -Fq 'search --set=root --file /EFI/tracer-rescue-loader' "$target_config"
 	grep -Fq 'linux /EFI/TRACER/bzImage ' "$target_config"
 	grep -Fq 'initrd /EFI/TRACER/initrd' "$target_config"
+	grep -Fq 'initrd /EFI/TRACER/initrd' "$source_config"
 	cmp "$mount_root/payload/${kernel_path#/}" "$mount_root/efi/EFI/TRACER/bzImage"
 	cmp "$mount_root/payload/${initrd_path#/}" "$mount_root/efi/EFI/TRACER/initrd"
 }
@@ -178,7 +199,6 @@ wipefs --all "$payload_device"
 mkfs.ext4 -F -L NIXOS_ISO "$payload_device"
 mount "$payload_device" "$mount_root/payload"
 xorriso -osirrox on -indev "$iso_file" -extract / "$mount_root/payload"
-test -f "$mount_root/payload/boot/bzImage"
 test -f "$mount_root/payload/EFI/BOOT/BOOTX64.EFI"
 test -f "$mount_root/payload/EFI/nixos-installer-image"
 test -f "$mount_root/payload/nix-store.squashfs"
@@ -219,3 +239,4 @@ trap - EXIT INT TERM
 rm -r -- "$mount_root"
 printf '\nTracer rescue system refreshed on %s; persistence %s was preserved.\n' \
 	"$device" "$persist_uuid"
+printf 'TRACER_RESCUE_REFRESH_OK device=%s persistence=%s\n' "$device" "$persist_uuid"

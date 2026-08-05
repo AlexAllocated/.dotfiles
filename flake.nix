@@ -393,6 +393,7 @@
               git
               gnugrep
               gptfdisk
+              grub2_efi
               jq
               parted
               python3
@@ -417,6 +418,7 @@
               findutils
               gawk
               gnugrep
+              grub2_efi
               util-linux
               xorriso
             ];
