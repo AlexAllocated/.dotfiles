@@ -1459,6 +1459,10 @@ in
         ExecStart = lib.getExe sunshineKmsLauncher;
         Restart = "always";
         RestartSec = 5;
+        # Sunshine's long-lived KMS backend can retain DRM descriptors across
+        # repeated streams. Keep the soft limit well above systemd's 1024-file
+        # default while retaining the existing hard ceiling.
+        LimitNOFILE = "65536:524288";
         UMask = "0077";
         AmbientCapabilities = [
           "CAP_SYS_ADMIN"
