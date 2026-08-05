@@ -181,8 +181,8 @@ Do not perform this phase until the new PC is assembled.
 
 ## Final acceptance
 
-- Move Chev from static `192.168.0.117` to DHCP before enabling Tracer's static
-  profile with its discovered Ethernet interface.
+- Keep Chev at its Master Chief address, `192.168.0.117`, and enable Tracer's
+  static `192.168.0.69` profile after confirming its Ethernet interface.
 - Verify audio buses/noise suppression, physical outputs, RTX 5080 decode and
   encode, OBS/Vesktop capture, Noctalia thermals, Bluetooth, Sunshine/Moonlight,
   dummy display, Steam, SSH/tmux, Docker, and both boot paths.

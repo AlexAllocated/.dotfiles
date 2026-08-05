@@ -31,7 +31,7 @@ in
       default = null;
       description = "Discovered Tracer Ethernet interface; null keeps the initial installation on DHCP.";
     };
-    staticLan.enable = lib.mkEnableOption "Tracer's permanent 192.168.0.117 LAN profile";
+    staticLan.enable = lib.mkEnableOption "Tracer's permanent 192.168.0.69 LAN profile";
     dataDisk.enable = lib.mkEnableOption "the migrated and TPM-enrolled Intel 2 TB data disk";
   };
 
@@ -154,7 +154,7 @@ in
           };
           ipv4 = {
             method = "manual";
-            addresses = "192.168.0.117/24";
+            addresses = "192.168.0.69/24";
             gateway = "192.168.0.1";
             dns = "8.8.8.8;4.4.4.4;";
             dns-search = "lan;";
