@@ -210,6 +210,19 @@ if [[ ! -d "$working_source/.git" ]]; then
 fi
 nixos-install --root "$target_root" --flake "path:$working_source#tracer" --no-root-password
 
+# Carry the rescue environment's working Wi-Fi profiles into the installed
+# system without ever committing their credentials to the repository. This
+# keeps the first permanent boot reachable over SSH before Ethernet and the
+# final static profile are configured.
+source_connections="/etc/NetworkManager/system-connections"
+target_connections="$target_root/etc/NetworkManager/system-connections"
+if [[ -d "$source_connections" ]]; then
+	install -d -m 0700 "$target_connections"
+	while IFS= read -r -d '' connection; do
+		install -m 0600 "$connection" "$target_connections/$(basename "$connection")"
+	done < <(find "$source_connections" -maxdepth 1 -type f -print0)
+fi
+
 install -d -m 0755 -o 1000 -g 100 "$target_root/home/alx"
 if [[ -d "$invoking_home/.dotfiles/.git" ]]; then
 	rsync -a --exclude=result --exclude='result-*' "$invoking_home/.dotfiles/" "$target_root/home/alx/.dotfiles/"
