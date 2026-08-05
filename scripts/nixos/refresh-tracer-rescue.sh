@@ -4,6 +4,42 @@ set -euo pipefail
 device=""
 expected_serial=""
 
+install_efi_boot_payload() {
+	local source_config="$mount_root/payload/EFI/BOOT/grub.cfg"
+	local target_config="$mount_root/efi/EFI/BOOT/grub.cfg"
+	local kernel_path initrd_path
+	local -a kernel_paths initrd_paths
+
+	mapfile -t kernel_paths < <(awk '$1 == "linux" { print $2 }' "$source_config" | sort -u)
+	mapfile -t initrd_paths < <(awk '$1 == "initrd" { print $2 }' "$source_config" | sort -u)
+	if ((${#kernel_paths[@]} != 1 || ${#initrd_paths[@]} != 1)); then
+		printf 'Expected one kernel and one initrd path in the rescue GRUB configuration.\n' >&2
+		exit 1
+	fi
+	kernel_path="${kernel_paths[0]}"
+	initrd_path="${initrd_paths[0]}"
+	test -f "$mount_root/payload/${kernel_path#/}"
+	test -f "$mount_root/payload/${initrd_path#/}"
+
+	install -d "$mount_root/efi/EFI/BOOT" "$mount_root/efi/EFI/TRACER"
+	cp -a "$mount_root/payload/EFI/BOOT/." "$mount_root/efi/EFI/BOOT/"
+	install -m 0644 "$mount_root/payload/${kernel_path#/}" "$mount_root/efi/EFI/TRACER/bzImage"
+	install -m 0644 "$mount_root/payload/${initrd_path#/}" "$mount_root/efi/EFI/TRACER/initrd"
+	: >"$mount_root/efi/EFI/tracer-rescue-loader"
+	sed \
+		-e 's#search --set=root --file /EFI/nixos-installer-image#search --set=root --file /EFI/tracer-rescue-loader#g' \
+		-e "s#${kernel_path}#/EFI/TRACER/bzImage#g" \
+		-e "s#${initrd_path}#/EFI/TRACER/initrd#g" \
+		"$source_config" >"$target_config"
+
+	test -f "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
+	grep -Fq 'search --set=root --file /EFI/tracer-rescue-loader' "$target_config"
+	grep -Fq 'linux /EFI/TRACER/bzImage ' "$target_config"
+	grep -Fq 'initrd /EFI/TRACER/initrd' "$target_config"
+	cmp "$mount_root/payload/${kernel_path#/}" "$mount_root/efi/EFI/TRACER/bzImage"
+	cmp "$mount_root/payload/${initrd_path#/}" "$mount_root/efi/EFI/TRACER/initrd"
+}
+
 usage() {
 	cat <<'EOF'
 Usage: sudo refresh-tracer-rescue \
@@ -163,14 +199,13 @@ umount "$mount_root/store"
 
 mkfs.fat -F 32 -n RESCUE_EFI "$efi_device"
 mount "$efi_device" "$mount_root/efi"
-install -d "$mount_root/efi/EFI/BOOT"
-cp -a "$mount_root/payload/EFI/BOOT/." "$mount_root/efi/EFI/BOOT/"
-test -f "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
-cmp "$mount_root/payload/EFI/BOOT/grub.cfg" "$mount_root/efi/EFI/BOOT/grub.cfg"
+install_efi_boot_payload
 sync
 umount "$mount_root/efi"
 mount -o ro "$efi_device" "$mount_root/efi"
-cmp "$mount_root/payload/EFI/BOOT/grub.cfg" "$mount_root/efi/EFI/BOOT/grub.cfg"
+test -s "$mount_root/efi/EFI/TRACER/bzImage"
+test -s "$mount_root/efi/EFI/TRACER/initrd"
+grep -Fq 'initrd /EFI/TRACER/initrd' "$mount_root/efi/EFI/BOOT/grub.cfg"
 umount "$mount_root/efi"
 umount "$mount_root/payload"
 
