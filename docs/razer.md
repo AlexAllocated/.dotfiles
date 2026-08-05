@@ -34,8 +34,11 @@ settings. The recovered Windows baseline was:
 
 The full conversion inventory is in `razer/migration-report.json`. The eight
 Tartarus layouts and the Huntsman Caps Lock/Escape swap were directly
-translated. Ordinary Basilisk side-button and horizontal-wheel mappings were
-translated too.
+translated. The Huntsman's onboard profile now performs that complete swap on
+the keyboard itself, so its equivalent Input Remapper preset is retained for
+recovery but is not autoloaded; enabling both layers would swap the keys back.
+Ordinary Basilisk side-button and horizontal-wheel mappings were translated
+too.
 
 The Basilisk V3 Pro 35K Phantom Green's four Razer-private controls are now
 bridged as well. At boot and reconnect, `razer-onboard` programs only the

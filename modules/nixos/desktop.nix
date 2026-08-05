@@ -963,7 +963,7 @@ in
       type = lib.types.nullOr lib.types.str;
       default = null;
       example = "HDMI-A-1";
-      description = "DRM connector verified as the FUN/EK1080 dummy adapter; never the LG display.";
+      description = "DRM connector verified as the known dummy adapter; never the LG display.";
     };
 
     sunshine = {

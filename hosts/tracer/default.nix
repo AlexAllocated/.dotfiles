@@ -21,6 +21,7 @@ in
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/audio.nix
     ../../modules/nixos/compositors.nix
+    ../../modules/nixos/migration-tools.nix
     ../../modules/nixos/tracer-tools.nix
   ];
 
@@ -44,6 +45,10 @@ in
     ];
 
     dotfiles = {
+      tracer = {
+        lanInterface = "enp11s0";
+        staticLan.enable = true;
+      };
       compositors = {
         inherit user;
         nvidiaVramWorkaround = true;
@@ -53,7 +58,7 @@ in
         userDescription = "Alex";
         hostName = "tracer";
         cpuVendor = "amd";
-        autoLogin = false;
+        autoLogin = true;
         lanInterface = cfg.lanInterface;
         storage = {
           rootLabel = "TRACER_NIX";
@@ -66,10 +71,20 @@ in
           mode = "kms";
           name = "TRACER";
         };
+        ipadDisplay.connector = "DP-5";
       };
       tracerTools = {
         enable = true;
         source = self.outPath;
+      };
+      migrationTools = {
+        enable = true;
+        source = self.outPath;
+        rescue = {
+          enable = false;
+          user = user;
+          durableTmux = true;
+        };
       };
     };
 
@@ -86,6 +101,9 @@ in
         luks.devices.tracer-root = {
           device = "/dev/disk/by-partlabel/TRACER_CRYPT";
           allowDiscards = true;
+          # The recovery passphrase remains enrolled, but normal boots use the
+          # PCR-bound TPM2 token created with systemd-cryptenroll.
+          crypttabExtraOpts = [ "tpm2-device=auto" ];
         };
       };
       loader = {
@@ -98,7 +116,10 @@ in
       };
     };
 
-    environment.systemPackages = [ pkgs.sbctl ];
+    environment.systemPackages = [
+      pkgs.efibootmgr
+      pkgs.sbctl
+    ];
 
     # The secondary SSD is added only after the fresh installation is proven.
     # Missing bulk storage must not prevent the desktop from booting.
@@ -203,15 +224,32 @@ in
         };
         dotfiles = {
           inherit profile;
-          wallpaper.connector = "DP-4";
-          compositors.outputs.DP-4 = {
-            mode = "3440x1440@160";
-            scale = 1;
-            position = {
-              x = 0;
-              y = 0;
+          wallpaper = {
+            connector = "DP-4";
+            ipad.connector = config.dotfiles.desktop.ipadDisplay.connector;
+          };
+          compositors.outputs = {
+            DP-4 = {
+              mode = "3440x1440@160";
+              scale = 1;
+              position = {
+                x = 0;
+                y = 0;
+              };
+              focusAtStartup = true;
             };
-            focusAtStartup = true;
+            DP-5 = {
+              # Sunshine enables the dummy only while a remote client needs
+              # it. The LG remains the sole startup output whenever it is on.
+              enable = false;
+              mode = "2732x2048@60";
+              scale = 1.75;
+              niriGaps = 24;
+              position = {
+                x = 3440;
+                y = 0;
+              };
+            };
           };
           gaming = {
             steamLibrary = "/games/SteamLibrary";

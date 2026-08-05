@@ -1,7 +1,6 @@
 {
   "version": "2.2.0",
   "autoload": {
-    "Razer Razer Huntsman V2 Analog": "CHEV-DESKTOP-Default",
     "Razer Razer Tartarus Pro": "DEFAULT"
   }
 }

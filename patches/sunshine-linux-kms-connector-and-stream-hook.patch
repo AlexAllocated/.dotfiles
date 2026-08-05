@@ -10,6 +10,9 @@
 +      return std::string {type_name} + "-" + std::to_string(index);
 +    }
 +
+@@ -478 +487 @@
+-          auto index = ++conn_type_count[conn->connector_type];
++          auto index = conn->connector_type_id;
 @@ -614 +623,6 @@
 -        int monitor_index = util::from_view(display_name);
 +        const bool numeric_name = !display_name.empty() && std::all_of(

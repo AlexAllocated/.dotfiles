@@ -8,9 +8,10 @@ usage() {
 	cat <<'EOF'
 Usage: ipad-display-prepare [--connector HDMI-A-1] [--apply-now]
 
-Find the connected FUN/EK1080 dummy adapter, never the LG monitor, and print
-the persistent NixOS EDID-override configuration. --apply-now also attempts a
-temporary debugfs override until the next reboot.
+Find the connected dummy adapter, never the LG monitor, and print the
+persistent NixOS EDID-override configuration. The detector accepts either the
+FUN/EK1080 EDID or NVIDIA's exact NVD model-0 headless fallback. --apply-now
+also attempts a temporary debugfs override until the next reboot.
 EOF
 }
 
@@ -60,7 +61,12 @@ for status_file in /sys/class/drm/card*-*/status; do
 	if grep -Eiq 'Manufacturer:[[:space:]]*GSM|GSM774B' <<<"$decoded"; then
 		continue
 	fi
-	if grep -Eiq 'Manufacturer:[[:space:]]*FUN|EK1080T4KHR|FUN7F52' <<<"$decoded"; then
+	if grep -Eiq 'Manufacturer:[[:space:]]*FUN|EK1080T4KHR|FUN7F52' <<<"$decoded" \
+		|| {
+			grep -Eiq 'Manufacturer:[[:space:]]*NVD' <<<"$decoded" \
+				&& grep -Eiq 'Model:[[:space:]]*0([[:space:]]|$)' <<<"$decoded" \
+				&& grep -Eiq '640x480[[:space:]]+59\.940' <<<"$decoded"
+		}; then
 		connector="$(basename "$sysfs_connector" | sed -E 's/^card[0-9]+-//')"
 		candidates+=("$connector")
 		candidate_paths["$connector"]="$sysfs_connector"
@@ -81,7 +87,7 @@ else
 	connector="${candidates[0]}"
 fi
 
-printf 'Verified dummy adapter connector: %s (FUN/EK1080; LG excluded)\n' "$connector"
+printf 'Verified dummy adapter connector: %s (known headless EDID; LG excluded)\n' "$connector"
 printf '\nPersistent configuration (hosts/chev-desktop/hardware-generated.nix):\n'
 printf '  dotfiles.desktop.ipadDisplay.connector = "%s";\n' "$connector"
 printf '\nThen run: dotctl apply\nReboot once so drm.edid_firmware is active.\n'
