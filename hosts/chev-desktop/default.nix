@@ -43,8 +43,12 @@
   };
 
   # The dispatcher remembers Alex's chosen desktop across logins and boots.
-  # It defaults—and automatically falls back—to the proven Plasma session.
+  # Niri + Noctalia is both the canonical session and automatic recovery path.
   services.displayManager.defaultSession = "dotfiles-desktop";
+
+  # Build Raspberry Pi NixOS images locally without needing a separate ARM
+  # builder. This registers qemu-aarch64 through binfmt for Nix builds.
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
   # Termius and other SSH clients enter through the fixed wired-LAN address.
   # Authentication is device-key-only; the user's public keys remain in the
@@ -84,28 +88,53 @@
     after = [ "network-online.target" ];
   };
 
-  networking.firewall.interfaces.eno1.allowedTCPPorts = [ 22 ];
+  networking.firewall.interfaces.br0.allowedTCPPorts = [ 22 ];
 
   networking.networkmanager = {
-    # Prevent NetworkManager from racing this declared profile with another
-    # automatically generated DHCP profile for the same Ethernet interface.
+    # Bridge the router-facing and Pi-facing NICs so the Pi is a first-class
+    # device on the home LAN while retaining this desktop's static address.
     settings.main.no-auto-default = "*";
-    ensureProfiles.profiles.chev-static-ethernet = {
-      connection = {
-        id = "chev-static-ethernet";
-        type = "ethernet";
-        interface-name = "eno1";
-        autoconnect = true;
-        autoconnect-priority = 100;
+    ensureProfiles.profiles = {
+      home-lan-bridge = {
+        connection = {
+          id = "home-lan-bridge";
+          type = "bridge";
+          interface-name = "br0";
+          autoconnect = true;
+          autoconnect-priority = 100;
+        };
+        bridge.stp = false;
+        ipv4 = {
+          method = "manual";
+          addresses = "192.168.0.117/24";
+          gateway = "192.168.0.1";
+          dns = "8.8.8.8;4.4.4.4;";
+          dns-search = "lan;";
+        };
+        ipv6.method = "auto";
       };
-      ipv4 = {
-        method = "manual";
-        addresses = "192.168.0.117/24";
-        gateway = "192.168.0.1";
-        dns = "8.8.8.8;4.4.4.4;";
-        dns-search = "lan;";
+      home-lan-uplink = {
+        connection = {
+          id = "home-lan-uplink";
+          type = "ethernet";
+          interface-name = "eno1";
+          controller = "br0";
+          port-type = "bridge";
+          autoconnect = true;
+          autoconnect-priority = 100;
+        };
       };
-      ipv6.method = "auto";
+      plex-pi-link = {
+        connection = {
+          id = "plex-pi-link";
+          type = "ethernet";
+          interface-name = "enp4s0";
+          controller = "br0";
+          port-type = "bridge";
+          autoconnect = true;
+          autoconnect-priority = 100;
+        };
+      };
     };
   };
 
@@ -163,14 +192,6 @@
           };
         };
       };
-
-      # Plasma stores dragged launchers as filesystem URLs, which can embed
-      # generation-specific Nix store paths. Keep the desired order as stable
-      # desktop IDs so rebuilds and rollbacks cannot strand the taskbar icons.
-      dotfiles.plasma.taskbarLaunchers = [
-        "org.wezfurlong.wezterm.desktop"
-        "Alacritty.desktop"
-      ];
     };
   };
 

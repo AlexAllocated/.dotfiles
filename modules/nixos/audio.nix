@@ -566,17 +566,15 @@ let
         outputs = [ "rnnoise:Output" ];
       };
 
-      # The Yeti presents duplicate stereo capture channels. Process only FL
-      # and expose one proper mono communications source.
+      # Follow the physical source selected as the system input and expose one
+      # proper mono communications source. WirePlumber's policy below routes
+      # microphone clients back through the processed side of this filter.
       "capture.props" = {
         "node.name" = "creator.filter.clean-mic.capture";
         "audio.channels" = 1;
         "audio.position" = [ "FL" ];
-        "stream.dont-remix" = true;
-        # Keep the filter itself independent of USB device lifetime. The
-        # event-driven creator-clean-mic-link service below supplies the exact
-        # passive Yeti link whenever both ports exist.
-        "node.autoconnect" = false;
+        "stream.dont-remix" = false;
+        "state.restore-target" = false;
         "node.passive" = true;
       };
 
@@ -587,38 +585,40 @@ let
         "audio.channels" = 1;
         "audio.position" = [ "MONO" ];
         "node.virtual" = true;
-        "priority.session" = 3000;
+        # Noctalia's input chooser is for the physical source feeding this
+        # filter, so keep the processed implementation node out of that list.
+        "node.hidden" = true;
+        "priority.session" = 1;
       };
     };
   };
 
-  cleanMicLink = pkgs.writeShellApplication {
-    name = "creator-clean-mic-link";
+  recoverYetiHotplug = pkgs.writeShellApplication {
+    name = "creator-recover-yeti-hotplug";
     runtimeInputs = [
+      pkgs.coreutils
       pkgs.pipewire
       pkgs.ripgrep
+      pkgs.systemd
     ];
     text = ''
+      # ALSA device nodes can appear a fraction of a second before the PCM is
+      # ready. WirePlumber occasionally loses that race and does not retry the
+      # failed profile until it is restarted.
+      sleep 2
+
+      compgen -G '/dev/snd/by-id/usb-Generic_Blue_Microphones_*-00' \
+        >/dev/null || exit 0
+      systemctl --user is-active --quiet pipewire.service || exit 0
+      systemctl --user is-active --quiet wireplumber.service || exit 0
+
       output='creator.hardware.blue-yeti.mic:capture_FL'
-      input='creator.filter.clean-mic.capture:input_FL'
+      if pw-link --output "$output" 2>/dev/null \
+          | rg --fixed-strings --line-regexp --quiet "$output"; then
+        exit 0
+      fi
 
-      reconcile() {
-        pw-link --output "$output" | rg --fixed-strings --line-regexp --quiet "$output" || return 0
-        pw-link --input "$input" | rg --fixed-strings --line-regexp --quiet "$input" || return 0
-
-        if [[ -z "$(pw-link --links "$output" "$input")" ]]; then
-          # Linger makes the link owned by PipeWire instead of this short-lived
-          # command; passive keeps RNNoise asleep until Clean Mic has a consumer.
-          pw-link --linger --passive "$output" "$input"
-        fi
-      }
-
-      # Monitoring inputs, outputs, and links emits the current graph first and
-      # then wakes this loop only when the graph changes. PipeWire disconnects
-      # cause the monitor to exit; systemd restarts us against the new daemon.
-      pw-link --monitor --output --input --links | while IFS= read -r _event; do
-        reconcile
-      done
+      systemctl --user restart wireplumber.service
     '';
   };
 
@@ -678,6 +678,64 @@ in
         };
       }
     ];
+  };
+
+  # The selected default source is the physical input feeding Clean Mic. Route
+  # ordinary microphone consumers through the processed source while leaving
+  # sink-monitor captures (OBS bus tracks and screen-share audio) untouched.
+  services.pipewire.wireplumber.extraScripts."creator/clean-mic-policy.lua" = ''
+    local cutils = require ("common-utils")
+    local lutils = require ("linking-utils")
+    local log = Log.open_topic ("creator-clean-mic")
+
+    SimpleEventHook {
+      name = "creator-clean-mic/route-capture",
+      before = "linking/find-defined-target",
+      interests = {
+        EventInterest {
+          Constraint { "event.type", "=", "select-target" },
+          Constraint { "media.class", "=", "Stream/Input/Audio" },
+        },
+      },
+      execute = function (event)
+        local _, om, si, props, flags =
+            lutils:unwrap_select_target_event (event)
+
+        if props ["node.name"] == "creator.filter.clean-mic.capture" or
+            cutils.parseBool (props ["stream.capture.sink"]) or
+            cutils.parseBool (props ["stream.monitor"]) then
+          return
+        end
+
+        local target = om:lookup {
+          type = "SiLinkable",
+          Constraint { "node.name", "=", "creator.mic.clean" },
+          Constraint { "item.node.direction", "=", "output" },
+        }
+        if not target or not lutils.canLink (props, target) then
+          return
+        end
+
+        local compatible, can_passthrough =
+            lutils.checkPassthroughCompatibility (si, target)
+        if compatible then
+          flags.can_passthrough = can_passthrough
+          event:set_data ("target", target)
+          log:debug (si, "routing microphone capture through Clean Mic")
+        end
+      end
+    }:register ()
+  '';
+
+  services.pipewire.wireplumber.extraConfig."90-creator-clean-mic-policy" = {
+    "wireplumber.components" = [
+      {
+        name = "creator/clean-mic-policy.lua";
+        type = "script/lua";
+        provides = "hooks.creator-clean-mic-policy";
+      }
+    ];
+    "wireplumber.profiles".main."hooks.creator-clean-mic-policy" = "required";
   };
 
   # Keep spatial processing automatic without inserting another routing layer:
@@ -958,18 +1016,29 @@ in
     };
   };
 
-  systemd.user.services.creator-clean-mic-link = {
-    description = "Keep the Blue Yeti linked to the persistent Clean Mic filter";
+  # Retry the Yeti profile after hot-plug only when WirePlumber lost the ALSA
+  # readiness race. The path unit is event-driven and remains idle otherwise.
+  systemd.user.paths.creator-yeti-hotplug-recovery = {
+    description = "Watch sound devices for Blue Yeti reconnects";
     wantedBy = [ "default.target" ];
+    pathConfig = {
+      PathChanged = [
+        "/dev/snd"
+        "/dev/snd/by-id"
+      ];
+      Unit = "creator-yeti-hotplug-recovery.service";
+    };
+  };
+
+  systemd.user.services.creator-yeti-hotplug-recovery = {
+    description = "Recover a Blue Yeti node lost during hot-plug";
     after = [
       "pipewire.service"
       "wireplumber.service"
     ];
-    partOf = [ "pipewire.service" ];
     serviceConfig = {
-      ExecStart = "${cleanMicLink}/bin/creator-clean-mic-link";
-      Restart = "always";
-      RestartSec = "250ms";
+      Type = "oneshot";
+      ExecStart = "${recoverYetiHotplug}/bin/creator-recover-yeti-hotplug";
     };
   };
 }

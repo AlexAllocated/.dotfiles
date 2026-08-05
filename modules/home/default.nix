@@ -11,8 +11,9 @@
     ./codex.nix
     ./cloud.nix
     ./terminal.nix
+    ./obs.nix
     ./wallpaper.nix
-    ./plasma.nix
+    ./appearance.nix
     ./compositors.nix
     ./gaming.nix
     ./razer.nix

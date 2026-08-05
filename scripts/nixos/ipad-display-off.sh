@@ -81,7 +81,7 @@ if [[ -n "$restore_output" ]]; then
 	}
 	arguments+=("output.$restore_output.enable")
 elif ((${#other_enabled[@]} == 0)); then
-	printf '%s\n' 'The dummy is the only enabled output; refusing to leave Plasma with no display.' >&2
+	printf '%s\n' 'The dummy is the only enabled output; refusing to leave the desktop with no display.' >&2
 	printf '%s\n' 'Connect another display and use --restore-output NAME to enable it atomically.' >&2
 	exit 1
 fi

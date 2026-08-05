@@ -1,0 +1,12 @@
+id = "alex/mullvad"
+name = "Mullvad VPN"
+version = "1.0.0"
+plugin_api = 3
+author = "Alex"
+license = "MIT"
+description = "A stateful bar toggle for the system-wide Mullvad VPN tunnel."
+dependencies = ["mullvad"]
+
+[[widget]]
+id = "toggle"
+entry = "toggle.luau"

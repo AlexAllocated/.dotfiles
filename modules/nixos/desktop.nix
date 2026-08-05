@@ -61,7 +61,12 @@ let
     nativeBuildInputs = [ pkgs.makeWrapper ];
     # OBS patches its plugins with NixOS's runtime GPU-driver path, but its
     # separate NVENC capability probe also dlopens libnvidia-encode.so.1.
+    # The plugin resolves that probe beside OBS's real executable, bypassing
+    # a wrapper around only the helper, so the parent process must export the
+    # driver path for the child to inherit as well.
     postBuild = ''
+      wrapProgram $out/bin/obs \
+        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
       wrapProgram $out/bin/obs-nvenc-test \
         --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib
     '';
@@ -76,8 +81,8 @@ let
     # retaining CUDA/NVENC for hardware-accelerated screen sharing. Keep
     # Discord native on Wayland so its PipeWire source picker and frame
     # presentation do not fall through XWayland.
-    # Plasma auto-login has no PAM password with which to unlock KWallet, so
-    # avoid its setup prompt.
+    # Graphical auto-login has no PAM password with which to unlock KWallet,
+    # so avoid its setup prompt.
     postBuild = ''
       wrapProgram $out/opt/Discord/Discord \
         --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.libva ]}:/run/opengl-driver/lib" \
@@ -969,11 +974,11 @@ in
       };
       mode = lib.mkOption {
         type = lib.types.enum [
-          "plasma"
+          "session"
           "kms"
         ];
-        default = "plasma";
-        description = "Run Sunshine per Plasma session or persistently below every graphical session with KMS capture.";
+        default = "session";
+        description = "Run Sunshine inside the graphical session or persistently below every compositor with KMS capture.";
       };
 
       fallbackConnector = lib.mkOption {
@@ -1211,8 +1216,6 @@ in
         enable = cfg.autoLogin;
         user = cfg.user;
       };
-      desktopManager.plasma6.enable = true;
-
       pipewire = {
         enable = true;
         alsa = {
@@ -1224,10 +1227,24 @@ in
         wireplumber.enable = true;
       };
 
+      # Nautilus needs desktop-independent mount, trash, and network-location
+      # services because there is no full GNOME or Plasma desktop to supply
+      # them implicitly.
+      gvfs.enable = true;
+      udisks2.enable = true;
       usbmuxd.enable = true;
 
+      mullvad-vpn = {
+        enable = true;
+        package = pkgs.mullvad-vpn;
+        # This workstation uses a full-device tunnel. It does not need the
+        # setuid split-tunnel escape hatch, and disabling it narrows the local
+        # privilege surface.
+        enableExcludeWrapper = false;
+      };
+
       # Synapse profile mappings are reproduced with a compositor-independent
-      # evdev/uinput layer, so they work in Plasma and every Wayland session.
+      # evdev/uinput layer, so they work in every Wayland session.
       input-remapper.enable = true;
 
       sunshine = {
@@ -1308,6 +1325,26 @@ in
       "${lib.getExe' pkgs.util-linux "runuser"} -u ${cfg.user} -- ${lib.getExe' pkgs.input-remapper "input-remapper-control"} --command autoload --config-dir /home/${cfg.user}/.config/input-remapper-2"
     ];
 
+    # Keep local SSH, Moonlight, Plex, and other LAN services reachable while
+    # Mullvad owns the default internet route. Internet-bound traffic still
+    # uses the full-device VPN tunnel.
+    systemd.services.mullvad-allow-lan = {
+      description = "Allow local network access through Mullvad";
+      wantedBy = [ "multi-user.target" ];
+      requires = [ "mullvad-daemon.service" ];
+      after = [ "mullvad-daemon.service" ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        for attempt in {1..20}; do
+          if ${lib.getExe' pkgs.mullvad-vpn "mullvad"} lan set allow; then
+            exit 0
+          fi
+          ${lib.getExe' pkgs.coreutils "sleep"} 1
+        done
+        exit 1
+      '';
+    };
+
     # The Phantom Green accepts the Basilisk V3 button protocol on interface
     # zero, which browsers cannot address through WebHID. Reapply the selected
     # recovered Synapse layout after boot and whenever either transport
@@ -1345,7 +1382,7 @@ in
     # iPad session remains recoverable after reboot even while the LG is off.
     # ExecCondition cleanly skips autostart when the dummy is absent or cannot
     # be prepared; an ExecStartPre failure would enter a restart loop and can
-    # block Plasma from stopping graphical-session.target during logout.
+    # block the compositor from stopping graphical-session.target during logout.
     systemd.user.services.sunshine.serviceConfig.ExecCondition = lib.mkIf (
       !sunshineKms && cfg.ipadDisplay.connector != null
     ) "${ipadDisplayEnsure}/bin/ipad-display-ensure";
@@ -1362,9 +1399,8 @@ in
     systemd.user.services.sunshine.serviceConfig.ExecStart = lib.mkIf (!sunshineKms) (
       lib.mkForce "${config.security.wrapperDir}/sunshine ${sunshineConfig}"
     );
-    # The current capture backend and dummy-display preparation are both
-    # Plasma-specific. Do not let an experimental compositor session churn
-    # through KScreen retries and Sunshine's restart limit.
+    # Session-local capture and dummy-display preparation require a compatible
+    # desktop backend. Keep that legacy mode gated to a KDE session.
     systemd.user.services.sunshine.unitConfig =
       if sunshineKms then
         {
@@ -1456,10 +1492,6 @@ in
       };
     };
 
-    # KWin's direct-scanout overlays bypass the framebuffer KMS captures.
-    # Disable them for both Plasma and SDDM while persistent capture is active.
-    environment.sessionVariables.KWIN_USE_OVERLAYS = lib.mkIf sunshineKms "0";
-    systemd.services.display-manager.environment.KWIN_USE_OVERLAYS = lib.mkIf sunshineKms "0";
     # Sunshine's DualSense emulation uses UHID in addition to UInput. The
     # upstream udev rules also grant access to the virtual devices Sunshine
     # creates so their advanced controller features remain usable.
@@ -1543,8 +1575,8 @@ in
     users.users.${cfg.user} = {
       isNormalUser = true;
       uid = 1000;
-      # Keep PipeWire and the user bus available to the persistent Sunshine
-      # service even while SDDM owns the visible session.
+      # Keep PipeWire and the user bus available to persistent Sunshine even
+      # while the display manager owns the visible session.
       linger = sunshineKms;
       description = cfg.userDescription;
       home = "/home/${cfg.user}";
@@ -1584,34 +1616,40 @@ in
       ardour
       audacity
       curl
+      davinci-resolve
       discordNvidia
       vesktopWayland
+      file-roller
       flameshot
       finalizeDockerDataRoot
       gimp
       git
+      google-chrome
       gparted
       ipadDisplayOff
       ipadDisplayOn
       ipadDisplayPrepare
       ipadDisplaySessionOff
       ipadDisplaySessionOn
-      kdePackages.kcalc
       kdePackages.kdenlive
-      kdePackages.kdialog
+      gnome-calculator
       krita
       ksnip
       lanMouse
       linearWebApp
       libimobiledevice
       libva-utils
+      loupe
       mangohud
       migrateDockerDataRoot
+      nautilus
       nvtopPackages.nvidia
+      papers
       pciutils
       plex-desktop
       pulseaudio
       polychromatic
+      qbittorrent
       razerProfile
       slack
       spotify
@@ -1619,10 +1657,12 @@ in
       twitchWebApp
       usbutils
       vim
+      vlc
       vulkan-tools
       wget
       wl-clipboard
       youtubeWebApp
+      zenity
     ];
 
     assertions = [

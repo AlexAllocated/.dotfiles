@@ -30,21 +30,6 @@ let
     exec ${systemctl} --user restart xdg-desktop-portal.service
   '';
 
-  # Plasma ships its X11 and Wayland launchers in one derivation. Present a
-  # small filtered package to SDDM so the chooser stays Wayland-only without
-  # removing XWayland compatibility from applications running inside it.
-  plasmaWaylandSession =
-    pkgs.runCommand "plasma-wayland-session-only"
-      {
-        passthru.providedSessions = [ "plasma" ];
-      }
-      ''
-        mkdir -p "$out/share/wayland-sessions"
-        ln -s -- \
-          ${pkgs.kdePackages.plasma-workspace.sessions}/share/wayland-sessions/plasma.desktop \
-          "$out/share/wayland-sessions/plasma.desktop"
-      '';
-
   mkExperimentalLauncher =
     {
       id,
@@ -206,10 +191,6 @@ let
   );
 
   desktopTargets = {
-    plasma = {
-      label = "KDE Plasma";
-      command = lib.getExe' pkgs.kdePackages.plasma-workspace "startplasma-wayland";
-    };
     niri-noctalia = {
       label = "Niri + Noctalia";
       command = experimentalLaunchers.niri-noctalia;
@@ -224,10 +205,9 @@ let
     };
   };
   desktopTargetOrder = [
-    "plasma"
-    "niri-dms"
     "niri-noctalia"
     "mango-noctalia"
+    "niri-dms"
   ];
   desktopTargetHelp = lib.concatMapStringsSep "\n" (
     target: "  ${target}\t${desktopTargets.${target}.label}"
@@ -257,15 +237,15 @@ let
       mkdir -p "$state_root"
       rm -f "$switch_request_file"
 
-      target=plasma
+      target=niri-noctalia
       if [[ -r "$selection_file" ]]; then
         target="$(<"$selection_file")"
       fi
       case "$target" in
         ${lib.concatStringsSep " | " desktopTargetOrder}) ;;
         *)
-          printf 'Ignoring invalid desktop target %q; falling back to Plasma.\n' "$target" >&2
-          target=plasma
+          printf 'Ignoring invalid desktop target %q; falling back to Niri + Noctalia.\n' "$target" >&2
+          target=niri-noctalia
           ;;
       esac
 
@@ -277,12 +257,12 @@ let
       mv -f "$recent_history" "$history_file"
       failures="$(awk -v target="$target" '$2 == target { count++ } END { print count + 0 }' "$history_file")"
 
-      if ((failures >= 3)) && [[ "$target" != plasma ]]; then
+      if ((failures >= 3)) && [[ "$target" != niri-noctalia ]]; then
         failed_target="$target"
-        target=plasma
+        target=niri-noctalia
         printf '%s\n' "$target" >"$selection_file.tmp"
         mv -f "$selection_file.tmp" "$selection_file"
-        printf '%s: %s failed three times within 120 seconds; selected Plasma.\n' \
+        printf '%s: %s failed three times within 120 seconds; selected Niri + Noctalia.\n' \
           "$(date --iso-8601=seconds)" "$failed_target" >"$fallback_reason"
         : >"$history_file"
       fi
@@ -380,7 +360,7 @@ let
       fi
       # SDDM only honors Relogin after a successful session helper exit. The
       # launch history above decides when rapid failures must fall back to
-      # Plasma, so always return success after the desktop has ended.
+      # Niri + Noctalia, so always return success after the desktop has ended.
       exit 0
     '';
   };
@@ -391,7 +371,7 @@ let
     text = ''
       [Desktop Entry]
       Name=Dotfiles Desktop Switcher
-      Comment=Launch the persistent desktop choice with automatic Plasma recovery
+      Comment=Launch the persistent desktop choice with automatic Niri + Noctalia recovery
       Exec=${lib.getExe desktopSessionDispatcher}
       TryExec=${lib.getExe desktopSessionDispatcher}
       DesktopNames=dotfiles-desktop
@@ -430,7 +410,7 @@ let
       Targets:
       ${desktopTargetHelp}
 
-      Short aliases: niri (DMS), mango (Noctalia)
+      Short aliases: niri (Noctalia), dms (Niri), mango (Noctalia)
 
       Switching ends the current graphical login. Save application work first.
       Sunshine remains running; Moonlight may need one reconnect during handoff.
@@ -439,14 +419,15 @@ let
 
       canonicalize() {
         case "$1" in
-          niri) printf '%s\n' niri-dms ;;
+          niri) printf '%s\n' niri-noctalia ;;
+          dms) printf '%s\n' niri-dms ;;
           mango) printf '%s\n' mango-noctalia ;;
           ${lib.concatStringsSep " | " desktopTargetOrder}) printf '%s\n' "$1" ;;
           *) return 1 ;;
         esac
       }
 
-      selected=plasma
+      selected=niri-noctalia
       [[ ! -r "$selection_file" ]] || selected="$(<"$selection_file")"
       current="''${DOTFILES_DESKTOP_TARGET:-}"
       if [[ -z "$current" ]]; then
@@ -481,7 +462,7 @@ let
           immediate=0
           ;;
         --restart)
-          target="$(canonicalize "''${current:-$selected}")" || target=plasma
+          target="$(canonicalize "''${current:-$selected}")" || target=niri-noctalia
           immediate=1
           ;;
         --*)
@@ -572,9 +553,9 @@ in
       niri = {
         enable = true;
         package = niriPackage;
-        # Dolphin remains the desktop file manager; use the GTK portal instead
-        # of pulling Nautilus into the workstation merely for file pickers.
-        useNautilus = false;
+        # Keep the file manager and the GNOME portal's file chooser on the
+        # same GTK-native implementation.
+        useNautilus = true;
       };
 
       mango = {
@@ -641,12 +622,10 @@ in
     services.displayManager.sddm.autoLogin.relogin = true;
 
     # Force the complete advertised list because ordinary module assignments
-    # concatenate. That would re-add Plasma X11 and the generic compositor
-    # entries supplied by their upstream modules.
+    # concatenate and would re-add the compositors' generic upstream entries.
     services.displayManager.sessionPackages = lib.mkForce (
       [
         desktopDispatcherSession
-        plasmaWaylandSession
       ]
       ++ experimentalSessions
     );

@@ -12,6 +12,11 @@ input {
     focus-follows-mouse max-scroll-amount="0%"
 }
 
+cursor {
+    xcursor-theme "Adwaita"
+    xcursor-size 24
+}
+
 layout {
     gaps 48
     center-focused-column "on-overflow"
@@ -78,8 +83,8 @@ binds {
     Mod+S { spawn "dotfiles-shell-action" "control-center"; }
     Mod+Shift+Comma { spawn "dotfiles-shell-action" "settings"; }
     Mod+Shift+E { spawn "dotfiles-shell-action" "session-menu"; }
-    Mod+E { spawn "dolphin"; }
-    Mod+B { spawn "firefox"; }
+    Mod+E { spawn "nautilus" "--new-window"; }
+    Mod+B { spawn "google-chrome"; }
     Super+Alt+L { spawn "swaylock"; }
 
     Mod+O repeat=false { toggle-overview; }

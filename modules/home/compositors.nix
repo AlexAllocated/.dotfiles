@@ -24,6 +24,19 @@ let
   noctaliaNixosNvmlPatch = pkgs.writeText "noctalia-nixos-nvml.patch" (
     builtins.readFile ../../patches/noctalia-nixos-nvml.patch
   );
+  noctaliaHiddenAudioNodesPatch = pkgs.writeText "noctalia-hidden-audio-nodes.patch" (
+    builtins.readFile ../../patches/noctalia-hidden-audio-nodes.patch
+  );
+  mullvadWidgetScript = pkgs.replaceVars ../../noctalia/plugins/mullvad/toggle.luau {
+    mullvad = lib.getExe' pkgs.mullvad-vpn "mullvad";
+    mullvadGui = lib.getExe' pkgs.mullvad-vpn "mullvad-vpn";
+    sleep = lib.getExe' pkgs.coreutils "sleep";
+  };
+  noctaliaLocalPlugins = pkgs.runCommand "noctalia-local-plugins" { } ''
+    mkdir -p "$out/mullvad"
+    cp ${../../noctalia/plugins/mullvad/plugin.toml} "$out/mullvad/plugin.toml"
+    cp ${mullvadWidgetScript} "$out/mullvad/toggle.luau"
+  '';
   mangoPackage = import ../../lib/mango-package.nix { inherit inputs pkgs; };
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   wallpaper = config.dotfiles.wallpaper;
@@ -117,11 +130,18 @@ let
     runtimeInputs = [
       dmsPackage
       noctaliaPackage
+      pkgs.procps
     ];
     text = ''
       case "''${DOTFILES_DESKTOP_SHELL:-noctalia}" in
         dms) exec dms run --session ;;
-        noctalia) exec noctalia ;;
+        noctalia)
+          # KDE applications may DBus-activate kded6, which can seize the
+          # StatusNotifierWatcher name while Noctalia is restarting and leave
+          # the restored shell with an empty tray.
+          pkill -x kded6 >/dev/null 2>&1 || true
+          exec noctalia
+          ;;
         *)
           printf 'Unknown desktop shell: %s\n' "$DOTFILES_DESKTOP_SHELL" >&2
           exit 64
@@ -422,8 +442,8 @@ let
     bind=SUPER,a,spawn,dotfiles-shell-action control-center
     bind=SUPER,comma,spawn,dotfiles-shell-action settings
     bind=SUPER+SHIFT,e,spawn,dotfiles-shell-action session-menu
-    bind=SUPER,e,spawn,dolphin
-    bind=SUPER,b,spawn,firefox
+    bind=SUPER,e,spawn,nautilus --new-window
+    bind=SUPER,b,spawn,google-chrome
     bind=SUPER,q,killclient,
     bind=SUPER,v,togglefloating,
     bind=SUPER,f,togglefullscreen,
@@ -561,6 +581,7 @@ in
           (oldAttrs: {
             patches = (oldAttrs.patches or [ ]) ++ [
               noctaliaFocusPatch
+              noctaliaHiddenAudioNodesPatch
               noctaliaNixosNvmlPatch
               noctaliaWeztermNotificationsPatch
             ];
@@ -603,6 +624,7 @@ in
             "tray"
             "notifications"
             "clipboard"
+            "alex/mullvad:toggle"
             "network"
             "bluetooth"
             "volume"
@@ -643,6 +665,18 @@ in
             show_condition = false;
             show_temperature = true;
           };
+        };
+        plugins = {
+          source = [
+            {
+              name = "dotfiles";
+              kind = "path";
+              location = "${noctaliaLocalPlugins}";
+              enabled = true;
+            }
+          ];
+          enabled = [ "alex/mullvad" ];
+          auto_update = false;
         };
         weather = {
           enabled = true;
@@ -820,11 +854,15 @@ in
         # Noctalia 5.0 beta does not yet rebuild its device registry after
         # PipeWire or WirePlumber restarts. Refresh the shell with the audio
         # services so its output picker cannot retain dead pre-restart nodes.
+        # Both audio services must also pull the shell back in after a fresh
+        # start: PartOf propagates a restart, but a switch performs separate
+        # stop and start transactions.
         PartOf = [
           "graphical-session.target"
           "pipewire.service"
           "wireplumber.service"
         ];
+        ConditionEnvironment = "WAYLAND_DISPLAY";
         After = [
           "graphical-session-pre.target"
           "pipewire.service"
@@ -844,6 +882,10 @@ in
         RestartSec = 1;
         Slice = "session.slice";
       };
+      Install.WantedBy = [
+        "pipewire.service"
+        "wireplumber.service"
+      ];
     };
 
     systemd.user.services.dotfiles-compositor-polkit = {

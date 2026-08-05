@@ -43,18 +43,6 @@ in
       description = "Physical output that receives the ultrawide wallpaper.";
     };
 
-    logicalWidth = lib.mkOption {
-      type = lib.types.ints.positive;
-      default = 3440;
-      description = "Logical width used to identify the output in Plasma.";
-    };
-
-    logicalHeight = lib.mkOption {
-      type = lib.types.ints.positive;
-      default = 1440;
-      description = "Logical height used to identify the output in Plasma.";
-    };
-
     ipad = {
       connector = lib.mkOption {
         type = lib.types.nullOr (lib.types.strMatching "^[A-Za-z0-9._-]+$");
@@ -80,18 +68,6 @@ in
         readOnly = true;
         default = "${config.xdg.dataHome}/wallpapers/dotfiles/${cfg.ipad.fileName}";
         description = "Stable user-visible path to the installed iPad wallpaper.";
-      };
-
-      logicalWidth = lib.mkOption {
-        type = lib.types.ints.positive;
-        default = 1561;
-        description = "Scaled logical width used to identify the iPad output in Plasma.";
-      };
-
-      logicalHeight = lib.mkOption {
-        type = lib.types.ints.positive;
-        default = 1170;
-        description = "Scaled logical height used to identify the iPad output in Plasma.";
       };
     };
   };

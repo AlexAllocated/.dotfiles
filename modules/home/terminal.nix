@@ -8,7 +8,7 @@ let
   cfg = config.dotfiles;
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
   nativeLinux = pkgs.stdenv.hostPlatform.isLinux && cfg.profile != "nixos-wsl";
-  plasmaDesktop = cfg.profile == "nixos-desktop";
+  workstation = cfg.profile == "nixos-desktop";
   terminalFont = pkgs.nerd-fonts.bigblue-terminal;
   canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
   durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {
@@ -68,7 +68,7 @@ in
       };
     };
 
-    # Home Manager's package path joins the Plasma application search path on
+    # Home Manager's package path joins the system application search path on
     # the next NixOS system switch. Publish Alacritty's canonical desktop ID in
     # the user data directory too, so it is discoverable immediately after a
     # user-only activation during migration. The matching ID cleanly shadows
@@ -112,19 +112,12 @@ in
       '';
     };
 
-    xdg.dataFile."konsole/Alex-Gruvbox.profile" = lib.mkIf plasmaDesktop {
-      source = sourceRoot + "/konsole/Alex-Gruvbox.profile";
-    };
-    xdg.dataFile."konsole/AlexGruvboxDarkHard.colorscheme" = lib.mkIf plasmaDesktop {
-      source = sourceRoot + "/konsole/AlexGruvboxDarkHard.colorscheme";
-    };
-
     # Tmux owns durable panes, windows, and sessions while the GUI terminal is
     # free to stay small and replaceable. Its stock C-b bindings intentionally
     # match upstream documentation and tutorials.
     programs.tmux = {
       enable = true;
-      package = if plasmaDesktop then canonicalTmuxClient else pkgs.tmux;
+      package = if workstation then canonicalTmuxClient else pkgs.tmux;
       mouse = true;
       terminal = "tmux-256color";
       historyLimit = 50000;
@@ -149,7 +142,7 @@ in
 
     # The system-owned tmux process deliberately survives NixOS switches, so
     # apply new personal defaults in place without restarting it.
-    home.activation.canonicalTmuxConfiguration = lib.mkIf plasmaDesktop (
+    home.activation.canonicalTmuxConfiguration = lib.mkIf workstation (
       lib.hm.dag.entryAfter [ "linkGeneration" ] ''
         tmux=${lib.getExe durableTmuxPackage}
         socket=/run/chev-ttyd-rescue-tmux/tmux.sock
@@ -256,70 +249,5 @@ in
       };
     };
 
-    home.activation.weztermPlasmaDefault = lib.mkIf plasmaDesktop (
-      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file kdeglobals \
-          --group General \
-          --key TerminalApplication \
-          "wezterm start --cwd ."
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file kdeglobals \
-          --group General \
-          --key TerminalService \
-          "org.wezfurlong.wezterm.desktop"
-      ''
-    );
-
-    # Konsole's built-in profile is immutable. Add a managed profile instead,
-    # and change only the default-profile key so any user-created profiles are
-    # preserved alongside it.
-    home.activation.konsoleDefaultProfile = lib.mkIf plasmaDesktop (
-      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file konsolerc \
-          --group "Desktop Entry" \
-          --key DefaultProfile \
-          "Alex-Gruvbox.profile"
-      ''
-    );
-
-    # Remove the former no-border rule now that Plasma owns WezTerm's titlebar
-    # and resize frame. Leaving the rule behind would make one-tab windows
-    # chromeless and remove their edge-resize hitboxes.
-    home.activation.weztermPlasmaDecorationCleanup = lib.mkIf plasmaDesktop (
-      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        rules_file="''${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc"
-        rule_id="wezterm-integrated-chrome"
-        rules="$(${lib.getExe' pkgs.kdePackages.kconfig "kreadconfig6"} \
-          --file "$rules_file" \
-          --group General \
-          --key rules \
-          --default "")"
-
-        filtered_rules=""
-        old_ifs="$IFS"
-        IFS=,
-        for rule in $rules; do
-          if [ "$rule" != "$rule_id" ]; then
-            filtered_rules="''${filtered_rules:+$filtered_rules,}$rule"
-          fi
-        done
-        IFS="$old_ifs"
-
-        run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-          --file "$rules_file" --group General --key rules "$filtered_rules"
-
-        for key in \
-          Description Enabled noborder noborderrule types \
-          wmclass wmclasscomplete wmclassmatch; do
-          run ${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} \
-            --file "$rules_file" --group "$rule_id" --key "$key" --delete ""
-        done
-
-        ${lib.getExe' pkgs.systemd "busctl"} --user call \
-          org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true
-      ''
-    );
   };
 }

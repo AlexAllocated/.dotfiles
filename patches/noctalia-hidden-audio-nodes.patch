@@ -1,0 +1,53 @@
+diff --git a/src/pipewire/pipewire_service.h b/src/pipewire/pipewire_service.h
+--- a/src/pipewire/pipewire_service.h
++++ b/src/pipewire/pipewire_service.h
+@@ -153,6 +153,7 @@ public:
+     bool nodePassive = false;
+     bool streamCaptureSink = false;
+     bool streamClassificationReady = false;
++    bool hidden = false;
+     float volume = 1.0f;
+     // Software / node-route mute from PipeWire props (SPA_PARAM_Props, node routes). For device nodes
+     // swMute mirrors the authoritative mixer-api mute.
+diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.cpp
+--- a/src/pipewire/pipewire_service.cpp
++++ b/src/pipewire/pipewire_service.cpp
+@@ -993,6 +993,7 @@ void PipeWireService::onRegistryGlobal(
+       nd->iconName = nd->applicationBinary;
+     }
+     nd->mediaClass = mediaClass;
++    nd->hidden = isTruthyPipeWireProp(dictGet(props, "node.hidden"));
+     applyStreamFilterPropsFromDict(*nd, props, false);
+     const bool audioDeviceNode = mediaClass == "Audio/Sink" || mediaClass == "Audio/Source";
+     applyVolumePropsFromDict(*nd, props, !audioDeviceNode);
+@@ -1192,6 +1193,10 @@ void PipeWireService::onNodeInfo(std::uint32_t id, const pw_node_info* info) {
+     if (!iconName.empty()) {
+       nd.iconName = iconName;
+     }
++    const std::string hidden = dictGet(info->props, "node.hidden");
++    if (!hidden.empty()) {
++      nd.hidden = isTruthyPipeWireProp(hidden);
++    }
+     filterPropsChanged = applyStreamFilterPropsFromDict(nd, info->props, true);
+     const bool audioDevice = nd.mediaClass == "Audio/Sink" || nd.mediaClass == "Audio/Source";
+     applyVolumePropsFromDict(nd, info->props, !audioDevice);
+@@ -1627,14 +1632,18 @@ void PipeWireService::rebuildState() {
+       if (node.isDefault) {
+         next.defaultSinkId = id;
+       }
+-      next.sinks.push_back(std::move(node));
++      if (!nd->hidden) {
++        next.sinks.push_back(std::move(node));
++      }
+     } else if (nd->mediaClass == "Audio/Source") {
+       node.isDefault = (nd->name == m_defaultSourceName);
+       if (node.isDefault) {
+         next.defaultSourceId = id;
+       }
+-      next.sources.push_back(std::move(node));
++      if (!nd->hidden) {
++        next.sources.push_back(std::move(node));
++      }
+     } else if (isProgramOutputNode(*nd)) {
+       next.programOutputs.push_back(std::move(node));
+     }
