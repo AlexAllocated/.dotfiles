@@ -203,6 +203,16 @@ in
         };
         dotfiles = {
           inherit profile;
+          wallpaper.connector = "DP-4";
+          compositors.outputs.DP-4 = {
+            mode = "3440x1440@160";
+            scale = 1;
+            position = {
+              x = 0;
+              y = 0;
+            };
+            focusAtStartup = true;
+          };
           gaming = {
             steamLibrary = "/games/SteamLibrary";
             haloCampaignEvolved.enable = true;

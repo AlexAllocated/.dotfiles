@@ -1321,9 +1321,15 @@ in
     # Upstream starts the privileged daemon but does not apply configured
     # autoload profiles. Do that after it owns its D-Bus name so mappings are
     # restored at boot regardless of which graphical session Alex chooses.
-    systemd.services.input-remapper.serviceConfig.ExecStartPost = [
-      "${lib.getExe' pkgs.util-linux "runuser"} -u ${cfg.user} -- ${lib.getExe' pkgs.input-remapper "input-remapper-control"} --command autoload --config-dir /home/${cfg.user}/.config/input-remapper-2"
-    ];
+    systemd.services.input-remapper = {
+      # A new workstation does not have the mutable profile directory until
+      # Home Manager's first activation. Wait for it instead of failing the
+      # boot-time autoload race and succeeding only on later boots.
+      after = [ "home-manager-${cfg.user}.service" ];
+      serviceConfig.ExecStartPost = [
+        "${lib.getExe' pkgs.util-linux "runuser"} -u ${cfg.user} -- ${lib.getExe' pkgs.input-remapper "input-remapper-control"} --command autoload --config-dir /home/${cfg.user}/.config/input-remapper-2"
+      ];
+    };
 
     # Keep local SSH, Moonlight, Plex, and other LAN services reachable while
     # Mullvad owns the default internet route. Internet-bound traffic still
