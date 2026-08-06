@@ -548,7 +548,7 @@
                 "enabled"
               else
                 "disabled"
-            } = disabled
+            } = enabled
             test ${
               nixpkgs.lib.escapeShellArg
                 self.nixosConfigurations.tracer.config.boot.initrd.luks.devices."tracer-root".device
