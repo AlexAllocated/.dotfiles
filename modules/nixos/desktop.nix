@@ -1554,14 +1554,20 @@ in
       description = "Persistent KMS game stream host for Moonlight";
       wantedBy = [ "multi-user.target" ];
       wants = [
+        "avahi-daemon.service"
         "network-online.target"
         "user@1000.service"
       ];
       after = [
+        "avahi-daemon.service"
         "display-manager.service"
         "network-online.target"
         "user@1000.service"
       ];
+      # Sunshine does not re-register its Moonlight mDNS service after Avahi
+      # disappears. Couple their restarts so discovery cannot silently remain
+      # absent after a configuration activation or an Avahi recovery.
+      partOf = [ "avahi-daemon.service" ];
       startLimitIntervalSec = 500;
       startLimitBurst = 10;
       path = [

@@ -218,6 +218,13 @@ in
       };
     };
 
+    # Keep mDNS service discovery on the physical LAN. Docker creates bridge
+    # and veth interfaces that would otherwise publish bogus Sunshine targets
+    # and make Moonlight discovery unreliable.
+    services.avahi = lib.mkIf (cfg.lanInterface != null) {
+      allowInterfaces = [ cfg.lanInterface ];
+    };
+
     services.openssh = {
       enable = true;
       startWhenNeeded = false;
