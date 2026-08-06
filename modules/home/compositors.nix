@@ -981,6 +981,25 @@ in
       };
     };
 
+    systemd.user.services.flameshot = {
+      Unit = {
+        Description = "Flameshot screenshot service";
+        PartOf = [ "graphical-session.target" ];
+        After = [
+          "graphical-session.target"
+          "xdg-desktop-portal.service"
+          "xdg-desktop-portal-gnome.service"
+        ];
+      };
+      Service = {
+        ExecStart = lib.getExe pkgs.flameshot;
+        Restart = "on-failure";
+        RestartSec = 1;
+        Slice = "session.slice";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
     systemd.user.services.dotfiles-niri-output-follow = {
       Unit = {
         Description = "Move Niri workspaces with the physical LG output";
