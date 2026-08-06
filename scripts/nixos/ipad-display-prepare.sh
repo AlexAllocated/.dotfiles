@@ -17,22 +17,22 @@ EOF
 
 while (($#)); do
 	case "$1" in
-	--connector)
-		requested_connector="${2:-}"
-		shift 2
-		;;
-	--apply-now)
-		apply_now=1
-		shift
-		;;
-	-h | --help)
-		usage
-		exit 0
-		;;
-	*)
-		printf 'Unknown argument: %s\n' "$1" >&2
-		exit 2
-		;;
+		--connector)
+			requested_connector="${2:-}"
+			shift 2
+			;;
+		--apply-now)
+			apply_now=1
+			shift
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		*)
+			printf 'Unknown argument: %s\n' "$1" >&2
+			exit 2
+			;;
 	esac
 done
 
