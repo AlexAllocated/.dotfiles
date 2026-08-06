@@ -725,6 +725,12 @@ in
             type = "tray";
             drawer = true;
             drawer_columns = 3;
+            pinned = [
+              "chrome_status_icon_1"
+              "flameshot"
+              "lan-mouse-edge-toggle"
+              "razer-profile-selector"
+            ];
           };
           cpu_temperature = {
             type = "sysmon";
