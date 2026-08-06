@@ -189,10 +189,9 @@ in
       };
     };
 
-    virtualisation.docker.daemon.settings.data-root = "/data/docker";
-    systemd.services.docker = {
-      after = [ "data.mount" ];
-      unitConfig.ConditionPathIsMountPoint = "/data";
+    virtualisation.docker = {
+      enableOnBoot = true;
+      daemon.settings.data-root = "/var/lib/docker";
     };
 
     networking = {
@@ -301,18 +300,5 @@ in
     };
 
     systemd.tmpfiles.rules = [ "d /games/SteamLibrary 0755 ${user} users -" ];
-    systemd.services.tracer-data-directories = {
-      description = "Create Tracer bulk-storage directories after /data is mounted";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "data.mount" ];
-      unitConfig.ConditionPathIsMountPoint = "/data";
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-      };
-      script = ''
-        install -d -m 0710 -o root -g docker /data/docker
-      '';
-    };
   };
 }
