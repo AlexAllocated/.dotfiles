@@ -29,7 +29,7 @@ class LanMouseTray:
 
         self.indicator = AppIndicator3.Indicator.new(
             "lan-mouse-edge-toggle",
-            "input-mouse-symbolic",
+            "preferences-desktop-remote-desktop-symbolic",
             AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
@@ -82,25 +82,25 @@ class LanMouseTray:
         if self.busy:
             self.status_item.set_label("Changing state…")
             self.toggle_item.set_sensitive(False)
-            self.indicator.set_icon_full("content-save-settings-symbolic", "Changing LAN Mouse state")
+            self.indicator.set_icon_full("network-transmit-receive-symbolic", "Changing LAN Mouse state")
             self.indicator.set_title("LAN Mouse: changing state")
         elif self.enabled is True:
             self.status_item.set_label("Mac edge: Enabled")
             self.toggle_item.set_label("Lock mouse to Tracer")
             self.toggle_item.set_sensitive(True)
-            self.indicator.set_icon_full("input-mouse-symbolic", "LAN Mouse enabled")
+            self.indicator.set_icon_full("preferences-desktop-remote-desktop-symbolic", "LAN Mouse enabled")
             self.indicator.set_title("LAN Mouse: Mac edge enabled")
         elif self.enabled is False:
             self.status_item.set_label("Mac edge: Locked")
             self.toggle_item.set_label("Enable Mac edge")
             self.toggle_item.set_sensitive(True)
-            self.indicator.set_icon_full("changes-prevent-symbolic", "LAN Mouse locked")
+            self.indicator.set_icon_full("computer-symbolic", "LAN Mouse locked")
             self.indicator.set_title("LAN Mouse: locked to Tracer")
         else:
             self.status_item.set_label("Mac edge: Unavailable")
             self.toggle_item.set_label("Retry")
             self.toggle_item.set_sensitive(True)
-            self.indicator.set_icon_full("dialog-warning-symbolic", "LAN Mouse unavailable")
+            self.indicator.set_icon_full("network-error-symbolic", "LAN Mouse unavailable")
             self.indicator.set_title("LAN Mouse: unavailable")
 
     def refresh(self, _item=None):
