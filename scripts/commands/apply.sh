@@ -1,5 +1,42 @@
 #!/usr/bin/env bash
 
+verify_native_nixos_activation() {
+	local running_system boot_system profile_link generation expected_entry default_entry
+	running_system="$(readlink -f /run/current-system)"
+	boot_system="$(readlink -f /nix/var/nix/profiles/system)"
+	[[ -n "$running_system" && "$running_system" == "$boot_system" ]] || {
+		printf 'The running NixOS system does not match the persistent boot profile.\n' >&2
+		printf 'Running: %s\nBoot profile: %s\n' "$running_system" "$boot_system" >&2
+		return 1
+	}
+
+	profile_link="$(readlink /nix/var/nix/profiles/system)"
+	profile_link="${profile_link##*/}"
+	case "$profile_link" in
+		system-*-link)
+			generation="${profile_link#system-}"
+			generation="${generation%-link}"
+			;;
+		*)
+			printf 'Could not identify the persistent NixOS generation from %s.\n' "$profile_link" >&2
+			return 1
+			;;
+	esac
+	[[ "$generation" =~ ^[0-9]+$ ]] || {
+		printf 'Invalid persistent NixOS generation: %s\n' "$generation" >&2
+		return 1
+	}
+
+	expected_entry="nixos-generation-$generation.conf"
+	default_entry="$(sudo awk '$1 == "default" { print $2; exit }' /efi/loader/loader.conf)"
+	[[ "$default_entry" == "$expected_entry" ]] || {
+		printf 'systemd-boot does not default to the newly activated generation.\n' >&2
+		printf 'Expected: %s\nConfigured: %s\n' "$expected_entry" "${default_entry:-missing}" >&2
+		return 1
+	}
+	printf 'Verified generation %s is running and is the persistent systemd-boot default.\n' "$generation"
+}
+
 apply_profile() {
 	local profile="$1"
 	local source_root="${2:-$REPO_ROOT}"
@@ -10,6 +47,7 @@ apply_profile() {
 			require_command sudo
 			require_command nixos-rebuild
 			sudo nixos-rebuild switch --flake "$flake_ref"
+			verify_native_nixos_activation
 			;;
 		macos-managed)
 			apply_macos_managed 0

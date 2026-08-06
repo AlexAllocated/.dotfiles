@@ -299,11 +299,48 @@ let
           <<<"$workspaces"
       }
 
+      normalize_anchored_workspace_columns() {
+        local anchors="$1"
+        local windows restore_focus anchor workspace_id window_id
+        windows="$(niri msg --json windows 2>/dev/null)" || return 1
+        restore_focus="$(focused_window_id || true)"
+
+        while IFS= read -r anchor; do
+          [[ "$anchor" =~ ^[0-9]+$ ]] || continue
+          workspace_id="$(jq -r --argjson anchor "$anchor" \
+            'first(.[] | select(.id == $anchor)).workspace_id // empty' <<<"$windows")"
+          [[ "$workspace_id" =~ ^[0-9]+$ ]] || continue
+          while IFS= read -r window_id; do
+            [[ "$window_id" =~ ^[0-9]+$ ]] || continue
+            niri msg action focus-window --id "$window_id" >/dev/null 2>&1 || continue
+            # A zero proportional adjustment preserves the current visual width
+            # while converting pixel-fixed columns to Niri's proportional sizing.
+            niri msg action set-column-width '+0%' >/dev/null 2>&1 || true
+          done < <(
+            jq -r --argjson workspace_id "$workspace_id" '
+              [
+                .[]
+                | select(.workspace_id == $workspace_id)
+                | select(.is_floating == false and .layout.pos_in_scrolling_layout != null)
+              ]
+              | sort_by(.layout.pos_in_scrolling_layout[0])
+              | unique_by(.layout.pos_in_scrolling_layout[0])
+              | .[].id
+            ' <<<"$windows"
+          )
+        done < <(jq -r '.[]' <<<"$anchors")
+
+        if [[ "$restore_focus" =~ ^[0-9]+$ ]]; then
+          niri msg action focus-window --id "$restore_focus" >/dev/null 2>&1 || true
+        fi
+      }
+
       move_anchored_workspaces() {
         local target="$1"
         local anchors="$2"
         local restore_focus anchor
         restore_focus="$(focused_window_id || true)"
+        normalize_anchored_workspace_columns "$anchors" || true
 
         while IFS= read -r anchor; do
           [[ "$anchor" =~ ^[0-9]+$ ]] || continue
@@ -843,7 +880,7 @@ in
         Name=Vesktop
         Comment=Discord client with improved Linux and Wayland support
         Icon=vesktop
-        Exec=/run/current-system/sw/bin/vesktop
+        Exec=/run/current-system/sw/bin/vesktop --start-minimized
         Terminal=false
         X-GNOME-Autostart-enabled=true
       '';

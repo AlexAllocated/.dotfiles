@@ -6,8 +6,7 @@
 }:
 let
   cfg = config.dotfiles.gaming;
-  linuxWorkstation =
-    pkgs.stdenv.hostPlatform.isLinux && config.dotfiles.profile == "nixos-desktop";
+  linuxWorkstation = pkgs.stdenv.hostPlatform.isLinux && config.dotfiles.profile == "nixos-desktop";
   haloEnabled = linuxWorkstation && cfg.haloCampaignEvolved.enable;
   steamLibrary = cfg.steamLibrary;
   haloPrefix = "${steamLibrary}/steamapps/compatdata/2806050/pfx";
@@ -123,19 +122,19 @@ in
     })
 
     (lib.mkIf (linuxWorkstation && cfg.steamAutostart.enable) {
-      xdg.configFile."autostart/steam.desktop" = {
-        force = true;
-        text = ''
-          [Desktop Entry]
-          Type=Application
-          Name=Steam
-          Comment=Start Steam silently so installed games stay current
-          Exec=${lib.getExe pkgs.steam} -silent
-          Icon=steam
-          Terminal=false
-          StartupNotify=false
-          X-GNOME-Autostart-enabled=true
-        '';
+      systemd.user.services.steam-autostart = {
+        Unit = {
+          Description = "Keep Steam running silently with the graphical session";
+          PartOf = [ "graphical-session.target" ];
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          ExecStart = "${lib.getExe pkgs.steam} -silent";
+          Restart = "always";
+          RestartSec = 10;
+          Slice = "background.slice";
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
       };
     })
   ];

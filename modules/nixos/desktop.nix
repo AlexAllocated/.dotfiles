@@ -1340,10 +1340,10 @@ in
         settings = {
           sunshine_name = cfg.sunshine.name;
           capture = if sunshineKms then "kms" else "kwin";
-			# Encode directly through the NVIDIA hardware encoder. Vulkan Video was a
-			# workaround for the previous RTX 3090 host; on Tracer it produces visible
-			# flicker while capturing the iPad dummy through KMS.
-			encoder = "nvenc";
+          # Encode directly through the NVIDIA hardware encoder. Vulkan Video was a
+          # workaround for the previous RTX 3090 host; on Tracer it produces visible
+          # flicker while capturing the iPad dummy through KMS.
+          encoder = "nvenc";
           file_state = "sunshine_state.json";
           credentials_file = "sunshine_state.json";
           cert = "credentials/cacert.pem";
@@ -1788,8 +1788,9 @@ in
 
     assertions = [
       {
-        assertion =
-          lib.all (connector: builtins.match "^[A-Za-z0-9._-]+$" connector != null) ipadConnectors;
+        assertion = lib.all (
+          connector: builtins.match "^[A-Za-z0-9._-]+$" connector != null
+        ) ipadConnectors;
         message = "dotfiles.desktop.ipadDisplay connector names contain unsafe characters";
       }
       {
