@@ -113,6 +113,53 @@ let
       printf 'Halo started as PID %s with the declarative preset and GameMode.\n' "$halo_pid"
     '';
   };
+  steamUiHealthcheck = pkgs.writeShellApplication {
+    name = "steam-ui-healthcheck";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.dbus
+      pkgs.gnugrep
+      pkgs.jq
+      pkgs.niri
+      pkgs.procps
+      pkgs.steam
+      pkgs.systemd
+    ];
+    text = ''
+      steam_service=steam-autostart.service
+
+      steam_ui_is_visible() {
+        busctl --user get-property \
+          org.kde.StatusNotifierWatcher \
+          /StatusNotifierWatcher \
+          org.kde.StatusNotifierWatcher \
+          RegisteredStatusNotifierItems 2>/dev/null \
+          | grep -q '/steam"' \
+          || niri msg --json windows 2>/dev/null \
+            | jq -e 'any(.[]; .app_id == "steam")' >/dev/null
+      }
+
+      steam_game_is_running() {
+        pgrep -u "$UID" -f '[r]eaper SteamLaunch AppId=' >/dev/null
+      }
+
+      systemctl --user is-active --quiet "$steam_service" || exit 0
+      steam_ui_is_visible && exit 0
+
+      # Never disrupt a running game just to repair the desktop UI. The next
+      # timer pass after the game exits can recover a stale client instead.
+      steam_game_is_running && exit 0
+
+      # Give a healthy hidden client one chance to recreate its window before
+      # treating a surviving main process as a wedged UI.
+      timeout 10 steam steam://open/main >/dev/null 2>&1 || true
+      sleep 5
+      steam_ui_is_visible && exit 0
+      steam_game_is_running && exit 0
+
+      systemctl --user restart "$steam_service"
+    '';
+  };
 in
 {
   imports = [ ./core.nix ];
@@ -176,6 +223,28 @@ in
           Slice = "background.slice";
         };
         Install.WantedBy = [ "graphical-session.target" ];
+      };
+
+      systemd.user.services.steam-ui-healthcheck = {
+        Unit = {
+          Description = "Recover a headless or wedged Steam desktop UI";
+          After = [ "steam-autostart.service" ];
+        };
+        Service = {
+          Type = "oneshot";
+          ExecStart = lib.getExe steamUiHealthcheck;
+          Slice = "background.slice";
+        };
+      };
+
+      systemd.user.timers.steam-ui-healthcheck = {
+        Unit.Description = "Periodically verify the Steam tray and window UI";
+        Timer = {
+          OnBootSec = "5m";
+          OnUnitActiveSec = "2m";
+          Unit = "steam-ui-healthcheck.service";
+        };
+        Install.WantedBy = [ "timers.target" ];
       };
     })
 
