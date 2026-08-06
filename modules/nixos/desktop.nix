@@ -1747,7 +1747,6 @@ in
       git
       google-chrome
       gparted
-      heroic
       ipadDisplayOff
       ipadDisplayOn
       ipadDisplayPrepare
@@ -1762,7 +1761,6 @@ in
       libimobiledevice
       libva-utils
       loupe
-      lutris
       mangohud
       migrateDockerDataRoot
       nautilus
@@ -1783,8 +1781,6 @@ in
       vlc
       vulkan-tools
       wget
-      wineWow64Packages.staging
-      winetricks
       wl-clipboard
       youtubeWebApp
       zenity
