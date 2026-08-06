@@ -412,13 +412,26 @@ let
     '';
   });
   ipadConnector = if cfg.ipadDisplay.connector == null then "" else cfg.ipadDisplay.connector;
+  ipadConnectors = lib.unique (
+    lib.optional (cfg.ipadDisplay.connector != null) cfg.ipadDisplay.connector
+    ++ cfg.ipadDisplay.connectorAliases
+  );
+  ipadConnectorShellWords = lib.concatStringsSep " " (map lib.escapeShellArg ipadConnectors);
   mkIpadTool =
     name: script: runtimeInputs:
     pkgs.writeShellApplication {
       inherit name runtimeInputs;
       text = ''
-        export CHEV_IPAD_CONNECTOR=${lib.escapeShellArg ipadConnector}
-        export CHEV_IPAD_EDID=${ipadEdidFirmware}/lib/firmware/edid/ipad2732.bin
+        connector=${lib.escapeShellArg ipadConnector}
+        for candidate in ${ipadConnectorShellWords}; do
+          for status_file in /sys/class/drm/card*-"$candidate"/status; do
+            [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
+            connector="$candidate"
+            break 2
+          done
+        done
+        export DOTFILES_IPAD_CONNECTOR="$connector"
+        export DOTFILES_IPAD_EDID=${ipadEdidFirmware}/lib/firmware/edid/ipad2732.bin
         exec ${pkgs.bash}/bin/bash ${script} "$@"
       '';
     };
@@ -758,6 +771,7 @@ let
     ];
     text = ''
       configured=${lib.escapeShellArg ipadConnector}
+      configured_candidates=( ${ipadConnectorShellWords} )
       fallback=${lib.escapeShellArg cfg.sunshine.fallbackConnector}
       runtime_config="''${RUNTIME_DIRECTORY:?systemd did not provide RUNTIME_DIRECTORY}/sunshine.conf"
       session_record="$RUNTIME_DIRECTORY/seat-session"
@@ -780,6 +794,13 @@ let
         [[ -r "$directory/enabled" && -r "$directory/status" ]] || return 1
         [[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]]
       }
+
+      for candidate in "''${configured_candidates[@]}"; do
+        directory="$(connector_directory "$candidate" || true)"
+        [[ -n "$directory" && -r "$directory/status" && "$(<"$directory/status")" == connected ]] || continue
+        configured="$candidate"
+        break
+      done
 
       active_session() {
         loginctl show-seat seat0 --property ActiveSession --value 2>/dev/null || true
@@ -966,6 +987,12 @@ in
       description = "DRM connector verified as the known dummy adapter; never the LG display.";
     };
 
+    ipadDisplay.connectorAliases = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Additional observed DRM connector names for the same dummy adapter.";
+    };
+
     sunshine = {
       name = lib.mkOption {
         type = lib.types.str;
@@ -1053,9 +1080,10 @@ in
       kernelParams = [
         "nvidia-drm.fbdev=1"
       ]
-      ++ lib.optional (
-        cfg.ipadDisplay.connector != null
-      ) "drm.edid_firmware=${cfg.ipadDisplay.connector}:edid/ipad2732.bin";
+      ++ lib.optional (ipadConnectors != [ ]) (
+        "drm.edid_firmware="
+        + lib.concatStringsSep "," (map (connector: "${connector}:edid/ipad2732.bin") ipadConnectors)
+      );
       supportedFilesystems = [ "ntfs" ];
       loader = {
         timeout = 8;
@@ -1065,7 +1093,8 @@ in
         };
         systemd-boot = {
           enable = true;
-          configurationLimit = 10;
+          # Keep the active generation plus two known-good rollback entries.
+          configurationLimit = 3;
           xbootldrMountPoint = "/boot";
           extraInstallCommands = ''
             # EFI filesystems are case-insensitive, so EFI/NixOS collides with
@@ -1258,7 +1287,7 @@ in
         settings = {
           sunshine_name = cfg.sunshine.name;
           capture = if sunshineKms then "kms" else "kwin";
-          # Vulkan Video is hardware accelerated on the RTX 3090 Ti and has
+          # Vulkan Video is hardware accelerated on the workstation NVIDIA GPU and has
           # already sustained the exact 2732x2048 iPad mode. Unlike NVENC's
           # Linux CUDA interop path, it does not stall Sunshine's PipeWire
           # consumer when a demanding game saturates the general GPU cores.
@@ -1678,9 +1707,8 @@ in
     assertions = [
       {
         assertion =
-          cfg.ipadDisplay.connector == null
-          || builtins.match "^[A-Za-z0-9._-]+$" cfg.ipadDisplay.connector != null;
-        message = "dotfiles.desktop.ipadDisplay.connector contains unsafe characters";
+          lib.all (connector: builtins.match "^[A-Za-z0-9._-]+$" connector != null) ipadConnectors;
+        message = "dotfiles.desktop.ipadDisplay connector names contain unsafe characters";
       }
       {
         assertion = builtins.match "^[A-Za-z0-9._-]+$" cfg.sunshine.fallbackConnector != null;

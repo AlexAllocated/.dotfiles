@@ -43,12 +43,24 @@ in
       description = "Physical output that receives the ultrawide wallpaper.";
     };
 
+    outputMatch = lib.mkOption {
+      type = lib.types.strMatching "^[A-Za-z0-9 ._+-]+$";
+      default = cfg.connector;
+      description = "Niri output identity or connector used to follow the physical workstation display.";
+    };
+
     ipad = {
       connector = lib.mkOption {
         type = lib.types.nullOr (lib.types.strMatching "^[A-Za-z0-9._-]+$");
         default = null;
         example = "DP-2";
         description = "Optional iPad dummy output that receives the 4:3 wallpaper.";
+      };
+
+      outputMatch = lib.mkOption {
+        type = lib.types.nullOr (lib.types.strMatching "^[A-Za-z0-9 ._+-]+$");
+        default = cfg.ipad.connector;
+        description = "Niri output identity or connector used to follow the iPad dummy display.";
       };
 
       source = lib.mkOption {

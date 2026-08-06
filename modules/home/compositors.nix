@@ -60,6 +60,7 @@ let
               lib.optional (output.mode != null) "  mode ${builtins.toJSON output.mode}"
               ++ [ "  scale ${toString output.scale}" ]
               ++ lib.optional output.focusAtStartup "  focus-at-startup"
+              ++ lib.optional output.variableRefreshRate "  variable-refresh-rate"
               ++ lib.optional (output.position != null) (
                 "  position x=${toString output.position.x} y=${toString output.position.y}"
               )
@@ -247,20 +248,43 @@ let
       pkgs.coreutils
       pkgs.jq
       pkgs.niri
+      noctaliaPackage
     ];
     text = ''
-      primary=${lib.escapeShellArg wallpaper.connector}
-      fallback=${
-        lib.escapeShellArg (if wallpaper.ipad.connector == null then "" else wallpaper.ipad.connector)
+      primary_selector=${lib.escapeShellArg wallpaper.outputMatch}
+      fallback_selector=${
+        lib.escapeShellArg (if wallpaper.ipad.outputMatch == null then "" else wallpaper.ipad.outputMatch)
       }
+      primary_wallpaper=${lib.escapeShellArg wallpaper.installedPath}
+      fallback_wallpaper=${lib.escapeShellArg wallpaper.ipad.installedPath}
       state_dir="''${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is unset}/dotfiles-niri-output-follow"
       anchors_file="$state_dir/primary-workspace-anchors.json"
       last_state=unknown
+      assigned_primary=""
+      assigned_fallback=""
       mkdir -p -- "$state_dir"
 
-      [[ -n "$fallback" ]] || {
+      [[ -n "$fallback_selector" ]] || {
         printf '%s\n' 'No iPad fallback connector is configured; output following is disabled.' >&2
         exit 0
+      }
+
+      resolve_output() {
+        local selector="$1" outputs="$2"
+        jq -r --arg selector "$selector" '
+          if .[$selector] != null then
+            $selector
+          else
+            first(
+              to_entries[]
+              | select(
+                  ([.value.make, .value.model, (.value.serial // "Unknown")] | join(" "))
+                  == $selector
+                )
+              | .key
+            ) // empty
+          end
+        ' <<<"$outputs"
       }
 
       focused_window_id() {
@@ -302,7 +326,19 @@ let
           continue
         }
 
-        if jq -e --arg primary "$primary" \
+        primary="$(resolve_output "$primary_selector" "$outputs")"
+        fallback="$(resolve_output "$fallback_selector" "$outputs")"
+
+        if [[ -n "$primary" && "$assigned_primary" != "$primary" ]] \
+          && noctalia msg wallpaper-set "$primary" "$primary_wallpaper" >/dev/null 2>&1; then
+          assigned_primary="$primary"
+        fi
+        if [[ -n "$fallback" && "$assigned_fallback" != "$fallback" ]] \
+          && noctalia msg wallpaper-set "$fallback" "$fallback_wallpaper" >/dev/null 2>&1; then
+          assigned_fallback="$fallback"
+        fi
+
+        if [[ -n "$primary" ]] && jq -e --arg primary "$primary" \
           '.[$primary].current_mode != null and .[$primary].logical != null' \
           <<<"$outputs" >/dev/null; then
           current_state=on
@@ -320,7 +356,7 @@ let
           # Repeating the move through one stable window ID per workspace also
           # covers monitors that remain logically present for part of their
           # physical power-down sequence.
-          if [[ -s "$anchors_file" ]]; then
+          if [[ -n "$fallback" && -s "$anchors_file" ]]; then
             move_anchored_workspaces "$fallback" "$(<"$anchors_file")"
           fi
         fi
@@ -551,6 +587,11 @@ in
               default = false;
               description = "Whether niri should focus this output when the session starts.";
             };
+            variableRefreshRate = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = "Whether Niri should keep variable refresh rate enabled on this output.";
+            };
             niriGaps = lib.mkOption {
               type = lib.types.nullOr lib.types.number;
               default = null;
@@ -701,6 +742,7 @@ in
           enabled = true;
           fill_mode = "crop";
           automation.enabled = false;
+          default.path = wallpaper.installedPath;
           monitors = noctaliaWallpaperMonitors;
         };
       };
@@ -918,10 +960,10 @@ in
 
     assertions = lib.mapAttrsToList (name: output: {
       assertion =
-        builtins.match "^[A-Za-z0-9._-]+$" name != null
+        builtins.match "^[A-Za-z0-9 ._+-]+$" name != null
         && (output.mode == null || builtins.match "^[0-9]+x[0-9]+(@[0-9.]+)?$" output.mode != null)
         && (output.niriGaps == null || output.niriGaps >= 0);
-      message = "dotfiles.compositors.outputs.${name} has an unsafe connector name, mode, or Niri layout value";
+      message = "dotfiles.compositors.outputs.${name} has an unsafe output identity, mode, or Niri layout value";
     }) cfg.outputs;
   };
 }

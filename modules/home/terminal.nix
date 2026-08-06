@@ -10,7 +10,7 @@ let
   nativeLinux = pkgs.stdenv.hostPlatform.isLinux && cfg.profile != "nixos-wsl";
   workstation = cfg.profile == "nixos-desktop";
   terminalFont = pkgs.nerd-fonts.bigblue-terminal;
-  canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
+  canonicalTmuxSocket = "/run/dotfiles-durable-tmux/tmux.sock";
   durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {
     # Upstream's systemd integration places every pane in a transient scope in
     # the caller's user manager. This workstation deliberately keeps one tmux
@@ -145,7 +145,7 @@ in
     home.activation.canonicalTmuxConfiguration = lib.mkIf workstation (
       lib.hm.dag.entryAfter [ "linkGeneration" ] ''
         tmux=${lib.getExe durableTmuxPackage}
-        socket=/run/chev-ttyd-rescue-tmux/tmux.sock
+        socket=/run/dotfiles-durable-tmux/tmux.sock
 
         if [[ -S "$socket" ]]; then
           run "$tmux" -S "$socket" source-file "$HOME/.config/tmux/tmux.conf"

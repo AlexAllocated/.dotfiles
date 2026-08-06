@@ -139,7 +139,10 @@ detect_profile() {
 	elif [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'nixos-wsl\n'
 	elif [[ -f /etc/NIXOS ]]; then
-		printf 'chev-desktop\n'
+		case "$(hostname)" in
+			tracer) printf 'tracer\n' ;;
+			*) printf 'chev-desktop\n' ;;
+		esac
 	else
 		printf 'linux\n'
 	fi
@@ -150,6 +153,7 @@ flake_ref_for_profile() {
 	local source_root="${2:-$REPO_ROOT}"
 	case "$profile" in
 		nixos-wsl) printf 'path:%s#wsl\n' "$source_root" ;;
+		tracer) printf 'path:%s#tracer\n' "$source_root" ;;
 		# The native target includes a machine-generated, gitignored ESP PARTUUID.
 		# path: semantics deliberately include it in every rebuild.
 		chev-desktop) printf 'path:%s#chev-desktop\n' "$source_root" ;;

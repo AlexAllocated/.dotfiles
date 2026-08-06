@@ -23,10 +23,25 @@ assert_equal() {
 assert_equal "path:$repo_root#linux" "$(flake_ref_for_profile linux)"
 assert_equal "path:$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
+assert_equal "path:$repo_root#tracer" "$(flake_ref_for_profile tracer)"
 assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
 assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
 assert_equal "path:/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
+assert_equal "path:/tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
+
+detected_tracer="$({
+	WSL_DISTRO_NAME=""
+	uname() {
+		case "$1" in
+			-s) printf 'Linux\n' ;;
+			-m) printf 'x86_64\n' ;;
+		esac
+	}
+	hostname() { printf 'tracer\n'; }
+	detect_profile
+})"
+assert_equal "tracer" "$detected_tracer"
 
 profile_apply="$({
 	require_command() { :; }
@@ -38,6 +53,28 @@ profile_apply="$({
 })"
 [[ "$profile_apply" == *"windows-packages:/tmp/staged-dotfiles"* ]] || {
 	printf 'nixos-wsl profile did not reconcile Windows packages from its source checkout\n' >&2
+	exit 1
+}
+
+cleanup_output="$({
+	command_exists() { return 0; }
+	require_command() { :; }
+	sudo() {
+		if [[ "$*" == *"--list-generations"* ]]; then
+			printf '%s\n' \
+				'   1   2026-08-01 00:00:00' \
+				'   2   2026-08-02 00:00:00' \
+				'   3   2026-08-03 00:00:00' \
+				'   4   2026-08-04 00:00:00' \
+				'   5   2026-08-05 00:00:00   (current)'
+		else
+			printf 'sudo:%s\n' "$*"
+		fi
+	}
+	cleanup_nix_after_updoot tracer
+})"
+[[ "$cleanup_output" == *"--delete-generations 1 2"* ]] || {
+	printf 'updoot cleanup did not preserve exactly the current generation and two backups\n' >&2
 	exit 1
 }
 if flake_ref_for_profile macos-managed >/dev/null 2>&1; then

@@ -5,7 +5,7 @@ apply_profile() {
 	local source_root="${2:-$REPO_ROOT}"
 	local flake_ref
 	case "$profile" in
-		chev-desktop)
+		chev-desktop | tracer)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command sudo
 			require_command nixos-rebuild
@@ -92,6 +92,7 @@ apply_with_update() {
 	if [[ "$rebased" == "1" ]]; then
 		revalidate_and_reapply_profile "$profile"
 	fi
+	cleanup_nix_after_updoot "$profile"
 	push_updates
 	print_repo_status
 }

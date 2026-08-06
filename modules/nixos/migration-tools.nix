@@ -10,7 +10,7 @@ let
   cfg = config.dotfiles.migrationTools;
   source = toString cfg.source;
   codexPackage = if builtins.hasAttr "codex" migrationPkgs then migrationPkgs.codex else pkgs.codex;
-  canonicalTmuxSocket = "/run/chev-ttyd-rescue-tmux/tmux.sock";
+  canonicalTmuxSocket = "/run/dotfiles-durable-tmux/tmux.sock";
   durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {
     # The system-owned server must not place panes in transient scopes owned
     # by a graphical user manager that is intentionally recycled on logout.
@@ -222,36 +222,6 @@ let
       '';
     };
 
-  canonicalTmuxClient = pkgs.writeShellApplication {
-    name = "tmux";
-    text = ''
-      # Preserve the server selected by an existing pane. This lets the one
-      # pre-migration local server be detached cleanly without redirecting its
-      # management commands elsewhere.
-      if [[ -n "''${TMUX:-}" ]]; then
-        exec ${durableTmuxPackage}/bin/tmux "$@"
-      fi
-
-      explicit_socket=false
-      OPTIND=1
-      while getopts ':2CDhlNuVvc:f:L:S:T:' option; do
-        case "$option" in
-          L | S)
-            explicit_socket=true
-            ;;
-          *)
-            ;;
-        esac
-      done
-
-      if [[ "$explicit_socket" == true ]]; then
-        exec ${durableTmuxPackage}/bin/tmux "$@"
-      fi
-
-      exec ${durableTmuxPackage}/bin/tmux -S ${lib.escapeShellArg canonicalTmuxSocket} "$@"
-    '';
-  };
-
   resumeMigration = mkTool {
     name = "resume-migration";
     script = "scripts/nixos/resume-migration.sh";
@@ -384,6 +354,8 @@ let
   };
 in
 {
+  imports = [ ./durable-tmux.nix ];
+
   options.dotfiles.migrationTools = {
     enable = lib.mkEnableOption "the chev-desktop migration and recovery commands";
 
@@ -425,6 +397,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    dotfiles.durableTmux = {
+      enable = cfg.rescue.durableTmux;
+      user = cfg.rescue.user;
+    };
+
     assertions = [
       {
         assertion = codexPackage.version == "0.144.4";
@@ -441,7 +418,7 @@ in
     environment.systemPackages = [
       resumeMigration
       checkpointMigration
-      (if cfg.rescue.durableTmux then canonicalTmuxClient else pkgs.tmux)
+      pkgs.tmux
       rebootWindows
       recoverWindowsFallback
       exportMachineManifest
@@ -479,73 +456,14 @@ in
           };
         };
 
-    systemd.services.chev-ttyd-rescue-tmux = lib.mkIf cfg.rescue.durableTmux {
-      description = "Canonical durable tmux server";
-      wantedBy = [ "multi-user.target" ];
-      # A generation switch may replace this unit's script or tmux package,
-      # but its sessions are live user state. Pick up those changes on the next
-      # boot instead of terminating every shell during routine activation.
-      restartIfChanged = false;
-      unitConfig.X-StopOnRemoval = false;
-      path = [
-        pkgs.bash
-        pkgs.coreutils
-        durableTmuxPackage
-      ];
-      serviceConfig = {
-        Type = "simple";
-        User = cfg.rescue.user;
-        Group = "users";
-        RuntimeDirectory = "chev-ttyd-rescue-tmux";
-        RuntimeDirectoryMode = "0750";
-        RuntimeDirectoryPreserve = "yes";
-        # The tmux server and its panes are the durable workload. Service
-        # supervision may be refreshed without signaling those child
-        # processes or unlinking their socket.
-        KillMode = "process";
-        Restart = "always";
-        RestartSec = 1;
-        ExecStart = pkgs.writeShellScript "chev-ttyd-rescue-tmux-start" ''
-          set -eu
-          tmux=${durableTmuxPackage}/bin/tmux
-          socket="$RUNTIME_DIRECTORY/tmux.sock"
-          home=/home/${cfg.rescue.user}
-
-          server_running() {
-            "$tmux" -N -S "$socket" display-message -p '#{pid}' >/dev/null 2>&1
-          }
-          trap 'exit 0' INT TERM
-
-          # Keep the server available without manufacturing an immortal user
-          # session. exit-empty=off lets the final real session disappear while
-          # preserving the canonical socket for the next client.
-          while :; do
-            if ! server_running; then
-              "$tmux" -S "$socket" -f /dev/null start-server \; set-option -s exit-empty off
-            fi
-            if [ -r "$home/.config/tmux/tmux.conf" ]; then
-              if ! "$tmux" -S "$socket" source-file "$home/.config/tmux/tmux.conf"; then
-                printf '%s\n' 'The personal tmux config did not load cleanly; continuing with durable defaults.' >&2
-              fi
-            fi
-            "$tmux" -S "$socket" set-option -s exit-empty off
-
-            while server_running; do
-              ${pkgs.coreutils}/bin/sleep 1
-            done
-          done
-        '';
-      };
-    };
-
     systemd.services.chev-ttyd-rescue = lib.mkIf cfg.rescue.enable {
       description = "Temporary ttyd migration rescue terminal";
       wantedBy = lib.optionals cfg.rescue.autoStart [ "multi-user.target" ];
       wants = lib.optionals cfg.rescue.autoStart [ "network-online.target" ];
-      requires = lib.optionals cfg.rescue.durableTmux [ "chev-ttyd-rescue-tmux.service" ];
+      requires = lib.optionals cfg.rescue.durableTmux [ "dotfiles-durable-tmux.service" ];
       after =
         lib.optionals cfg.rescue.autoStart [ "network-online.target" ]
-        ++ lib.optionals cfg.rescue.durableTmux [ "chev-ttyd-rescue-tmux.service" ];
+        ++ lib.optionals cfg.rescue.durableTmux [ "dotfiles-durable-tmux.service" ];
       unitConfig = lib.optionalAttrs (!cfg.rescue.autoStart) {
         ConditionPathExists = "/run/chev-rescue/address";
       };

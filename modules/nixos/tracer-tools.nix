@@ -52,6 +52,17 @@ let
       util-linux
     ];
   };
+  rebootWindows = mkTool {
+    name = "reboot-windows";
+    script = "scripts/nixos/reboot-windows.sh";
+    runtimeInputs = with pkgs; [
+      coreutils
+      efibootmgr
+      jq
+      gnused
+      systemd
+    ];
+  };
   installTracer = mkTool {
     name = "install-tracer";
     script = "scripts/nixos/install-tracer.sh";
@@ -96,6 +107,7 @@ in
     environment.systemPackages = [
       resumeTracer
       tracerDiagnostics
+      rebootWindows
     ]
     ++ lib.optional cfg.rescueMode installTracer;
   };

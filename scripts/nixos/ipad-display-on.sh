@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-connector="${CHEV_IPAD_CONNECTOR:-}"
+connector="${DOTFILES_IPAD_CONNECTOR:-}"
 sole=0
 while (($#)); do
 	case "$1" in
@@ -24,8 +24,8 @@ while (($#)); do
 	esac
 done
 
-if [[ -z "$connector" && -f /run/chev-ipad-display/connector ]]; then
-	connector="$(</run/chev-ipad-display/connector)"
+if [[ -z "$connector" && -f /run/dotfiles-ipad-display/connector ]]; then
+	connector="$(</run/dotfiles-ipad-display/connector)"
 fi
 [[ "$connector" =~ ^[A-Za-z0-9._-]+$ ]] || {
 	printf '%s\n' 'No safe dummy connector is configured. Run ipad-display-prepare first.' >&2

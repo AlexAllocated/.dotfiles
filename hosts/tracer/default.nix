@@ -21,7 +21,7 @@ in
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/audio.nix
     ../../modules/nixos/compositors.nix
-    ../../modules/nixos/migration-tools.nix
+    ../../modules/nixos/durable-tmux.nix
     ../../modules/nixos/tracer-tools.nix
   ];
 
@@ -71,20 +71,18 @@ in
           mode = "kms";
           name = "TRACER";
         };
-        ipadDisplay.connector = "DP-5";
+        ipadDisplay = {
+          connector = "DP-2";
+          connectorAliases = [ "DP-5" ];
+        };
       };
       tracerTools = {
         enable = true;
         source = self.outPath;
       };
-      migrationTools = {
+      durableTmux = {
         enable = true;
-        source = self.outPath;
-        rescue = {
-          enable = false;
-          user = user;
-          durableTmux = true;
-        };
+        user = user;
       };
     };
 
@@ -107,6 +105,10 @@ in
         };
       };
       loader = {
+        # Unattended boots must enter the latest activated NixOS generation
+        # immediately. Hold Space during systemd-boot startup to reveal the
+        # generation menu when an explicit rollback is needed.
+        timeout = lib.mkForce 0;
         systemd-boot.enable = lib.mkForce (!cfg.secureBoot.enable);
         efi.canTouchEfiVariables = true;
       };
@@ -120,6 +122,36 @@ in
       pkgs.efibootmgr
       pkgs.sbctl
     ];
+
+    # This firmware promoted Windows ahead of Linux after the first unattended
+    # reboot. Keep only Linux in the normal UEFI order; Windows remains fully
+    # available through systemd-boot, F11, and the one-shot reboot-windows
+    # helper without being eligible as the automatic fallback.
+    systemd.services.tracer-prefer-linux-boot = {
+      description = "Keep Linux first in Tracer's UEFI boot order";
+      wantedBy = [ "multi-user.target" ];
+      path = [
+        pkgs.coreutils
+        pkgs.efibootmgr
+        pkgs.gnused
+      ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        mapfile -t linux_entries < <(
+          efibootmgr | sed -nE \
+            's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager([[:space:]].*)?$/\1/p'
+        )
+        if ((''${#linux_entries[@]} != 1)); then
+          printf 'Expected exactly one Linux Boot Manager entry, found %s; refusing to alter BootOrder.\n' \
+            "''${#linux_entries[@]}" >&2
+          exit 1
+        fi
+        current="$(efibootmgr | sed -nE 's/^BootOrder:[[:space:]]*//p')"
+        if [[ "$current" != "''${linux_entries[0]}" ]]; then
+          efibootmgr --bootorder "''${linux_entries[0]}"
+        fi
+      '';
+    };
 
     # The secondary SSD is added only after the fresh installation is proven.
     # Missing bulk storage must not prevent the desktop from booting.
@@ -225,20 +257,25 @@ in
         dotfiles = {
           inherit profile;
           wallpaper = {
-            connector = "DP-4";
-            ipad.connector = config.dotfiles.desktop.ipadDisplay.connector;
+            connector = "DP-1";
+            outputMatch = "LG Electronics LG ULTRAGEAR 101NTCZMT555";
+            ipad = {
+              connector = config.dotfiles.desktop.ipadDisplay.connector;
+              outputMatch = "Nvidia 0x0000 Unknown";
+            };
           };
           compositors.outputs = {
-            DP-4 = {
+            "LG Electronics LG ULTRAGEAR 101NTCZMT555" = {
               mode = "3440x1440@160";
               scale = 1;
+              variableRefreshRate = true;
               position = {
                 x = 0;
                 y = 0;
               };
               focusAtStartup = true;
             };
-            DP-5 = {
+            "Nvidia 0x0000 Unknown" = {
               # Sunshine enables the dummy only while a remote client needs
               # it. The LG remains the sole startup output whenever it is on.
               enable = false;

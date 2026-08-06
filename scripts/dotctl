@@ -40,6 +40,7 @@ Commands:
   codex-share <command>       Diagnose or migrate the Windows/WSL shared Codex home.
 
 Profiles:
+  tracer
   chev-desktop
   nixos-wsl
   linux

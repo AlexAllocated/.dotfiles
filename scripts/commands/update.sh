@@ -226,6 +226,53 @@ push_updates() {
 	fi
 }
 
+cleanup_nix_after_updoot() {
+	local profile="$1"
+	local system_profile=/nix/var/nix/profiles/system
+	local generations current generation kept_previous=0
+	local -a delete_generations=()
+	local -A keep_generations=()
+
+	command_exists nix-collect-garbage || return 0
+	case "$profile" in
+		chev-desktop | tracer | nixos-wsl)
+			require_command sudo
+			require_command nix-env
+			generations="$(sudo nix-env --profile "$system_profile" --list-generations)"
+			current="$(awk '/\(current\)/ { print $1; exit }' <<<"$generations")"
+			[[ "$current" =~ ^[0-9]+$ ]] || {
+				printf 'Could not identify the active NixOS generation; refusing cleanup.\n' >&2
+				return 1
+			}
+
+			keep_generations["$current"]=1
+			while IFS= read -r generation; do
+				[[ "$generation" =~ ^[0-9]+$ ]] || continue
+				[[ "$generation" == "$current" ]] && continue
+				if ((kept_previous < 2)); then
+					keep_generations["$generation"]=1
+					((kept_previous += 1))
+				fi
+			done < <(awk '{ print $1 }' <<<"$generations" | sort -rn)
+
+			while IFS= read -r generation; do
+				[[ "$generation" =~ ^[0-9]+$ ]] || continue
+				[[ -n "${keep_generations[$generation]:-}" ]] || delete_generations+=("$generation")
+			done < <(awk '{ print $1 }' <<<"$generations")
+
+			if ((${#delete_generations[@]})); then
+				printf 'Removing superseded NixOS generations; retaining current plus two backups...\n'
+				sudo nix-env --profile "$system_profile" --delete-generations "${delete_generations[@]}"
+			else
+				printf 'NixOS generation history already contains only current plus two backups.\n'
+			fi
+			sudo nix-collect-garbage
+			;;
+		macos-managed) ;;
+		*) nix-collect-garbage ;;
+	esac
+}
+
 run_check() {
 	local work candidate
 	require_command nix

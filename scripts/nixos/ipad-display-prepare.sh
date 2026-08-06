@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-requested_connector="${CHEV_IPAD_CONNECTOR:-}"
+requested_connector="${DOTFILES_IPAD_CONNECTOR:-}"
 apply_now=0
 
 usage() {
@@ -41,7 +41,7 @@ done
 	exit 1
 }
 
-firmware="${CHEV_IPAD_EDID:?NixOS wrapper did not provide CHEV_IPAD_EDID}"
+firmware="${DOTFILES_IPAD_EDID:?NixOS wrapper did not provide DOTFILES_IPAD_EDID}"
 [[ -f "$firmware" ]] || {
 	printf 'Generated iPad EDID firmware is missing: %s\n' "$firmware" >&2
 	exit 1
@@ -88,7 +88,7 @@ else
 fi
 
 printf 'Verified dummy adapter connector: %s (known headless EDID; LG excluded)\n' "$connector"
-printf '\nPersistent configuration (hosts/chev-desktop/hardware-generated.nix):\n'
+printf '\nPersistent configuration for this host:\n'
 printf '  dotfiles.desktop.ipadDisplay.connector = "%s";\n' "$connector"
 printf '\nThen run: dotctl apply\nReboot once so drm.edid_firmware is active.\n'
 
@@ -97,8 +97,8 @@ if ((apply_now == 0)); then
 fi
 if ((EUID != 0)); then
 	exec sudo -- "$(command -v env)" \
-		"CHEV_IPAD_EDID=$firmware" \
-		"CHEV_IPAD_CONNECTOR=${CHEV_IPAD_CONNECTOR:-}" \
+		"DOTFILES_IPAD_EDID=$firmware" \
+		"DOTFILES_IPAD_CONNECTOR=${DOTFILES_IPAD_CONNECTOR:-}" \
 		"$(command -v bash)" "$0" --connector "$connector" --apply-now
 fi
 
@@ -149,7 +149,7 @@ grep -Fxq '2732x2048' "$mode_file" || {
 	printf '%s\n' 'Hotplug completed but 2732x2048 is not advertised; use the persistent config and reboot.' >&2
 	exit 1
 }
-install -d -m 0755 /run/chev-ipad-display
-printf '%s\n' "$connector" >/run/chev-ipad-display/connector
-chmod 0644 /run/chev-ipad-display/connector
+install -d -m 0755 /run/dotfiles-ipad-display
+printf '%s\n' "$connector" >/run/dotfiles-ipad-display/connector
+chmod 0644 /run/dotfiles-ipad-display/connector
 printf '%s\n' 'Temporary 2732x2048 EDID override is active. Run ipad-display-on as alex.'
