@@ -294,6 +294,7 @@ in
             steamLibrary = "/games/SteamLibrary";
             steamAutostart.enable = true;
             haloCampaignEvolved.enable = true;
+            battleNet.enable = true;
           };
         };
       };

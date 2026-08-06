@@ -9,6 +9,39 @@ let
   linuxWorkstation = pkgs.stdenv.hostPlatform.isLinux && config.dotfiles.profile == "nixos-desktop";
   haloEnabled = linuxWorkstation && cfg.haloCampaignEvolved.enable;
   steamLibrary = cfg.steamLibrary;
+  battleNetAppId = toString cfg.battleNet.appId;
+  battleNetPrefix = "${config.xdg.dataHome}/Steam/steamapps/compatdata/${battleNetAppId}";
+  battleNetExecutable = "${battleNetPrefix}/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net.exe";
+  battleNetSchemes = [
+    "x-scheme-handler/battlenet"
+    "x-scheme-handler/blizzard"
+    "x-scheme-handler/heroes"
+  ];
+  battleNetUriHandler = pkgs.writeShellApplication {
+    name = "battlenet-uri-handler";
+    text = ''
+      uri="''${1:-}"
+      case "$uri" in
+        battlenet://* | blizzard://* | heroes://*) ;;
+        *)
+          printf 'Refusing unsupported Battle.net URI: %s\n' "$uri" >&2
+          exit 64
+          ;;
+      esac
+
+      executable=${lib.escapeShellArg battleNetExecutable}
+      if [[ ! -f "$executable" ]]; then
+        printf 'Battle.net is not installed in Steam prefix %s\n' ${lib.escapeShellArg battleNetPrefix} >&2
+        exit 1
+      fi
+
+      exec ${lib.getExe' pkgs.protontricks "protontricks-launch"} \
+        --appid ${battleNetAppId} \
+        --no-term \
+        "$executable" \
+        "--uri=$uri"
+    '';
+  };
   haloPrefix = "${steamLibrary}/steamapps/compatdata/2806050/pfx";
   haloConfigRoot = "${haloPrefix}/drive_c/users/steamuser/AppData/Local/Meteorite/Saved/Config";
   haloSettings = pkgs.writeShellApplication {
@@ -93,6 +126,14 @@ in
 
     haloCampaignEvolved.enable = lib.mkEnableOption "the optimized Halo: Campaign Evolved preset";
     steamAutostart.enable = lib.mkEnableOption "silent Steam startup with the graphical session";
+    battleNet = {
+      enable = lib.mkEnableOption "Battle.net browser callbacks for a Steam-managed Proton prefix";
+      appId = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        default = 2527490029;
+        description = "Steam non-game shortcut ID whose Proton prefix contains Battle.net.";
+      };
+    };
   };
 
   config = lib.mkMerge [
@@ -136,6 +177,28 @@ in
         };
         Install.WantedBy = [ "graphical-session.target" ];
       };
+    })
+
+    (lib.mkIf (linuxWorkstation && cfg.battleNet.enable) {
+      home.packages = [ battleNetUriHandler ];
+
+      xdg.desktopEntries.battlenet-proton-handler = {
+        name = "Battle.net Proton URI Handler";
+        comment = "Return browser authentication to Battle.net running under Steam Proton";
+        exec = "${lib.getExe battleNetUriHandler} %u";
+        icon = "battlenet";
+        terminal = false;
+        noDisplay = true;
+        mimeType = battleNetSchemes;
+        categories = [ "Game" ];
+      };
+
+      xdg.mimeApps.associations.added = lib.genAttrs battleNetSchemes (_: [
+        "battlenet-proton-handler.desktop"
+      ]);
+      xdg.mimeApps.defaultApplications = lib.genAttrs battleNetSchemes (_: [
+        "battlenet-proton-handler.desktop"
+      ]);
     })
   ];
 }
