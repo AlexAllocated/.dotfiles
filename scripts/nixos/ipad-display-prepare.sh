@@ -17,22 +17,22 @@ EOF
 
 while (($#)); do
 	case "$1" in
-		--connector)
-			requested_connector="${2:-}"
-			shift 2
-			;;
-		--apply-now)
-			apply_now=1
-			shift
-			;;
-		-h | --help)
-			usage
-			exit 0
-			;;
-		*)
-			printf 'Unknown argument: %s\n' "$1" >&2
-			exit 2
-			;;
+	--connector)
+		requested_connector="${2:-}"
+		shift 2
+		;;
+	--apply-now)
+		apply_now=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown argument: %s\n' "$1" >&2
+		exit 2
+		;;
 	esac
 done
 
@@ -61,11 +61,11 @@ for status_file in /sys/class/drm/card*-*/status; do
 	if grep -Eiq 'Manufacturer:[[:space:]]*GSM|GSM774B' <<<"$decoded"; then
 		continue
 	fi
-	if grep -Eiq 'Manufacturer:[[:space:]]*FUN|EK1080T4KHR|FUN7F52' <<<"$decoded" \
-		|| {
-			grep -Eiq 'Manufacturer:[[:space:]]*NVD' <<<"$decoded" \
-				&& grep -Eiq 'Model:[[:space:]]*0([[:space:]]|$)' <<<"$decoded" \
-				&& grep -Eiq '640x480[[:space:]]+59\.940' <<<"$decoded"
+	if grep -Eiq 'Manufacturer:[[:space:]]*FUN|EK1080T4KHR|FUN7F52' <<<"$decoded" ||
+		{
+			grep -Eiq 'Manufacturer:[[:space:]]*NVD' <<<"$decoded" &&
+				grep -Eiq 'Model:[[:space:]]*0([[:space:]]|$)' <<<"$decoded" &&
+				grep -Eiq '640x480[[:space:]]+59\.940' <<<"$decoded"
 		}; then
 		connector="$(basename "$sysfs_connector" | sed -E 's/^card[0-9]+-//')"
 		candidates+=("$connector")
