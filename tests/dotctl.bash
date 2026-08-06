@@ -32,6 +32,7 @@ assert_equal "path:/tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer 
 
 detected_tracer="$({
 	WSL_DISTRO_NAME=""
+	is_nixos() { return 0; }
 	uname() {
 		case "$1" in
 			-s) printf 'Linux\n' ;;

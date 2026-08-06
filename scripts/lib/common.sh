@@ -126,6 +126,10 @@ trap_remove_on_exit() {
 	trap "$cleanup" EXIT
 }
 
+is_nixos() {
+	[[ -f /etc/NIXOS ]]
+}
+
 detect_profile() {
 	if [[ "$(uname -s)" == "Darwin" ]]; then
 		if [[ "$(uname -m)" != "arm64" ]]; then
@@ -136,9 +140,9 @@ detect_profile() {
 		else
 			printf 'macos\n'
 		fi
-	elif [[ -f /etc/NIXOS && -n "${WSL_DISTRO_NAME:-}" ]]; then
+	elif is_nixos && [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
 		printf 'nixos-wsl\n'
-	elif [[ -f /etc/NIXOS ]]; then
+	elif is_nixos; then
 		case "$(hostname)" in
 			tracer) printf 'tracer\n' ;;
 			*) printf 'chev-desktop\n' ;;
