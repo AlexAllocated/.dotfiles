@@ -680,6 +680,19 @@ in
     ];
   };
 
+  # Keep Bluetooth headsets usable as simultaneous output and Clean Mic input.
+  # WirePlumber exposes the microphone while A2DP is active and temporarily
+  # selects the best available bidirectional profile only when capture needs it.
+  services.pipewire.wireplumber.extraConfig."52-creator-bluetooth-headsets" = {
+    "wireplumber.settings" = {
+      "bluetooth.autoswitch-to-headset-profile" = true;
+      "bluetooth.use-persistent-storage" = true;
+    };
+    "monitor.bluez.properties" = {
+      "bluez5.enable-msbc" = true;
+    };
+  };
+
   # The selected default source is the physical input feeding Clean Mic. Route
   # ordinary microphone consumers through the processed source while leaving
   # sink-monitor captures (OBS bus tracks and screen-share audio) untouched.
