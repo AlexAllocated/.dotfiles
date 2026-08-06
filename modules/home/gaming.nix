@@ -6,10 +6,9 @@
 }:
 let
   cfg = config.dotfiles.gaming;
-  enabled =
-    pkgs.stdenv.hostPlatform.isLinux
-    && config.dotfiles.profile == "nixos-desktop"
-    && cfg.haloCampaignEvolved.enable;
+  linuxWorkstation =
+    pkgs.stdenv.hostPlatform.isLinux && config.dotfiles.profile == "nixos-desktop";
+  haloEnabled = linuxWorkstation && cfg.haloCampaignEvolved.enable;
   steamLibrary = cfg.steamLibrary;
   haloPrefix = "${steamLibrary}/steamapps/compatdata/2806050/pfx";
   haloConfigRoot = "${haloPrefix}/drive_c/users/steamuser/AppData/Local/Meteorite/Saved/Config";
@@ -94,30 +93,50 @@ in
     };
 
     haloCampaignEvolved.enable = lib.mkEnableOption "the optimized Halo: Campaign Evolved preset";
+    steamAutostart.enable = lib.mkEnableOption "silent Steam startup with the graphical session";
   };
 
-  config = lib.mkIf enabled {
-    home.packages = [
-      haloLauncher
-      haloSettings
-    ];
-
-    home.activation.haloCampaignEvolvedSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run ${lib.getExe haloSettings}
-    '';
-
-    xdg.desktopEntries.halo-campaign-evolved-optimized = {
-      name = "Halo: Campaign Evolved (Optimized)";
-      genericName = "First-Person Shooter";
-      comment = "Launch Halo with the declarative performance preset and GameMode";
-      exec = lib.getExe haloLauncher;
-      icon = "steam_icon_2806050";
-      terminal = false;
-      startupNotify = true;
-      categories = [
-        "Game"
-        "ActionGame"
+  config = lib.mkMerge [
+    (lib.mkIf haloEnabled {
+      home.packages = [
+        haloLauncher
+        haloSettings
       ];
-    };
-  };
+
+      home.activation.haloCampaignEvolvedSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        run ${lib.getExe haloSettings}
+      '';
+
+      xdg.desktopEntries.halo-campaign-evolved-optimized = {
+        name = "Halo: Campaign Evolved (Optimized)";
+        genericName = "First-Person Shooter";
+        comment = "Launch Halo with the declarative performance preset and GameMode";
+        exec = lib.getExe haloLauncher;
+        icon = "steam_icon_2806050";
+        terminal = false;
+        startupNotify = true;
+        categories = [
+          "Game"
+          "ActionGame"
+        ];
+      };
+    })
+
+    (lib.mkIf (linuxWorkstation && cfg.steamAutostart.enable) {
+      xdg.configFile."autostart/steam.desktop" = {
+        force = true;
+        text = ''
+          [Desktop Entry]
+          Type=Application
+          Name=Steam
+          Comment=Start Steam silently so installed games stay current
+          Exec=${lib.getExe pkgs.steam} -silent
+          Icon=steam
+          Terminal=false
+          StartupNotify=false
+          X-GNOME-Autostart-enabled=true
+        '';
+      };
+    })
+  ];
 }

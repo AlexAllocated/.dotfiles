@@ -68,6 +68,8 @@ in
           requireGeneratedEfiPartuuid = false;
         };
         sunshine = {
+          fallbackConnector = "DP-4";
+          fallbackConnectorAliases = [ "DP-1" ];
           mode = "kms";
           name = "TRACER";
         };
@@ -261,7 +263,7 @@ in
             outputMatch = "LG Electronics LG ULTRAGEAR 101NTCZMT555";
             ipad = {
               connector = config.dotfiles.desktop.ipadDisplay.connector;
-              outputMatch = "Nvidia 0x0000 Unknown";
+              outputMatch = "The Linux Foundation ipad2732 Linux #0";
             };
           };
           compositors.outputs = {
@@ -275,7 +277,7 @@ in
               };
               focusAtStartup = true;
             };
-            "Nvidia 0x0000 Unknown" = {
+            "The Linux Foundation ipad2732 Linux #0" = {
               # Sunshine enables the dummy only while a remote client needs
               # it. The LG remains the sole startup output whenever it is on.
               enable = false;
@@ -290,6 +292,7 @@ in
           };
           gaming = {
             steamLibrary = "/games/SteamLibrary";
+            steamAutostart.enable = true;
             haloCampaignEvolved.enable = true;
           };
         };

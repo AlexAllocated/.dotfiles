@@ -960,7 +960,7 @@ in
 
     assertions = lib.mapAttrsToList (name: output: {
       assertion =
-        builtins.match "^[A-Za-z0-9 ._+-]+$" name != null
+        builtins.match "^[A-Za-z0-9 ._+#-]+$" name != null
         && (output.mode == null || builtins.match "^[0-9]+x[0-9]+(@[0-9.]+)?$" output.mode != null)
         && (output.niriGaps == null || output.niriGaps >= 0);
       message = "dotfiles.compositors.outputs.${name} has an unsafe output identity, mode, or Niri layout value";

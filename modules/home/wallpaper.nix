@@ -44,7 +44,7 @@ in
     };
 
     outputMatch = lib.mkOption {
-      type = lib.types.strMatching "^[A-Za-z0-9 ._+-]+$";
+      type = lib.types.strMatching "^[A-Za-z0-9 ._+#-]+$";
       default = cfg.connector;
       description = "Niri output identity or connector used to follow the physical workstation display.";
     };
@@ -58,7 +58,7 @@ in
       };
 
       outputMatch = lib.mkOption {
-        type = lib.types.nullOr (lib.types.strMatching "^[A-Za-z0-9 ._+-]+$");
+        type = lib.types.nullOr (lib.types.strMatching "^[A-Za-z0-9 ._+#-]+$");
         default = cfg.ipad.connector;
         description = "Niri output identity or connector used to follow the iPad dummy display.";
       };

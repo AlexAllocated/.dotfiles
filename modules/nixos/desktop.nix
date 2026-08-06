@@ -119,6 +119,19 @@ let
     hash = "sha256-5po6knQogtjHLauDo2pa0QVQQG9oCiX4OHseSESTriw=";
   };
   razerOnboardPython = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.hidapi ]);
+  openRazerHealthCheck = pkgs.writeShellScript "openrazer-health-check" ''
+    for attempt in $(${pkgs.coreutils}/bin/seq 1 15); do
+      if ${pkgs.coreutils}/bin/timeout 1 \
+        ${pkgs.systemd}/bin/busctl --user call \
+          org.razer /org/razer razer.devices getDevices \
+          >/dev/null 2>&1; then
+        exit 0
+      fi
+      ${pkgs.coreutils}/bin/sleep 0.2
+    done
+    printf '%s\n' 'OpenRazer acquired D-Bus but did not become responsive; restarting it.' >&2
+    exit 1
+  '';
   razerProfileDirectory = ../../razer/input-remapper-2/presets + "/Razer Razer Basilisk V3 Pro 35K";
   razerProfileDirect = pkgs.writeShellApplication {
     name = "razer-profile-direct";
@@ -149,7 +162,7 @@ let
 
       openrazer_was_active=false
       polychromatic_tray_was_active=false
-      polychromatic_tray_unit='app-polychromatic\x2dautostart@autostart.service'
+      polychromatic_tray_unit=polychromatic-tray.service
       user_systemctl=(systemctl --machine=${cfg.user}@.host --user)
       if [[ "$EUID" -eq 0 ]]; then
         user_busctl=(busctl --machine=${cfg.user}@.host --user)
@@ -417,6 +430,12 @@ let
     ++ cfg.ipadDisplay.connectorAliases
   );
   ipadConnectorShellWords = lib.concatStringsSep " " (map lib.escapeShellArg ipadConnectors);
+  sunshineFallbackConnectors = lib.unique (
+    [ cfg.sunshine.fallbackConnector ] ++ cfg.sunshine.fallbackConnectorAliases
+  );
+  sunshineFallbackConnectorShellWords = lib.concatStringsSep " " (
+    map lib.escapeShellArg sunshineFallbackConnectors
+  );
   mkIpadTool =
     name: script: runtimeInputs:
     pkgs.writeShellApplication {
@@ -456,6 +475,13 @@ let
     runtimeInputs = [ pkgs.coreutils ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
+      for candidate in ${ipadConnectorShellWords}; do
+        for status_file in /sys/class/drm/card*-"$candidate"/status; do
+          [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
+          connector="$candidate"
+          break 2
+        done
+      done
       connected=0
       for status_file in /sys/class/drm/card*-"$connector"/status; do
         [[ -r "$status_file" ]] || continue
@@ -498,6 +524,13 @@ let
     ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
+      for candidate in ${ipadConnectorShellWords}; do
+        for status_file in /sys/class/drm/card*-"$candidate"/status; do
+          [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
+          connector="$candidate"
+          break 2
+        done
+      done
       state_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/dotfiles-ipad-display"
       pending_off="$state_dir/disable-pending"
       mkdir -p -- "$state_dir"
@@ -621,6 +654,13 @@ let
     ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
+      for candidate in ${ipadConnectorShellWords}; do
+        for status_file in /sys/class/drm/card*-"$candidate"/status; do
+          [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
+          connector="$candidate"
+          break 2
+        done
+      done
       state_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/dotfiles-ipad-display"
       pending_off="$state_dir/disable-pending"
       wait_for_output=0
@@ -773,6 +813,7 @@ let
       configured=${lib.escapeShellArg ipadConnector}
       configured_candidates=( ${ipadConnectorShellWords} )
       fallback=${lib.escapeShellArg cfg.sunshine.fallbackConnector}
+      fallback_candidates=( ${sunshineFallbackConnectorShellWords} )
       runtime_config="''${RUNTIME_DIRECTORY:?systemd did not provide RUNTIME_DIRECTORY}/sunshine.conf"
       session_record="$RUNTIME_DIRECTORY/seat-session"
 
@@ -799,6 +840,13 @@ let
         directory="$(connector_directory "$candidate" || true)"
         [[ -n "$directory" && -r "$directory/status" && "$(<"$directory/status")" == connected ]] || continue
         configured="$candidate"
+        break
+      done
+
+      for candidate in "''${fallback_candidates[@]}"; do
+        directory="$(connector_directory "$candidate" || true)"
+        [[ -n "$directory" && -r "$directory/status" && "$(<"$directory/status")" == connected ]] || continue
+        fallback="$candidate"
         break
       done
 
@@ -1012,6 +1060,11 @@ in
         type = lib.types.strMatching "^[A-Za-z0-9._-]+$";
         default = "DP-1";
         description = "Local DRM output captured when the configured iPad dummy is unavailable.";
+      };
+      fallbackConnectorAliases = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        description = "Additional observed DRM connector names for the physical Sunshine fallback display.";
       };
     };
   };
@@ -1531,6 +1584,36 @@ in
       };
     };
 
+    # The Basilisk exposes several USB interfaces while the boot-time direct
+    # profile transaction is still settling. Starting OpenRazer concurrently
+    # can leave it owning org.razer while its device scan is permanently
+    # wedged. Start after that short window and reject any daemon that cannot
+    # answer a real device query, allowing Restart=always to recover it.
+    systemd.user.services.openrazer-daemon.serviceConfig = {
+      ExecStartPre = "${pkgs.coreutils}/bin/sleep 3";
+      ExecStartPost = openRazerHealthCheck;
+      RestartSec = 1;
+    };
+
+    # Own Polychromatic as a normal user service instead of an unordered XDG
+    # autostart process. Type=dbus plus ExecStartPost makes this wait for a
+    # genuinely healthy OpenRazer daemon, and profile swaps can restart the
+    # tray without retaining stale D-Bus device proxies.
+    systemd.user.services.polychromatic-tray = {
+      description = "Polychromatic Razer lighting tray";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      requires = [ "openrazer-daemon.service" ];
+      after = [ "openrazer-daemon.service" ];
+      serviceConfig = {
+        Type = "exec";
+        ExitType = "cgroup";
+        ExecStart = "${pkgs.polychromatic}/bin/polychromatic-helper --autostart";
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
+
     # Sunshine's DualSense emulation uses UHID in addition to UInput. The
     # upstream udev rules also grant access to the virtual devices Sunshine
     # creates so their advanced controller features remain usable.
@@ -1711,8 +1794,10 @@ in
         message = "dotfiles.desktop.ipadDisplay connector names contain unsafe characters";
       }
       {
-        assertion = builtins.match "^[A-Za-z0-9._-]+$" cfg.sunshine.fallbackConnector != null;
-        message = "dotfiles.desktop.sunshine.fallbackConnector contains unsafe characters";
+        assertion = lib.all (
+          connector: builtins.match "^[A-Za-z0-9._-]+$" connector != null
+        ) sunshineFallbackConnectors;
+        message = "dotfiles.desktop.sunshine fallback connector names contain unsafe characters";
       }
     ];
   };

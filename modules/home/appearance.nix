@@ -100,5 +100,18 @@ in
       gtk-theme = "gruvbox-dark";
       icon-theme = "oomox-gruvbox-dark";
     };
+
+    # NixOS owns the ordered polychromatic-tray.service. Shadow the packaged
+    # XDG entry so the desktop autostart generator cannot race a second tray
+    # process against OpenRazer during login.
+    xdg.configFile."autostart/polychromatic-autostart.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Polychromatic Autostart (managed by systemd)
+        Hidden=true
+      '';
+    };
   };
 }
