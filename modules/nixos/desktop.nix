@@ -240,6 +240,34 @@ let
       exec ${razerProfileTrayPython}/bin/python3 \
         ${../../scripts/nixos/razer-profile-tray.py} \
         --controller ${lib.getExe razerProfile} \
+      "$@"
+    '';
+  };
+  lanMouseTray = pkgs.writeShellApplication {
+    name = "lan-mouse-tray";
+    runtimeInputs = [
+      pkgs.libnotify
+      razerProfileTrayPython
+    ];
+    text = ''
+      export GI_TYPELIB_PATH=${
+        lib.makeSearchPath "lib/girepository-1.0" (
+          map lib.getLib [
+            pkgs.at-spi2-core
+            pkgs.gdk-pixbuf
+            pkgs.glib
+            pkgs.gobject-introspection-unwrapped
+            pkgs.gtk3
+            pkgs.harfbuzz
+            pkgs.libayatana-appindicator
+            pkgs.pango
+          ]
+        )
+      }
+      export XDG_DATA_DIRS=${pkgs.adwaita-icon-theme}/share:${pkgs.gtk3}/share:''${XDG_DATA_DIRS:-}
+      exec ${razerProfileTrayPython}/bin/python3 \
+        ${../../scripts/nixos/lan-mouse-tray.py} \
+        --controller ${lib.getExe lanMouse} \
         "$@"
     '';
   };
@@ -1459,6 +1487,25 @@ in
       after = [ "graphical-session.target" ];
       serviceConfig = {
         ExecStart = lib.getExe razerProfileTray;
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
+
+    systemd.user.services.lan-mouse-tray = {
+      description = "Lan Mouse right-edge tray toggle";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [
+        "graphical-session.target"
+        "lan-mouse.service"
+      ];
+      requires = [ "lan-mouse.service" ];
+      after = [
+        "graphical-session.target"
+        "lan-mouse.service"
+      ];
+      serviceConfig = {
+        ExecStart = lib.getExe lanMouseTray;
         Restart = "on-failure";
         RestartSec = 2;
       };
