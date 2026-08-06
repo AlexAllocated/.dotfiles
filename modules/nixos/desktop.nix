@@ -1340,11 +1340,10 @@ in
         settings = {
           sunshine_name = cfg.sunshine.name;
           capture = if sunshineKms then "kms" else "kwin";
-          # Vulkan Video is hardware accelerated on the workstation NVIDIA GPU and has
-          # already sustained the exact 2732x2048 iPad mode. Unlike NVENC's
-          # Linux CUDA interop path, it does not stall Sunshine's PipeWire
-          # consumer when a demanding game saturates the general GPU cores.
-          encoder = "vulkan";
+			# Encode directly through the NVIDIA hardware encoder. Vulkan Video was a
+			# workaround for the previous RTX 3090 host; on Tracer it produces visible
+			# flicker while capturing the iPad dummy through KMS.
+			encoder = "nvenc";
           file_state = "sunshine_state.json";
           credentials_file = "sunshine_state.json";
           cert = "credentials/cacert.pem";
