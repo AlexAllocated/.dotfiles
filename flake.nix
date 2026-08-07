@@ -362,6 +362,7 @@
       nixosModules = {
         compositors = ./modules/nixos/compositors.nix;
         desktop = ./modules/nixos/desktop.nix;
+        github-actions-runner = ./modules/nixos/github-actions-runner.nix;
         migration-tools = ./modules/nixos/migration-tools.nix;
         tracer-tools = ./modules/nixos/tracer-tools.nix;
         wsl = ./modules/nixos/wsl.nix;

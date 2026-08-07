@@ -1,0 +1,107 @@
+From 0aefd8070dd0ce412fdbde05282f69772f5c0bf9 Mon Sep 17 00:00:00 2001
+From: besauce <300328542+besauce@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 10:58:58 -0500
+Subject: [PATCH] linux: fall back to latest pose when capture layer sends a
+ zero pose
+
+Backport of https://github.com/alvr-org/ALVR/pull/3342. SteamVR 2.16+
+stripped the compositor symbol ALVR used to match frames to poses. Without
+this fallback, frame timestamps become progressively stale and latency
+sawtooths toward 1.3 seconds.
+
+diff --git a/alvr/server_openvr/cpp/alvr_server/PoseHistory.cpp b/alvr/server_openvr/cpp/alvr_server/PoseHistory.cpp
+index 9fe294cdd4..ca103a75be 100644
+--- a/alvr/server_openvr/cpp/alvr_server/PoseHistory.cpp
++++ b/alvr/server_openvr/cpp/alvr_server/PoseHistory.cpp
+@@ -68,6 +68,14 @@ PoseHistory::GetBestPoseMatch(const vr::HmdMatrix34_t& pose) const {
+     return {};
+ }
+ 
++std::optional<PoseHistory::TrackingHistoryFrame> PoseHistory::GetLatestPose() const {
++    std::unique_lock<std::mutex> lock(m_mutex);
++    if (m_poseBuffer.empty()) {
++        return {};
++    }
++    return m_poseBuffer.back();
++}
++
+ std::optional<PoseHistory::TrackingHistoryFrame> PoseHistory::GetPoseAt(uint64_t timestampNs
+ ) const {
+     std::unique_lock<std::mutex> lock(m_mutex);
+diff --git a/alvr/server_openvr/cpp/alvr_server/PoseHistory.h b/alvr/server_openvr/cpp/alvr_server/PoseHistory.h
+index e197b84744..4ecd3baca6 100644
+--- a/alvr/server_openvr/cpp/alvr_server/PoseHistory.h
++++ b/alvr/server_openvr/cpp/alvr_server/PoseHistory.h
+@@ -18,6 +18,8 @@ class PoseHistory {
+     void OnPoseUpdated(uint64_t targetTimestampNs, FfiDeviceMotion motion);
+ 
+     std::optional<TrackingHistoryFrame> GetBestPoseMatch(const vr::HmdMatrix34_t& pose) const;
++    // Return the most recent pose in the buffer
++    std::optional<TrackingHistoryFrame> GetLatestPose() const;
+     // Return the most recent pose known at the given timestamp
+     std::optional<TrackingHistoryFrame> GetPoseAt(uint64_t timestampNs) const;
+ 
+diff --git a/alvr/server_openvr/cpp/platform/linux/CEncoder.cpp b/alvr/server_openvr/cpp/platform/linux/CEncoder.cpp
+index e3d47fdde8..2c2fbfcd19 100644
+--- a/alvr/server_openvr/cpp/platform/linux/CEncoder.cpp
++++ b/alvr/server_openvr/cpp/platform/linux/CEncoder.cpp
+@@ -228,7 +228,23 @@ void CEncoder::Run() {
+ 
+             encode_pipeline->SetParams(GetDynamicEncoderParams());
+ 
+-            auto pose = m_poseHistory->GetBestPoseMatch((const vr::HmdMatrix34_t&)frame_info.pose);
++            // The vulkan layer ships an all zero pose when it could not recover one
++            // from the compositor (see vulkan_layer/util/pose.cpp). Every rotation
++            // scores the same distance against zeros, so fall back to the newest
++            // pose instead of matching. Exact compare is safe, the source is a zero
++            // initialized static and a real pose is never all zeros.
++            const vr::HmdMatrix34_t& frame_pose = (const vr::HmdMatrix34_t&)frame_info.pose;
++            bool pose_is_zero = true;
++            for (int i = 0; i < 3 && pose_is_zero; ++i) {
++                for (int j = 0; j < 4; ++j) {
++                    if (frame_pose.m[i][j] != 0.0f) {
++                        pose_is_zero = false;
++                        break;
++                    }
++                }
++            }
++            auto pose = pose_is_zero ? m_poseHistory->GetLatestPose()
++                                     : m_poseHistory->GetBestPoseMatch(frame_pose);
+             if (!pose) {
+                 continue;
+             }
+diff --git a/alvr/vulkan_layer/util/pose.cpp b/alvr/vulkan_layer/util/pose.cpp
+index 3d83d21bcc..eddcb52e6d 100644
+--- a/alvr/vulkan_layer/util/pose.cpp
++++ b/alvr/vulkan_layer/util/pose.cpp
+@@ -72,6 +72,19 @@ const TrackedDevicePose_t & find_pose_in_call_stack()
+   if (res != nullptr)
+     return *res;
+   static TrackedDevicePose_t notfound;
++  // The walk below cannot succeed when the render thread symbol is not
++  // present in vrcompositor (true as of SteamVR 2.17.6), and a full unwind
++  // with symbol name lookup on every present is expensive. After enough
++  // consecutive misses only retry once in a while, so a vrcompositor that
++  // does have the symbol can still populate the cache.
++  constexpr unsigned failure_threshold = 300;
++  constexpr unsigned retry_interval = 1000;
++  static unsigned failures;
++  if (failures >= failure_threshold && failures % retry_interval != 0)
++  {
++    ++failures;
++    return notfound;
++  }
+   unw_context_t ctx;
+   unw_getcontext(&ctx);
+   unw_cursor_t cursor;
+@@ -96,8 +109,10 @@ const TrackedDevicePose_t & find_pose_in_call_stack()
+           return *p;
+         }
+       }
++      ++failures;
+       return notfound;
+     }
+   }
++  ++failures;
+   return notfound;
+ }

@@ -160,6 +160,34 @@ let
       systemctl --user restart "$steam_service"
     '';
   };
+  steamVrDefaults = pkgs.writeShellApplication {
+    name = "steamvr-workstation-defaults";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+    ];
+    text = ''
+      settings=${lib.escapeShellArg "${config.xdg.dataHome}/Steam/config/steamvr.vrsettings"}
+      if [[ -f "$settings" ]]; then
+        settings_dir="$(dirname "$settings")"
+        temporary="$(mktemp --tmpdir="$settings_dir" .steamvr.vrsettings.XXXXXX)"
+        trap 'rm -f "$temporary"' EXIT
+
+        jq '.steamvr = (.steamvr // {}) | .steamvr.enableHomeApp = false' \
+          "$settings" > "$temporary"
+        chmod --reference="$settings" "$temporary"
+
+        if ! cmp -s "$settings" "$temporary"; then
+          mv "$temporary" "$settings"
+          printf 'Disabled SteamVR Home.\n'
+        else
+          rm -f "$temporary"
+        fi
+        trap - EXIT
+      fi
+
+    '';
+  };
 in
 {
   imports = [ ./core.nix ];
@@ -210,6 +238,10 @@ in
     })
 
     (lib.mkIf (linuxWorkstation && cfg.steamAutostart.enable) {
+      home.activation.steamVrDefaults = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        run ${lib.getExe steamVrDefaults}
+      '';
+
       systemd.user.services.steam-autostart = {
         Unit = {
           Description = "Keep Steam running silently with the graphical session";
@@ -217,10 +249,16 @@ in
           After = [ "graphical-session.target" ];
         };
         Service = {
+          ExecStartPre = lib.getExe steamVrDefaults;
           ExecStart = "${lib.getExe pkgs.steam} -silent";
           Restart = "always";
           RestartSec = 10;
           Slice = "background.slice";
+			# SteamVR's compositor promotes only its render/signal threads.
+			# Permit that narrowly from this service instead of granting
+			# CAP_SYS_NICE to the entire graphical session.
+			LimitRTPRIO = 99;
+			LimitNICE = -20;
         };
         Install.WantedBy = [ "graphical-session.target" ];
       };

@@ -22,6 +22,7 @@ in
     ../../modules/nixos/audio.nix
     ../../modules/nixos/compositors.nix
     ../../modules/nixos/durable-tmux.nix
+    ../../modules/nixos/github-actions-runner.nix
     ../../modules/nixos/tracer-tools.nix
   ];
 
@@ -86,6 +87,7 @@ in
         enable = true;
         user = user;
       };
+      githubActionsRunner.enable = true;
     };
 
     boot = {

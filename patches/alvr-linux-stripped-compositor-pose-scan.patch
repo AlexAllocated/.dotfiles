@@ -1,0 +1,81 @@
+From 48e95d0b7c5d6236cc860ff7170e0934c7c9f742 Mon Sep 17 00:00:00 2001
+From: Alex workstation <local@tracer>
+Date: Fri, 7 Aug 2026 14:10:00 -0600
+Subject: [PATCH] linux: recover poses from stripped vrcompositor frames
+
+SteamVR 2.16+ strips the private CRenderThread symbols used to locate the
+TrackedDevicePose_t associated with a presented frame. The pose still lives
+in a vrcompositor stack frame, so use dladdr to identify compositor-owned
+frames and apply ALVR's existing strict pose validation to their locals.
+
+The located address is cached just like the named-symbol path. If no valid
+pose is found, the server-side latest-pose fallback remains available.
+
+diff --git a/alvr/vulkan_layer/util/pose.cpp b/alvr/vulkan_layer/util/pose.cpp
+index eddcb52e6d..03656130d2 100644
+--- a/alvr/vulkan_layer/util/pose.cpp
++++ b/alvr/vulkan_layer/util/pose.cpp
+@@ -1,5 +1,6 @@
+ #include "pose.hpp"
+ 
++#include <dlfcn.h>
+ #include <cmath>
+ #include <string.h>
+ 
+@@ -88,27 +89,46 @@ const TrackedDevicePose_t & find_pose_in_call_stack()
+   unw_cursor_t cursor;
+   unw_init_local(&cursor, &ctx);
+   while (unw_step(&cursor) > 0)
+   {
+-    char name[1024];
++    char name[1024] = {};
+     unw_word_t off;
+-    unw_get_proc_name(&cursor, name, sizeof(name), &off);
+-    if ((strcmp("_ZN13CRenderThread11UpdateAsyncEv", name) == 0) || (strcmp("_ZN13CRenderThread6UpdateEv", name) == 0))
++    const bool has_name = unw_get_proc_name(&cursor, name, sizeof(name), &off) == 0;
++    const bool known_render_thread = has_name
++      && ((strcmp("_ZN13CRenderThread11UpdateAsyncEv", name) == 0)
++          || (strcmp("_ZN13CRenderThread6UpdateEv", name) == 0));
++
++    unw_word_t ip;
++    unw_get_reg(&cursor, UNW_REG_IP, &ip);
++    Dl_info module = {};
++    const bool compositor_frame = dladdr(reinterpret_cast<void *>(ip), &module) != 0
++      && module.dli_fname != nullptr
++      && strstr(module.dli_fname, "vrcompositor") != nullptr;
++
++    if (known_render_thread || compositor_frame)
+     {
+       unw_word_t sp, sp_end;
+       unw_get_reg(&cursor, UNW_REG_SP, &sp);
+-      unw_step(&cursor);
+-      unw_get_reg(&cursor, UNW_REG_SP, &sp_end);
+-      for (uintptr_t addr = sp ; addr < sp_end; addr += 4)
++      unw_cursor_t caller = cursor;
++      if (unw_step(&caller) <= 0)
++        continue;
++      unw_get_reg(&caller, UNW_REG_SP, &sp_end);
++
++      // Reject malformed unwind ranges before walking stack memory. One MiB
++      // is far larger than a normal compositor frame but keeps this bounded.
++      if (sp_end <= sp || sp_end - sp > 1024 * 1024)
++        continue;
++
++      for (uintptr_t addr = sp;
++           addr + sizeof(TrackedDevicePose_t) <= sp_end;
++           addr += alignof(float))
+       {
+         TrackedDevicePose_t * p = (TrackedDevicePose_t *) addr;
+         if (check_pose(*p))
+         {
+           res = p;
+           return *p;
+         }
+       }
+-      ++failures;
+-      return notfound;
+     }
+   }
+   ++failures;
+-- 
+2.51.0

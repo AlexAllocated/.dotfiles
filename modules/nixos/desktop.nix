@@ -7,6 +7,27 @@
 let
   cfg = config.dotfiles.desktop;
   workstationPackageOverlay = _final: prev: {
+    alvr = prev.alvr.overrideAttrs (oldAttrs: {
+      # SteamVR 2.16+ stripped the private compositor symbol ALVR used to
+      # associate captured frames with headset poses. Backport the upstream
+      # fallback so frames use the latest valid pose instead of accumulating
+      # roughly 1.3 seconds of stale-pose latency.
+      patches = (oldAttrs.patches or [ ]) ++ [
+        ../../patches/alvr-linux-zero-pose-fallback.patch
+        ../../patches/alvr-linux-stripped-compositor-pose-scan.patch
+        ../../patches/alvr-steamvr-2.16-compositor-name.patch
+      ];
+    });
+	steam = prev.steam.override {
+		# SteamVR 2.16's CEF requires NSS 3.31, but Valve's legacy Scout
+		# runtime only carries NSS 3.22. Expose NixOS's current NSS/NSPR to
+		# Steam's FHS environment so its runtime can select the compatible
+		# libraries and start the VR dashboard.
+		extraLibraries = p: [
+			p.nss
+			p.nspr
+		];
+	};
     firefox = prev.firefox.overrideAttrs (oldAttrs: {
       # The 2026-07-25 Nixpkgs Firefox wrapper stopped exporting these schema
       # roots. Firefox's native Wayland chrome then lost text and collapsed
@@ -60,6 +81,36 @@ let
       esac
     fi
   '';
+	questWifiRegulatoryReady = pkgs.writeShellScript "tracer-quest-wifi-regulatory-ready" ''
+		interface=wlp8s0
+		phy="$(${pkgs.coreutils}/bin/basename "$(${pkgs.coreutils}/bin/readlink -f "/sys/class/net/$interface/phy80211")")"
+
+		channel_36_locked() {
+			${pkgs.iw}/bin/iw phy "$phy" info \
+				| ${pkgs.gnugrep}/bin/grep -Eq '5180(\.0)? MHz.*\(no IR\)'
+		}
+
+		${pkgs.iproute2}/bin/ip link set dev "$interface" up
+		# WCN7850 is a self-managed regulatory radio. The normal userspace US
+		# hint establishes the global domain, while a passive country-beacon
+		# scan gives ath12k the per-radio domain it requires before AP mode.
+		${pkgs.iw}/bin/iw reg set US
+		if ! channel_36_locked; then
+			exit 0
+		fi
+
+		for attempt in $(${pkgs.coreutils}/bin/seq 1 3); do
+			${pkgs.iw}/bin/iw dev "$interface" scan passive >/dev/null 2>&1 || true
+			${pkgs.coreutils}/bin/sleep 1
+			if ! channel_36_locked; then
+				exit 0
+			fi
+		done
+
+		printf '%s\n' \
+			'Channel 36 remains NO-IR after three passive scans; refusing to start the Quest AP.' >&2
+		exit 1
+	'';
   sunshineConfig =
     (pkgs.formats.keyValue { }).generate "sunshine.conf"
       config.services.sunshine.settings;
@@ -578,6 +629,28 @@ let
       # physical monitor to return.
       rm -f -- "$pending_off"
 
+		other_output_ready() {
+			local directory
+			for directory in /sys/class/drm/card*-*; do
+				[[ "$directory" == *-"$connector" ]] && continue
+				[[ -r "$directory/enabled" && -r "$directory/status" ]] || continue
+				[[ "$(<"$directory/enabled")" == enabled && "$(<"$directory/status")" == connected ]] \
+					&& return 0
+			done
+			return 1
+		}
+
+		# Moonlight absolute pointer coordinates begin at the captured output's
+		# origin. Keep the dummy to the right of the 3440-pixel LG only while a
+		# physical output is active; as the sole output it must start at (0, 0).
+		desired_output_x() {
+			if other_output_ready; then
+				printf '%s\n' 3440
+			else
+				printf '%s\n' 0
+			fi
+		}
+
       drm_connector_ready() {
         local directory
         for directory in /sys/class/drm/card*-"$connector"; do
@@ -637,6 +710,9 @@ let
         refresh_graphical_environment
         desktop="$(manager_variable XDG_CURRENT_DESKTOP)"
         if session_output_ready "$desktop"; then
+				if [[ "$desktop" == niri ]]; then
+					niri msg output "$connector" position set "$(desired_output_x)" 0 >/dev/null
+				fi
           exit 0
         fi
 
@@ -650,13 +726,13 @@ let
             # each property update.
             niri msg output "$connector" mode 2732x2048@60.001 \
               && niri msg output "$connector" scale 1.75 \
-              && niri msg output "$connector" position set 3440 0 \
+              && niri msg output "$connector" position set "$(desired_output_x)" 0 \
               && niri msg output "$connector" on \
               || true
             ;;
           Mango | mango)
             wlr-randr --output "$connector" --on \
-              --mode 2732x2048@60.001Hz --scale 1.75 --pos 3440,0 \
+					--mode 2732x2048@60.001Hz --scale 1.75 --pos "$(desired_output_x)",0 \
               || true
             ;;
           *)
@@ -1147,17 +1223,48 @@ in
       AllowSuspendThenHibernate = "no";
     };
 
-    networking = {
-      hostName = cfg.hostName;
-      networkmanager.enable = true;
-      # Lan Mouse is a TLS-authenticated, peer-to-peer software KVM. Limit
-      # its discovery/input port to the wired home-LAN interface.
-      firewall.interfaces = lib.optionalAttrs (cfg.lanInterface != null) {
-        ${cfg.lanInterface}.allowedUDPPorts = [ 4242 ];
-      };
-    };
+		networking = {
+			hostName = cfg.hostName;
+			networkmanager = {
+				enable = true;
+				# Tracer's Wi-Fi 7 radio is reserved for the dedicated Quest AP.
+				# Ethernet remains the workstation's upstream network.
+				unmanaged = lib.optionals (cfg.hostName == "tracer") [ "interface-name:wlp8s0" ];
+			};
+			wireless = lib.mkIf (cfg.hostName == "tracer") {
+				enable = lib.mkForce false;
+			};
+			interfaces.wlp8s0 = lib.mkIf (cfg.hostName == "tracer") {
+				ipv4.addresses = [
+					{
+						address = "10.42.0.1";
+						prefixLength = 24;
+					}
+				];
+			};
+			nat = lib.mkIf (cfg.hostName == "tracer") {
+				enable = true;
+				externalInterface = cfg.lanInterface;
+				internalInterfaces = [ "wlp8s0" ];
+			};
+			# Lan Mouse is a TLS-authenticated, peer-to-peer software KVM. Limit
+			# its discovery/input port to the wired home-LAN interface.
+			firewall.interfaces =
+				(lib.optionalAttrs (cfg.lanInterface != null) {
+					${cfg.lanInterface}.allowedUDPPorts = [ 4242 ];
+				})
+				// (lib.optionalAttrs (cfg.hostName == "tracer") {
+					wlp8s0 = {
+						allowedTCPPorts = [ 53 ];
+						allowedUDPPorts = [
+							53
+							67
+						];
+					};
+				});
+		};
 
-    time.timeZone = "America/Denver";
+		time.timeZone = "America/Denver";
     i18n.defaultLocale = "en_US.UTF-8";
 
     boot = {
@@ -1328,6 +1435,46 @@ in
     services.xserver.videoDrivers = [ "nvidia" ];
 
     services = {
+      dnsmasq = lib.mkIf (cfg.hostName == "tracer") {
+        enable = true;
+        settings = {
+          interface = "wlp8s0";
+          bind-dynamic = true;
+          dhcp-range = [ "10.42.0.10,10.42.0.254,255.255.255.0,12h" ];
+          dhcp-option = [ "3,10.42.0.1" ];
+        };
+      };
+      hostapd = lib.mkIf (cfg.hostName == "tracer") {
+        enable = true;
+			radios.wlp8s0 = {
+				band = "5g";
+				channel = 36;
+				countryCode = "US";
+				# Channel 36 is the lower edge of the 36-48 80 MHz block, so the
+				# required HT secondary channel is above the primary channel.
+				wifi4.capabilities = [
+					"HT40+"
+					"SHORT-GI-20"
+					"SHORT-GI-40"
+				];
+				wifi5.operatingChannelWidth = "80";
+          wifi6 = {
+            enable = true;
+            operatingChannelWidth = "80";
+          };
+          settings = {
+            vht_oper_centr_freq_seg0_idx = 42;
+            he_oper_centr_freq_seg0_idx = 42;
+          };
+          networks.wlp8s0 = {
+            ssid = "Tracer-Quest-VR";
+            authentication = {
+              mode = "wpa2-sha256";
+              wpaPasswordFile = "/var/lib/hostapd/tracer-quest-vr.password";
+            };
+          };
+        };
+      };
       xserver.enable = true;
       displayManager.sddm = {
         enable = true;
@@ -1450,6 +1597,23 @@ in
         "${lib.getExe' pkgs.util-linux "runuser"} -u ${cfg.user} -- ${lib.getExe' pkgs.input-remapper "input-remapper-control"} --command autoload --config-dir /home/${cfg.user}/.config/input-remapper-2"
       ];
     };
+
+		# During a live generation switch the Wi-Fi device target may already be
+		# active, so explicitly pull in its static address before either AP
+		# service starts. This also gives boot a deterministic dependency chain.
+		systemd.services.hostapd = lib.mkIf (cfg.hostName == "tracer") {
+			requires = [ "network-addresses-wlp8s0.service" ];
+			after = [ "network-addresses-wlp8s0.service" ];
+			# Run this before every hostapd start, including automatic restarts
+			# after a firmware or interface reset. Without the passive scan,
+			# ath12k leaves its self-managed WCN7850 radio in country 00 with all
+			# 5 GHz channels marked NO-IR even though hostapd declares US.
+			serviceConfig.ExecStartPre = lib.mkBefore [ questWifiRegulatoryReady ];
+		};
+		systemd.services.dnsmasq = lib.mkIf (cfg.hostName == "tracer") {
+			requires = [ "network-addresses-wlp8s0.service" ];
+			after = [ "network-addresses-wlp8s0.service" ];
+		};
 
     # Keep local SSH, Moonlight, Plex, and other LAN services reachable while
     # Mullvad owns the default internet route. Internet-bound traffic still
@@ -1780,6 +1944,14 @@ in
       };
     };
     system.activationScripts.steamvrCompositorCapability.text = steamVrCapabilityScript;
+
+		# The user manager needs a high enough hard ceiling to create the
+		# Steam-only limits declared by Home Manager. Other user services retain
+		# systemd's default zero real-time/nice allowance.
+		systemd.services."user@".serviceConfig = {
+			LimitRTPRIO = 99;
+			LimitNICE = -20;
+		};
 
     users.users.${cfg.user} = {
       isNormalUser = true;
