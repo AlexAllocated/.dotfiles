@@ -49,6 +49,17 @@ let
     });
   };
   sunshineKms = cfg.sunshine.mode == "kms";
+  steamVrCompositorLauncher = "/home/${cfg.user}/.local/share/Steam/steamapps/common/SteamVR/bin/linux64/vrcompositor-launcher";
+  steamVrCapabilityScript = ''
+    target=${lib.escapeShellArg steamVrCompositorLauncher}
+    if [ -x "$target" ]; then
+      current="$(${pkgs.libcap}/bin/getcap "$target" || true)"
+      case "$current" in
+        *cap_sys_nice*) ;;
+        *) ${pkgs.libcap}/bin/setcap cap_sys_nice=eip "$target" ;;
+      esac
+    fi
+  '';
   sunshineConfig =
     (pkgs.formats.keyValue { }).generate "sunshine.conf"
       config.services.sunshine.settings;
@@ -1745,6 +1756,30 @@ in
         openFirewall = true;
       };
     };
+
+    # SteamVR tries to run pkexec from inside Steam's pressure-vessel
+    # container, where NixOS's setuid wrapper is intentionally unavailable.
+    # Apply only the scheduler capability its compositor requests, and watch
+    # the mutable Steam library so an update that replaces the binary is
+    # repaired without another broken setup prompt.
+    systemd.services.steamvr-compositor-capability = {
+      description = "Grant SteamVR compositor realtime scheduling";
+      unitConfig.ConditionFileIsExecutable = steamVrCompositorLauncher;
+      serviceConfig = {
+        Type = "oneshot";
+        PrivateTmp = true;
+      };
+      script = steamVrCapabilityScript;
+    };
+    systemd.paths.steamvr-compositor-capability = {
+      description = "Watch SteamVR compositor capability";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathChanged = steamVrCompositorLauncher;
+        Unit = "steamvr-compositor-capability.service";
+      };
+    };
+    system.activationScripts.steamvrCompositorCapability.text = steamVrCapabilityScript;
 
     users.users.${cfg.user} = {
       isNormalUser = true;
