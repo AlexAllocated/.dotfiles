@@ -1786,6 +1786,7 @@ in
 
     environment.systemPackages = with pkgs; [
       age
+      android-tools
       btrfs-progs
       ardour
       audacity
