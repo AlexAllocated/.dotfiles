@@ -202,17 +202,34 @@ in
 
     virtualisation.docker = {
       enableOnBoot = true;
-      daemon.settings.data-root = "/var/lib/docker";
+      daemon.settings = {
+        data-root = "/var/lib/docker";
+        # With the systemd cgroup driver, Docker otherwise creates containers
+        # and BuildKit executors directly under system.slice. Put every Docker
+        # workload below our bounded slice instead of limiting dockerd alone.
+        cgroup-parent = "docker-workloads.slice";
+      };
     };
 
-    # CI builds run through the shared Docker daemon, outside the runner's own
-    # cgroup. Bound the daemon as well so Actions cannot starve the desktop.
-    systemd.services.docker.serviceConfig = {
+    # Bound the complete Docker tree: dockerd, ordinary containers, local
+    # BuildKit builds, and CI BuildKit builds. MemorySwapMax prevents a bad
+    # build from preserving responsiveness by merely exhausting swap instead.
+    systemd.slices.docker-workloads.sliceConfig = {
       CPUQuota = "2400%";
       CPUWeight = 20;
       IOWeight = 20;
       MemoryHigh = "40G";
       MemoryMax = "48G";
+      MemorySwapMax = "8G";
+      TasksMax = 4096;
+    };
+
+    # Keep the control plane in the same aggregate slice and make it a cheap
+    # OOM target relative to the graphical session if something escapes.
+    systemd.services.docker.serviceConfig = {
+      Slice = "docker-workloads.slice";
+      CPUWeight = 20;
+      IOWeight = 20;
       Nice = 5;
       OOMScoreAdjust = 500;
       TasksMax = 4096;

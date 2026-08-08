@@ -216,13 +216,51 @@ in
       };
     });
 
-    systemd.services = lib.genAttrs serviceNames (_: {
-      after = [ "docker.service" ];
-      requires = [ "docker.service" ];
-      # Let the complete NixOS generation activate before the machine-local
-      # secret exists. The setup helper writes it and starts the skipped unit.
-      unitConfig.ConditionPathExists = cfg.tokenFile;
-    });
+    systemd.services =
+      lib.genAttrs serviceNames (_: {
+        after = [ "docker.service" ];
+        requires = [ "docker.service" ];
+        # Let the complete NixOS generation activate before the machine-local
+        # secret exists. The setup helper writes it and starts the skipped unit.
+        unitConfig.ConditionPathExists = cfg.tokenFile;
+      })
+      // {
+        bumblebee-runner-cache-gc = {
+          description = "Bound Bumblebee GitHub Actions build cache usage";
+          after = [ "docker.service" ];
+          requires = [ "docker.service" ];
+          path = [ config.virtualisation.docker.package ];
+          serviceConfig = {
+            Type = "oneshot";
+            Nice = 15;
+            IOSchedulingClass = "idle";
+          };
+          script = ''
+            if docker buildx inspect bumblebee-release >/dev/null 2>&1; then
+              docker buildx prune \
+                --builder bumblebee-release \
+                --max-used-space 80gb \
+                --reserved-space 24gb \
+                --min-free-space 300gb \
+                --force
+            fi
+
+            # BuildKit owns reusable build layers. This only removes old dangling
+            # Docker images left behind by interrupted or manually inspected jobs.
+            docker image prune --filter until=168h --force
+          '';
+        };
+      };
+
+    systemd.timers.bumblebee-runner-cache-gc = {
+      description = "Daily Bumblebee GitHub Actions build cache maintenance";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "daily";
+        Persistent = true;
+        RandomizedDelaySec = "45m";
+      };
+    };
 
     environment.systemPackages = [ configureToken ];
   };
