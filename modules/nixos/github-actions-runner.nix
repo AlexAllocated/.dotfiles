@@ -165,6 +165,7 @@ in
         findutils
         gawk
         gcc
+        gnumake
         git
         git-lfs
         gnugrep
