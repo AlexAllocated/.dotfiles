@@ -87,7 +87,7 @@ in
     };
     instances = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 2;
+      default = 1;
       description = "Number of concurrent repository jobs Tracer can accept.";
     };
     repository = lib.mkOption {
@@ -201,6 +201,17 @@ in
         # account and is intentionally equivalent to host-root privileges.
         PrivateUsers = false;
         SupplementaryGroups = [ "docker" ];
+        # This is also an interactive workstation. Keep a future runner from
+        # starving the desktop if a job stalls or fans out unexpectedly.
+        CPUQuota = "800%";
+        CPUWeight = 20;
+        IOWeight = 20;
+        MemoryHigh = "12G";
+        MemoryMax = "16G";
+        Nice = 10;
+        OOMScoreAdjust = 500;
+        TasksMax = 2048;
+        TimeoutStopSec = "30s";
       };
     });
 

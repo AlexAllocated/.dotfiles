@@ -383,29 +383,29 @@ let
           current_state=off
         fi
 
-			# Sunshine's absolute Moonlight pointer is relative to the captured
-			# output, while Niri places absolute input devices in global layout
-			# coordinates. Anchor the dummy at the global origin whenever it is the
-			# sole display; restore it immediately to the LG's right edge when the
-			# physical monitor returns. Avoid redundant IPC so this watcher cannot
-			# induce periodic output or window movement.
-			if [[ -n "$fallback" ]] && jq -e --arg fallback "$fallback" \
-				'.[$fallback].current_mode != null and .[$fallback].logical != null' \
-				<<<"$outputs" >/dev/null; then
-				if [[ "$current_state" == on ]]; then
-					desired_fallback_x="$(jq -r --arg primary "$primary" \
-						'.[$primary].logical.x + .[$primary].logical.width' <<<"$outputs")"
-				else
-					desired_fallback_x=0
-				fi
-				current_fallback_x="$(jq -r --arg fallback "$fallback" \
-					'.[$fallback].logical.x' <<<"$outputs")"
-				current_fallback_y="$(jq -r --arg fallback "$fallback" \
-					'.[$fallback].logical.y' <<<"$outputs")"
-				if [[ "$current_fallback_x" != "$desired_fallback_x" || "$current_fallback_y" != 0 ]]; then
-					niri msg output "$fallback" position set "$desired_fallback_x" 0 >/dev/null
-				fi
-			fi
+      # Sunshine's absolute Moonlight pointer is relative to the captured
+      # output, while Niri places absolute input devices in global layout
+      # coordinates. Anchor the dummy at the global origin whenever it is the
+      # sole display; restore it immediately to the LG's right edge when the
+      # physical monitor returns. Avoid redundant IPC so this watcher cannot
+      # induce periodic output or window movement.
+      if [[ -n "$fallback" ]] && jq -e --arg fallback "$fallback" \
+        '.[$fallback].current_mode != null and .[$fallback].logical != null' \
+        <<<"$outputs" >/dev/null; then
+        if [[ "$current_state" == on ]]; then
+          desired_fallback_x="$(jq -r --arg primary "$primary" \
+            '.[$primary].logical.x + .[$primary].logical.width' <<<"$outputs")"
+        else
+          desired_fallback_x=0
+        fi
+        current_fallback_x="$(jq -r --arg fallback "$fallback" \
+          '.[$fallback].logical.x' <<<"$outputs")"
+        current_fallback_y="$(jq -r --arg fallback "$fallback" \
+          '.[$fallback].logical.y' <<<"$outputs")"
+        if [[ "$current_fallback_x" != "$desired_fallback_x" || "$current_fallback_y" != 0 ]]; then
+          niri msg output "$fallback" position set "$desired_fallback_x" 0 >/dev/null
+        fi
+      fi
 
         if [[ "$last_state" == off && "$current_state" == on ]]; then
           if [[ -s "$anchors_file" ]] && jq -e 'type == "array"' "$anchors_file" >/dev/null 2>&1; then

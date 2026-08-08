@@ -254,11 +254,11 @@ in
           Restart = "always";
           RestartSec = 10;
           Slice = "background.slice";
-			# SteamVR's compositor promotes only its render/signal threads.
-			# Permit that narrowly from this service instead of granting
-			# CAP_SYS_NICE to the entire graphical session.
-			LimitRTPRIO = 99;
-			LimitNICE = -20;
+          # SteamVR's compositor promotes only its render/signal threads.
+          # Permit that narrowly from this service instead of granting
+          # CAP_SYS_NICE to the entire graphical session.
+          LimitRTPRIO = 99;
+          LimitNICE = -20;
         };
         Install.WantedBy = [ "graphical-session.target" ];
       };

@@ -61,6 +61,10 @@ in
         cpuVendor = "amd";
         autoLogin = true;
         lanInterface = cfg.lanInterface;
+        # Keep the dedicated VR radio isolated from the workstation's own DNS
+        # and upstream routing. If ath12k or hostapd fails, Ethernet must remain
+        # a complete workstation network on its own.
+        questAccessPoint.enable = true;
         storage = {
           rootLabel = "TRACER_NIX";
           bootLabel = "TRACER_BOOT";
@@ -87,7 +91,12 @@ in
         enable = true;
         user = user;
       };
-      githubActionsRunner.enable = true;
+      githubActionsRunner = {
+        enable = true;
+        # Tracer is an interactive workstation first. A single bounded runner
+        # avoids multiplying BuildKit workloads behind the Docker daemon.
+        instances = 1;
+      };
     };
 
     boot = {
@@ -196,7 +205,26 @@ in
       daemon.settings.data-root = "/var/lib/docker";
     };
 
+    # CI builds run through the shared Docker daemon, outside the runner's own
+    # cgroup. Bound the daemon as well so Actions cannot starve the desktop.
+    systemd.services.docker.serviceConfig = {
+      CPUQuota = "2400%";
+      CPUWeight = 20;
+      IOWeight = 20;
+      MemoryHigh = "40G";
+      MemoryMax = "48G";
+      Nice = 5;
+      OOMScoreAdjust = 500;
+      TasksMax = 4096;
+    };
+
     networking = {
+      # Do not make workstation name resolution depend on the router's DNS
+      # proxy or on the dedicated Quest dnsmasq instance.
+      nameservers = [
+        "1.1.1.1"
+        "8.8.8.8"
+      ];
       firewall.allowedTCPPorts = [ 22 ];
       networkmanager = lib.mkIf cfg.staticLan.enable {
         settings.main.no-auto-default = "*";
@@ -212,10 +240,14 @@ in
             method = "manual";
             addresses = "192.168.0.69/24";
             gateway = "192.168.0.1";
-            dns = "8.8.8.8;4.4.4.4;";
+            dns = "1.1.1.1;8.8.8.8;";
+            ignore-auto-dns = true;
             dns-search = "lan;";
           };
-          ipv6.method = "auto";
+          ipv6 = {
+            method = "auto";
+            ignore-auto-dns = true;
+          };
         };
       };
     };
