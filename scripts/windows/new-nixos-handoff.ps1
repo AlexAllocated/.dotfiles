@@ -11,9 +11,9 @@ param(
     [string]$OutputRoot = 'C:\NixOS-Handoff',
     [string]$WslDistro = 'NixOS',
     [string]$WslCodexHome = '/mnt/c/Users/chev/.codex',
-    [string]$WslSqliteHome = '/home/alex/.codex/sqlite',
-    [string]$WslDotfiles = '/home/alex/.dotfiles',
-    [string]$Workspace = '/home/alex',
+    [string]$WslSqliteHome = '/home/alx/.codex/sqlite',
+    [string]$WslDotfiles = '/home/alx/.dotfiles',
+    [string]$Workspace = '/home/alx',
     [string]$AllowLiveThread = '',
     [switch]$CaptureDiskOnly
 )

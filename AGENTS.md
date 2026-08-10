@@ -6,7 +6,7 @@
 - `modules/home/`, `modules/nixos/`, `modules/darwin/`, and `modules/docker/` hold reusable Nix modules. `homeModules.*` is the public Home Manager module API. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
 - `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
 - `scripts/dotctl` is the small maintenance dispatcher. Shared helpers live under `scripts/lib/`, commands under `scripts/commands/`, and non-Nix platform profiles under `scripts/profiles/`.
-- The NixOS-WSL profile uses `alex` as the default Linux user.
+- The NixOS-WSL profile uses `alx` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules), `neovide/` (native and Windows-WSL GUI profiles), and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Reusable package capabilities are defined once in `lib/toolsets.nix`; host-native manifests live at `platforms/macos-managed/Brewfile` and `platforms/windows/winget.json`. Helper binaries land in `bin/`.
 

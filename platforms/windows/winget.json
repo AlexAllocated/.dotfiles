@@ -4,13 +4,67 @@
 		{
 			"Packages": [
 				{
+					"PackageIdentifier": "Valve.Steam"
+				},
+				{
+					"PackageIdentifier": "wez.wezterm"
+				},
+				{
+					"PackageIdentifier": "Google.Chrome"
+				},
+				{
+					"PackageIdentifier": "Discord.Discord"
+				},
+				{
+					"PackageIdentifier": "Blizzard.BattleNet"
+				},
+				{
+					"PackageIdentifier": "EpicGames.EpicGamesLauncher"
+				},
+				{
+					"PackageIdentifier": "LizardByte.Sunshine"
+				},
+				{
+					"PackageIdentifier": "VirtualDrivers.Virtual-Display-Driver"
+				},
+				{
+					"PackageIdentifier": "Symless.Synergy"
+				},
+				{
+					"PackageIdentifier": "RazerInc.RazerInstaller.Synapse4"
+				},
+				{
 					"PackageIdentifier": "AgileBits.1Password"
+				},
+				{
+					"PackageIdentifier": "DuongDieuPhap.ImageGlass"
+				},
+				{
+					"PackageIdentifier": "Microsoft.Teams"
+				},
+				{
+					"PackageIdentifier": "SlackTechnologies.Slack"
 				},
 				{
 					"PackageIdentifier": "Neovide.Neovide"
 				},
 				{
-					"PackageIdentifier": "wez.wezterm"
+					"PackageIdentifier": "OBSProject.OBSStudio"
+				},
+				{
+					"PackageIdentifier": "qBittorrent.qBittorrent"
+				},
+				{
+					"PackageIdentifier": "Spotify.Spotify"
+				},
+				{
+					"PackageIdentifier": "SumatraPDF.SumatraPDF"
+				},
+				{
+					"PackageIdentifier": "Vencord.Vesktop"
+				},
+				{
+					"PackageIdentifier": "VideoLAN.VLC"
 				}
 			],
 			"SourceDetails": {
@@ -22,6 +76,9 @@
 		},
 		{
 			"Packages": [
+				{
+					"PackageIdentifier": "XP8CLZL93F5Z4P"
+				},
 				{
 					"PackageIdentifier": "9PLM9XGG6VKS"
 				}

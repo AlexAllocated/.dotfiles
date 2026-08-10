@@ -54,6 +54,7 @@
     }:
     let
       linuxUser = "alex";
+      wslUser = "alx";
       darwinUser = "alexford";
       fullName = "Alex";
       systems = [
@@ -127,6 +128,7 @@
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
             python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py
             python3 scripts/windows/configure-codex.py --self-test
+            python3 scripts/codex/canonicalize-home.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
             python3 -c 'import pathlib, tomllib; tomllib.loads(pathlib.Path("platforms/windows/codex-desktop.toml").read_text())'
             find neovide -name '*.toml' -print0 | xargs -0 -n1 python3 -c 'import pathlib, sys, tomllib; tomllib.loads(pathlib.Path(sys.argv[1]).read_text())'
@@ -314,7 +316,7 @@
 
       nixosConfigurations.wsl = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
+        specialArgs = (mkSpecialArgs "x86_64-linux" wslUser) // {
           profile = "nixos-wsl";
         };
         modules = [
@@ -323,19 +325,20 @@
           ./modules/nixos/wsl.nix
           {
             dotfiles.wsl = {
-              user = linuxUser;
+              user = wslUser;
               userDescription = fullName;
+              legacyUser = "alex";
             };
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = (mkSpecialArgs "x86_64-linux" linuxUser) // {
+            home-manager.extraSpecialArgs = (mkSpecialArgs "x86_64-linux" wslUser) // {
               profile = "nixos-wsl";
             };
-            home-manager.users.${linuxUser} = {
+            home-manager.users.${wslUser} = {
               imports = [ ./modules/home/default.nix ];
-              home.username = linuxUser;
-              home.homeDirectory = "/home/${linuxUser}";
+              home.username = wslUser;
+              home.homeDirectory = "/home/${wslUser}";
               home.stateVersion = "26.05";
               dotfiles = {
                 profile = "nixos-wsl";
@@ -386,7 +389,6 @@
             runtimeInputs = with pkgs; [
               btrfs-progs
               coreutils
-              cryptsetup
               dosfstools
               e2fsprogs
               findutils
@@ -413,7 +415,6 @@
             name = "refresh-tracer-rescue";
             runtimeInputs = with pkgs; [
               coreutils
-              cryptsetup
               dosfstools
               e2fsprogs
               findutils
@@ -555,12 +556,8 @@
                 self.nixosConfigurations.tracer.config.boot.initrd.luks.devices."tracer-root".device
             } = /dev/disk/by-partlabel/TRACER_CRYPT
             test ${
-              nixpkgs.lib.escapeShellArg
-                self.nixosConfigurations.tracer-rescue.config.boot.initrd.luks.devices."tracer-rescue-persist".device
-            } = /dev/disk/by-partlabel/TRACER_RESCUE_CRYPT
-            test ${
               nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer-rescue.config.fileSystems."/home".device
-            } = /dev/mapper/tracer-rescue-persist
+            } = /dev/disk/by-partlabel/TRACER_RESCUE_DATA
             test ${
               if self.nixosConfigurations.tracer-rescue.config.services.displayManager.autoLogin.enable then
                 "enabled"

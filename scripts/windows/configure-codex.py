@@ -16,6 +16,10 @@ SECTION_RE = re.compile(r"^\s*(\[[^\n]+\])\s*(?:#.*)?$")
 ASSIGNMENT_RE = re.compile(
     r'''^\s*((?:"(?:\\.|[^"\\])*")|(?:'[^']*')|(?:[A-Za-z0-9_-]+))\s*='''
 )
+PROJECT_SECTION_RE = re.compile(
+    r'''^\[projects\.(?P<path>"(?:\\.|[^"\\])*"|'[^']*')\]$'''
+)
+LINUX_HOME_RE = re.compile(r"^/home/[^/]+(?=/|$)")
 
 
 class TomlDocument:
@@ -40,6 +44,28 @@ class TomlDocument:
             if section not in self.sections:
                 self.sections[section] = []
             merge_assignments(self.sections[section], assignments)
+
+    def canonicalize_linux_projects(self, linux_home: str) -> int:
+        rewritten: OrderedDict[str | None, list[str]] = OrderedDict()
+        changed = 0
+        for section, lines in self.sections.items():
+            canonical_section = section
+            match = PROJECT_SECTION_RE.match(section) if section is not None else None
+            if match:
+                project_path = tomllib.loads(f"path = {match.group('path')}")["path"]
+                canonical_path = LINUX_HOME_RE.sub(linux_home, project_path, count=1)
+                if canonical_path != project_path:
+                    canonical_section = f"[projects.{toml_string(canonical_path)}]"
+                    changed += 1
+
+            if canonical_section in rewritten:
+                assignments = section_assignments(lines, section)
+                merge_assignments(rewritten[canonical_section], assignments)
+            else:
+                rewritten[canonical_section] = list(lines)
+
+        self.sections = rewritten
+        return changed
 
     def render(self) -> str:
         output: list[str] = []
@@ -130,6 +156,7 @@ def configure(args: argparse.Namespace) -> bool:
         tomllib.loads(existing)
 
     document = TomlDocument(existing)
+    project_paths_rewritten = document.canonicalize_linux_projects(args.linux_home)
     managed_text = Path(args.desktop_config).read_text()
     tomllib.loads(managed_text)
     document.merge(TomlDocument(managed_text))
@@ -155,6 +182,8 @@ def configure(args: argparse.Namespace) -> bool:
         temporary = Path(handle.name)
     os.replace(temporary, config_path)
     print(f"Updated Codex desktop configuration at {config_path}.")
+    if project_paths_rewritten:
+        print(f"Canonicalized {project_paths_rewritten} WSL project path(s).")
     return True
 
 
@@ -166,6 +195,12 @@ def self_test() -> None:
         desktop.write_text('[desktop]\nintegratedTerminalShell = "wsl"\n')
         config.write_text(
             'model = "local"\n'
+            "\n"
+            '[projects."/home/legacy/code"]\n'
+            'trust_level = "trusted"\n'
+            "\n"
+            '[projects."/home/tester/code"]\n'
+            'trust_level = "trusted"\n'
             "\n"
             '[plugins."linear@openai-curated"]\n'
             "enabled = true\n"
@@ -190,6 +225,8 @@ def self_test() -> None:
         assert parsed["plugins"]["linear@openai-curated"]["enabled"] is True
         assert parsed["mcp_servers"]["linear"]["url"] == "https://mcp.linear.app/mcp"
         assert parsed["sqlite_home"] == "/home/tester/.codex/sqlite"
+        assert "/home/legacy/code" not in parsed["projects"]
+        assert parsed["projects"]["/home/tester/code"]["trust_level"] == "trusted"
         assert parsed["desktop"]["open-in-target-preferences"]["global"] == "custom:neovide-wsl"
         assert "neovim-wsl" in parsed["desktop"]["custom_file_handlers"]
         assert "neovide-wsl" in parsed["desktop"]["custom_file_handlers"]

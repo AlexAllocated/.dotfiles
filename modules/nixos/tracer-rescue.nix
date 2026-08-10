@@ -34,12 +34,6 @@ in
         "vfat"
       ];
       systemd.enable = true;
-      luks.devices = lib.mkForce {
-        tracer-rescue-persist = {
-          device = "/dev/disk/by-partlabel/TRACER_RESCUE_CRYPT";
-          allowDiscards = true;
-        };
-      };
     };
     kernelModules = [ "uhid" ];
     zfs.forceImportRoot = false;
@@ -53,7 +47,7 @@ in
       noCheck = true;
     };
     "/home" = {
-      device = "/dev/mapper/tracer-rescue-persist";
+      device = "/dev/disk/by-partlabel/TRACER_RESCUE_DATA";
       fsType = "btrfs";
       options = [
         "subvol=@home"
@@ -63,7 +57,7 @@ in
       ];
     };
     "/persist" = {
-      device = "/dev/mapper/tracer-rescue-persist";
+      device = "/dev/disk/by-partlabel/TRACER_RESCUE_DATA";
       fsType = "btrfs";
       options = [
         "subvol=@state"
@@ -73,7 +67,7 @@ in
       ];
     };
     "/var/lib/NetworkManager" = {
-      device = "/dev/mapper/tracer-rescue-persist";
+      device = "/dev/disk/by-partlabel/TRACER_RESCUE_DATA";
       fsType = "btrfs";
       options = [
         "subvol=@networkmanager"
@@ -83,7 +77,7 @@ in
       ];
     };
     "/etc/NetworkManager/system-connections" = {
-      device = "/dev/mapper/tracer-rescue-persist";
+      device = "/dev/disk/by-partlabel/TRACER_RESCUE_DATA";
       fsType = "btrfs";
       options = [
         "subvol=@network-connections"
@@ -240,7 +234,7 @@ in
     [Desktop Entry]
     Type=Application
     Name=Resume Tracer Migration
-    Comment=Resume the encrypted Codex migration conversation
+    Comment=Resume the Codex migration conversation
     Exec=konsole -e resume-tracer
     Icon=utilities-terminal
     Terminal=false

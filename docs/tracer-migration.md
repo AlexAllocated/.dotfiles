@@ -1,7 +1,7 @@
 # Tracer Migration Runbook
 
 This runbook installs the Ryzen/RTX workstation as `tracer`, with local user
-`alx`, while keeping `chev-desktop` and WSL on `alex`.
+`alx`, while keeping `chev-desktop` on `alex`; NixOS-WSL also uses `alx`.
 
 ## Recovered hardware inventory
 
@@ -43,8 +43,10 @@ Manufacturer references:
 - Lexar 128 GB rescue/installer:
   `/dev/disk/by-id/usb-Lexar_USB_Flash_Drive_3756941132526803-0:0`, serial
   `3756941132526803`. It is rebuilt from `.#tracer-rescue-media` with a 1 GiB
-  UEFI partition, a 16 GiB immutable NixOS payload, and LUKS2/Btrfs encrypted
-  persistence containing the migration state.
+  UEFI partition, a 16 GiB immutable NixOS payload, and temporary Btrfs
+  persistence containing the migration state. The Lexar stays at home during
+  migration and is wiped after Windows recovery is complete, so this temporary
+  copy is intentionally not encrypted.
 - SanDisk Cruzer 64 GB firmware media:
   `/dev/disk/by-id/usb-SanDisk_Cruzer_04020122101921225345-0:0`, serial
   `04020122101921225345`. It has a 1 GiB active FAT32 partition labeled
@@ -118,7 +120,7 @@ whole list at once.
    removing the old `/var/lib/docker` copy.
 3. Build `.#tracer-rescue-iso` and write the Lexar rescue drive with the
    confirmation-gated `.#tracer-rescue-media` package.
-4. Boot the Lexar on Chev with Secure Boot disabled. Unlock persistence, run
+4. Boot the Lexar on Chev with Secure Boot disabled, run
    `tracer-diagnostics`, verify networking and SSH, and run `resume-tracer`.
 5. Leave the Intel 2 TB drive unchanged until Tracer is assembled and its 4 TB
    NixOS filesystem is available as a verified temporary migration target.

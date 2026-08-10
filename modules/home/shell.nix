@@ -126,7 +126,10 @@ in
               ${lib.getExe' pkgs.coreutils "stty"} -ixon start undef stop undef 2>/dev/null || true
             fi
 
-            if [[ "''${TERM_PROGRAM:-}" == WezTerm && -n "''${WEZTERM_PANE:-}" && -r "${sourceRoot}/wezterm-shell-integration.sh" ]]; then
+            # WezTerm's WSL domain forwards TERM_PROGRAM but not WEZTERM_PANE.
+            # TERM_PROGRAM is sufficient to identify a direct WezTerm shell;
+            # requiring the pane variable disables OSC 7 directory tracking.
+            if [[ "''${TERM_PROGRAM:-}" == WezTerm && -r "${sourceRoot}/wezterm-shell-integration.sh" ]]; then
               source "${sourceRoot}/wezterm-shell-integration.sh"
             fi
 

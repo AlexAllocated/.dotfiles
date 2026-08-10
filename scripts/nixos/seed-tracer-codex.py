@@ -9,7 +9,7 @@ import pathlib
 import re
 import shutil
 import sqlite3
-import time
+import sys
 
 
 THREAD_ID = re.compile(
@@ -19,22 +19,43 @@ THREAD_ID = re.compile(
 
 
 def copy_stable_jsonl(source: pathlib.Path, target: pathlib.Path) -> None:
-	for _attempt in range(50):
-		before = source.stat().st_size
-		data = source.read_bytes()
-		after = source.stat().st_size
-		if before == after == len(data) and data.endswith(b"\n"):
-			try:
-				for line in data.splitlines():
-					json.loads(line)
-			except json.JSONDecodeError:
-				pass
-			else:
-				target.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-				target.write_bytes(data)
-				return
-		time.sleep(0.1)
-	raise SystemExit(f"could not take a stable complete-line snapshot of {source}")
+	"""Copy the complete JSONL prefix present when the snapshot begins.
+
+	Codex appends to an active rollout continuously. A growing file does not make
+	its already-complete lines unstable, so capture the initial byte extent and
+	drop only a trailing partial record rather than waiting for the writer to stop.
+	"""
+	with source.open("rb") as source_file:
+		limit = source_file.seek(0, 2)
+		source_file.seek(0)
+		data = source_file.read(limit)
+	if len(data) != limit:
+		raise SystemExit(f"could not read the captured JSONL extent of {source}")
+	last_newline = data.rfind(b"\n")
+	if last_newline < 0:
+		raise SystemExit(f"rollout has no complete JSONL records: {source}")
+	data = data[: last_newline + 1]
+	valid_lines: list[bytes] = []
+	invalid_records = 0
+	for line in data.splitlines():
+		try:
+			json.loads(line)
+		except json.JSONDecodeError:
+			invalid_records += 1
+		else:
+			valid_lines.append(line)
+	if invalid_records > 8:
+		raise SystemExit(
+			f"rollout has too many malformed JSONL records to sanitize safely: {source}"
+		)
+	if invalid_records:
+		print(
+			f"warning: omitted {invalid_records} malformed JSONL record(s) from rescue snapshot",
+			file=sys.stderr,
+		)
+		data = b"\n".join(valid_lines) + b"\n"
+	target.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+	target.write_bytes(data)
 
 
 def main() -> int:

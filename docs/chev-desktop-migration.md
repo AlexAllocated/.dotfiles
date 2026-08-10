@@ -123,7 +123,7 @@ stable, complete-line JSONL snapshot.
 
 ```powershell
 $thread = 'REPLACE_WITH_THIS_THREAD_UUID'
-& \\wsl.localhost\NixOS\home\alex\.dotfiles\scripts\windows\new-nixos-handoff.ps1 `
+& \\wsl.localhost\NixOS\home\alx\.dotfiles\scripts\windows\new-nixos-handoff.ps1 `
   -ThreadId $thread `
   -BootPartitionNumber REPLACE_XBOOTLDR_NUMBER `
   -RootPartitionNumber REPLACE_NIXROOT_NUMBER `

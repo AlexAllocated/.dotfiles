@@ -70,12 +70,12 @@ usage() {
 	cat <<'EOF'
 Usage: sudo prepare-tracer-rescue \
   --device /dev/disk/by-id/... --expected-serial SERIAL --thread-id UUID \
-  [--source-home /home/alex] [--include-path PATH ...] [--include-repo PATH ...]
+  [--source-home /home/alx] [--include-path PATH ...] [--include-repo PATH ...]
 
 ERASES exactly one validated removable USB disk and creates:
   1. A 1 GiB removable-path UEFI boot partition
   2. A 16 GiB immutable NixOS payload partition
-  3. LUKS2-encrypted Btrfs persistence using the remaining space
+  3. Temporary Btrfs persistence using the remaining space
 
 The command snapshots the selected Codex thread and dotfiles before displaying
 the final destructive confirmation. Additional --include-path values are copied
@@ -144,7 +144,8 @@ if ((EUID != 0)); then
 	for path in "${include_repos[@]}"; do
 		arguments+=(--include-repo "$path")
 	done
-	exec sudo --preserve-env=TRACER_RESCUE_ISO,TRACER_DOTFILES_SOURCE -- "$0" "${arguments[@]}"
+	exec sudo --preserve-env=TRACER_RESCUE_ISO,TRACER_DOTFILES_SOURCE -- \
+		"${BASH:-/bin/bash}" "$0" "${arguments[@]}"
 fi
 
 device="$(readlink -f -- "$device")"
@@ -199,13 +200,11 @@ iso_file="$(find "$iso_root/iso" -maxdepth 1 -type f -name '*.iso' -print -quit)
 
 staging="$(mktemp -d /dev/shm/tracer-rescue-seed.XXXXXXXX)"
 mount_root="$(mktemp -d /run/tracer-rescue-media.XXXXXXXX)"
-mapper="tracer-rescue-persist-$$"
 cleanup() {
 	set +e
 	for mounted in "$mount_root/store" "$mount_root/home" "$mount_root/state" "$mount_root/payload" "$mount_root/efi" "$mount_root/persist"; do
 		mountpoint -q "$mounted" && umount "$mounted"
 	done
-	cryptsetup status "$mapper" >/dev/null 2>&1 && cryptsetup close "$mapper"
 	[[ "$staging" == /dev/shm/tracer-rescue-seed.* && -d "$staging" ]] && rm -r -- "$staging"
 	[[ "$mount_root" == /run/tracer-rescue-media.* && -d "$mount_root" ]] && rm -r -- "$mount_root"
 }
@@ -283,14 +282,14 @@ sgdisk --zap-all "$device"
 sgdisk \
 	--new=1:0:+1G --typecode=1:ef00 --change-name=1:TRACER_RESCUE_EFI \
 	--new=2:0:+16G --typecode=2:8300 --change-name=2:TRACER_RESCUE_SYSTEM \
-	--new=3:0:0 --typecode=3:8309 --change-name=3:TRACER_RESCUE_CRYPT \
+	--new=3:0:0 --typecode=3:8300 --change-name=3:TRACER_RESCUE_DATA \
 	"$device"
 partprobe "$device"
 udevadm settle
 
 efi_device="$(readlink -f /dev/disk/by-partlabel/TRACER_RESCUE_EFI)"
 payload_device="$(readlink -f /dev/disk/by-partlabel/TRACER_RESCUE_SYSTEM)"
-persist_device="$(readlink -f /dev/disk/by-partlabel/TRACER_RESCUE_CRYPT)"
+persist_device="$(readlink -f /dev/disk/by-partlabel/TRACER_RESCUE_DATA)"
 for partition in "$efi_device" "$payload_device" "$persist_device"; do
 	[[ -b "$partition" && "$(lsblk -dnro PKNAME "$partition" | xargs)" == "$(basename "$device")" ]] || {
 		printf 'Resolved partition does not belong to %s: %s\n' "$device" "$partition" >&2
@@ -301,14 +300,11 @@ done
 mkfs.fat -F 32 -n RESCUE_EFI "$efi_device"
 wipefs --all "$payload_device"
 mkfs.ext4 -F -L NIXOS_ISO "$payload_device"
-printf '\nChoose the portable LUKS passphrase for Tracer rescue persistence.\n'
-cryptsetup luksFormat --type luks2 "$persist_device"
-cryptsetup open "$persist_device" "$mapper"
-mkfs.btrfs --force --label TRACER_RESCUE_PERSIST "/dev/mapper/$mapper"
+mkfs.btrfs --force --label TRACER_RESCUE_PERSIST "$persist_device"
 
 install -d "$mount_root"/{efi,payload,store,persist,home,state}
-mount "$efi_device" "$mount_root/efi"
-mount "$payload_device" "$mount_root/payload"
+mount -t vfat "$efi_device" "$mount_root/efi"
+mount -t ext4 "$payload_device" "$mount_root/payload"
 xorriso -osirrox on -indev "$iso_file" -extract / "$mount_root/payload"
 mapfile -t boot_inits < <(grep -Eo 'init=/nix/store/[^[:space:]]+/init' \
 	"$mount_root/payload/EFI/BOOT/grub.cfg" | sort -u)
@@ -331,20 +327,20 @@ test -f "$mount_root/payload/nix-store.squashfs"
 sync -f "$mount_root/efi/EFI/BOOT/BOOTX64.EFI"
 sync
 umount "$mount_root/efi"
-mount -o ro "$efi_device" "$mount_root/efi"
+mount -t vfat -o ro "$efi_device" "$mount_root/efi"
 test -s "$mount_root/efi/EFI/TRACER/bzImage"
 test -s "$mount_root/efi/EFI/TRACER/initrd"
 grep -Fq 'initrd /EFI/TRACER/initrd' "$mount_root/efi/EFI/BOOT/grub.cfg"
 umount "$mount_root/efi"
 umount "$mount_root/payload"
 
-mount "/dev/mapper/$mapper" "$mount_root/persist"
+mount -t btrfs "$persist_device" "$mount_root/persist"
 for subvolume in @home @state @networkmanager @network-connections; do
 	btrfs subvolume create "$mount_root/persist/$subvolume"
 done
 umount "$mount_root/persist"
-mount -o subvol=@home,compress=zstd:3,noatime "/dev/mapper/$mapper" "$mount_root/home"
-mount -o subvol=@state,compress=zstd:3,noatime "/dev/mapper/$mapper" "$mount_root/state"
+mount -t btrfs -o subvol=@home,compress=zstd:3,noatime "$persist_device" "$mount_root/home"
+mount -t btrfs -o subvol=@state,compress=zstd:3,noatime "$persist_device" "$mount_root/state"
 install -d -m 0755 "$mount_root/home/alx"
 rsync -a "$staging/home/" "$mount_root/home/alx/"
 install -d -m 0700 "$mount_root/state/ssh" "$mount_root/state/migration"
@@ -359,8 +355,6 @@ chmod 0700 "$mount_root/home/alx/.codex"
 sync
 umount "$mount_root/home"
 umount "$mount_root/state"
-cryptsetup close "$mapper"
-
 trap - EXIT INT TERM
 rm -r -- "$staging" "$mount_root"
 printf '\nTracer rescue media is ready on %s (%s).\n' "$device" "$actual_serial"

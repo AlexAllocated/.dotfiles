@@ -1,0 +1,186 @@
+param(
+   [ValidateSet("Ensure", "Install", "Refresh", "Remove")]
+   [string]$Mode = "Ensure",
+   [string]$DistroName = "NixOS",
+   [int]$WindowsPort = 22,
+   [int]$LinuxPort = 22
+)
+
+$ErrorActionPreference = "Stop"
+$TaskName = "Dotfiles NixOS-WSL SSH Forward"
+$FirewallRuleName = "Dotfiles-NixOS-WSL-SSH"
+$PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$Wsl = "$env:SystemRoot\System32\wsl.exe"
+
+function Test-Administrator {
+   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+   $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Invoke-ElevatedInstall {
+   $arguments = @(
+      "-NoLogo",
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", ('"{0}"' -f $PSCommandPath),
+      "-Mode", "Install",
+      "-DistroName", $DistroName,
+      "-WindowsPort", [string]$WindowsPort,
+      "-LinuxPort", [string]$LinuxPort
+   )
+   $process = Start-Process -FilePath $PowerShell -Verb RunAs -Wait -PassThru -ArgumentList $arguments
+   if ($process.ExitCode -ne 0) {
+      throw "Elevated SSH-forward installation exited with status $($process.ExitCode)."
+   }
+}
+
+function Get-WslAddress {
+   & $Wsl --distribution $DistroName --user root --exec `
+      /run/current-system/sw/bin/systemctl start sshd.service
+   if ($LASTEXITCODE -ne 0) {
+      throw "Could not start sshd.service inside the $DistroName distro."
+   }
+
+   $addressOutput = & $Wsl --distribution $DistroName --user root --exec `
+      /run/current-system/sw/bin/ip -4 -o address show dev eth0 scope global
+   if ($LASTEXITCODE -ne 0) {
+      throw "Could not read the $DistroName eth0 address."
+   }
+   $addressMatch = [regex]::Match(($addressOutput -join "`n"), '\binet\s+(\d+\.\d+\.\d+\.\d+)/')
+   if (-not $addressMatch.Success) {
+      throw "The $DistroName distro has no global IPv4 address on eth0."
+   }
+   return $addressMatch.Groups[1].Value
+}
+
+function Get-ExistingForwardAddress {
+   $output = (& netsh interface portproxy show v4tov4) -join "`n"
+   $pattern = '(?m)^\s*0\.0\.0\.0\s+' + $WindowsPort + '\s+(\d+\.\d+\.\d+\.\d+)\s+' + $LinuxPort + '\s*$'
+   $match = [regex]::Match($output, $pattern)
+   if ($match.Success) {
+      return $match.Groups[1].Value
+   }
+   return $null
+}
+
+function Set-FirewallRule {
+   $rule = Get-NetFirewallRule -Name $FirewallRuleName -ErrorAction SilentlyContinue
+   if (-not $rule) {
+      $rule = New-NetFirewallRule `
+         -Name $FirewallRuleName `
+         -DisplayName "NixOS-WSL SSH from the private LAN" `
+         -Description "Allow the Windows port $WindowsPort forward to the key-only NixOS-WSL SSH server." `
+         -Enabled True `
+         -Profile Private `
+         -Direction Inbound `
+         -Action Allow `
+         -Protocol TCP `
+         -LocalPort $WindowsPort `
+         -RemoteAddress LocalSubnet
+   } else {
+      $rule | Set-NetFirewallRule -Enabled True -Profile Private -Direction Inbound -Action Allow | Out-Null
+      $rule | Get-NetFirewallPortFilter | Set-NetFirewallPortFilter -Protocol TCP -LocalPort $WindowsPort | Out-Null
+      $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress LocalSubnet | Out-Null
+   }
+}
+
+function Update-Forward {
+   if (-not (Test-Administrator)) {
+      throw "Refreshing the Windows SSH forward requires elevation."
+   }
+
+   $windowsSsh = Get-Service -Name "sshd" -ErrorAction SilentlyContinue
+   if ($windowsSsh -and $windowsSsh.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Running) {
+      throw "Windows OpenSSH already owns port $WindowsPort; refusing to replace it with a WSL forward."
+   }
+
+   Set-Service -Name "iphlpsvc" -StartupType Automatic
+   $ipHelper = Get-Service -Name "iphlpsvc"
+   if ($ipHelper.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+      Start-Service -Name "iphlpsvc"
+   }
+
+   $wslAddress = Get-WslAddress
+   $existingAddress = Get-ExistingForwardAddress
+   if ($existingAddress -ne $wslAddress) {
+      if ($existingAddress) {
+         & netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$WindowsPort | Out-Null
+      }
+      & netsh interface portproxy add v4tov4 `
+         listenaddress=0.0.0.0 listenport=$WindowsPort `
+         connectaddress=$wslAddress connectport=$LinuxPort | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+         throw "Could not create the Windows-to-WSL SSH port forward."
+      }
+   }
+
+   Set-FirewallRule
+   Write-Host "Windows 0.0.0.0:$WindowsPort forwards to $DistroName at ${wslAddress}:$LinuxPort."
+   Write-Host "The firewall permits TCP $WindowsPort only from the Private-profile local subnet."
+}
+
+function Install-Forward {
+   if (-not (Test-Administrator)) {
+      throw "Installing the Windows SSH-forward task requires elevation."
+   }
+
+   $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+   $actionArguments = @(
+      "-NoLogo",
+      "-NoProfile",
+      "-WindowStyle", "Hidden",
+      "-ExecutionPolicy", "Bypass",
+      "-File", ('"{0}"' -f $PSCommandPath),
+      "-Mode", "Refresh",
+      "-DistroName", $DistroName,
+      "-WindowsPort", [string]$WindowsPort,
+      "-LinuxPort", [string]$LinuxPort
+   ) -join " "
+   $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
+   $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
+   $principal = New-ScheduledTaskPrincipal `
+      -UserId $identity -LogonType Interactive -RunLevel Highest
+   $settings = New-ScheduledTaskSettingsSet `
+      -AllowStartIfOnBatteries `
+      -DontStopIfGoingOnBatteries `
+      -ExecutionTimeLimit ([TimeSpan]::FromMinutes(5)) `
+      -MultipleInstances IgnoreNew `
+      -StartWhenAvailable
+
+   Register-ScheduledTask `
+      -TaskName $TaskName `
+      -Description "Keep Windows port $WindowsPort forwarded to the key-only $DistroName SSH server." `
+      -Action $action `
+      -Trigger $trigger `
+      -Principal $principal `
+      -Settings $settings `
+      -Force | Out-Null
+   Update-Forward
+   Write-Host "Installed the event-driven '$TaskName' logon task."
+}
+
+function Remove-Forward {
+   if (-not (Test-Administrator)) {
+      throw "Removing the Windows SSH forward requires elevation."
+   }
+   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+   Remove-NetFirewallRule -Name $FirewallRuleName -ErrorAction SilentlyContinue
+   & netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$WindowsPort | Out-Null
+   Write-Host "Removed the $DistroName SSH forward, firewall rule, and scheduled task."
+}
+
+switch ($Mode) {
+   "Ensure" {
+      $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+      if (-not $task) {
+         Invoke-ElevatedInstall
+      } else {
+         Start-ScheduledTask -TaskName $TaskName
+         Write-Host "Requested an asynchronous refresh from '$TaskName'."
+      }
+   }
+   "Install" { Install-Forward }
+   "Refresh" { Update-Forward }
+   "Remove" { Remove-Forward }
+}

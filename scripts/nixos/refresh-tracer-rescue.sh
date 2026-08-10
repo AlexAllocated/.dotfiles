@@ -67,8 +67,8 @@ Usage: sudo refresh-tracer-rescue \
   --device /dev/disk/by-id/... --expected-serial SERIAL
 
 Refreshes only the immutable NixOS payload and UEFI loader on an existing
-Tracer rescue drive. The encrypted persistence partition is validated before
-and after the refresh and is never opened or reformatted.
+Tracer rescue drive. The temporary persistence partition is validated before
+and after the refresh and is never mounted or reformatted.
 EOF
 }
 
@@ -149,18 +149,18 @@ partition_by_label() {
 
 efi_device="$(partition_by_label TRACER_RESCUE_EFI)"
 payload_device="$(partition_by_label TRACER_RESCUE_SYSTEM)"
-persist_device="$(partition_by_label TRACER_RESCUE_CRYPT)"
+persist_device="$(partition_by_label TRACER_RESCUE_DATA)"
 for partition in "$efi_device" "$payload_device" "$persist_device"; do
 	[[ -b "$partition" && "$(lsblk -dnro PKNAME "$partition" | xargs)" == "$(basename "$device")" ]] || {
 		printf 'Required rescue partition is missing or belongs to another disk: %s\n' "$partition" >&2
 		exit 1
 	}
 done
-cryptsetup isLuks "$persist_device" || {
-	printf 'Encrypted persistence is not a valid LUKS container: %s\n' "$persist_device" >&2
+[[ "$(lsblk -dnro FSTYPE "$persist_device" | xargs)" == btrfs ]] || {
+	printf 'Persistence is not a Btrfs filesystem: %s\n' "$persist_device" >&2
 	exit 1
 }
-persist_uuid="$(cryptsetup luksUUID "$persist_device")"
+persist_uuid="$(blkid -s UUID -o value "$persist_device")"
 
 iso_root="${TRACER_RESCUE_ISO:?TRACER_RESCUE_ISO is not set by the packaged command}"
 iso_file="$(find "$iso_root/iso" -maxdepth 1 -type f -name '*.iso' -print -quit)"
@@ -176,7 +176,7 @@ printf '  EFI:          %s\n  System:       %s\n  Persistence:  %s (%s)\n' \
 	"$efi_device" "$payload_device" "$persist_device" "$persist_uuid"
 printf '  ISO:          %s\n' "$iso_file"
 printf '\nThis replaces only the EFI and immutable system partitions on %s.\n' "$device"
-printf '%s\n' 'Encrypted persistence will not be opened or reformatted.'
+printf '%s\n' 'Temporary persistence will not be mounted or reformatted.'
 printf 'Type exactly: REFRESH TRACER RESCUE %s\n> ' "$actual_serial"
 read -r confirmation
 [[ "$confirmation" == "REFRESH TRACER RESCUE $actual_serial" ]] || {
@@ -197,7 +197,7 @@ install -d "$mount_root"/{efi,payload,store}
 
 wipefs --all "$payload_device"
 mkfs.ext4 -F -L NIXOS_ISO "$payload_device"
-mount "$payload_device" "$mount_root/payload"
+mount -t ext4 "$payload_device" "$mount_root/payload"
 xorriso -osirrox on -indev "$iso_file" -extract / "$mount_root/payload"
 test -f "$mount_root/payload/EFI/BOOT/BOOTX64.EFI"
 test -f "$mount_root/payload/EFI/nixos-installer-image"
@@ -219,18 +219,18 @@ test -x "$mount_root/store/${boot_closure#/nix/store/}/init" || {
 umount "$mount_root/store"
 
 mkfs.fat -F 32 -n RESCUE_EFI "$efi_device"
-mount "$efi_device" "$mount_root/efi"
+mount -t vfat "$efi_device" "$mount_root/efi"
 install_efi_boot_payload
 sync
 umount "$mount_root/efi"
-mount -o ro "$efi_device" "$mount_root/efi"
+mount -t vfat -o ro "$efi_device" "$mount_root/efi"
 test -s "$mount_root/efi/EFI/TRACER/bzImage"
 test -s "$mount_root/efi/EFI/TRACER/initrd"
 grep -Fq 'initrd /EFI/TRACER/initrd' "$mount_root/efi/EFI/BOOT/grub.cfg"
 umount "$mount_root/efi"
 umount "$mount_root/payload"
 
-[[ "$(cryptsetup luksUUID "$persist_device")" == "$persist_uuid" ]] || {
+[[ "$(blkid -s UUID -o value "$persist_device")" == "$persist_uuid" ]] || {
 	printf '%s\n' 'Persistence UUID changed unexpectedly; stop using this drive.' >&2
 	exit 1
 }

@@ -57,9 +57,6 @@ config.webgpu_power_preference = "HighPerformance"
 -- config.webgpu_preferred_adapter = wezterm.gui.enumerate_gpus()[2]
 config.window_background_opacity = 0.9
 config.window_close_confirmation = "AlwaysPrompt"
--- Terminal rows are whole cells. Keep any unavoidable vertical remainder at
--- the bottom, away from tmux's top-anchored status line.
-config.window_content_alignment = { horizontal = "Left", vertical = "Top" }
 config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
 -- Leave the top status line flush with the window; whole-cell rounding is
 -- handled by the top alignment above and leaves only a bottom remainder.
@@ -74,12 +71,21 @@ if wezterm.target_triple:match("windows") then
 	config.wsl_domains = {}
 	local nixos = available.NixOS
 	if nixos then
+		-- Do not inherit a stale pre-migration username from WezTerm's WSL
+		-- discovery cache. NixOS-WSL's declared login is alx.
+		nixos.username = "alx"
+		nixos.default_cwd = "/home/alx"
 		table.insert(config.wsl_domains, nixos)
 		config.default_domain = nixos.name
 	end
+	config.default_cwd = "/home/alx"
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
 elseif wezterm.target_triple:match("linux") then
+	-- Terminal rows are whole cells. Keep any unavoidable vertical remainder at
+	-- the bottom, away from tmux's top-anchored status line. Windows stable does
+	-- not yet expose this setting, so keep it on the native Linux path.
+	config.window_content_alignment = { horizontal = "Left", vertical = "Top" }
 	-- Plasma owns the sole title bar and resize frame; tmux owns terminal tabs.
 	config.enable_tab_bar = false
 	config.enable_wayland = true

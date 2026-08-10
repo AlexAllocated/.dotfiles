@@ -57,9 +57,11 @@ apply_windows_packages() {
 
 apply_windows_integration() {
 	local source_root="${1:-$REPO_ROOT}"
-	local script font_installer configurator desktop_config script_windows
+	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot always_on slack_presence vdd_settings sunshine_session script_windows
 	local font_package font_directory_windows font_installer_windows
 	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
+	local ssh_forwarder_target ssh_forwarder_target_windows quest_hotspot_target quest_hotspot_target_windows always_on_target always_on_target_windows slack_presence_target slack_presence_target_windows
+	local vdd_settings_target
 	[[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
 	require_command nix
 	require_command powershell.exe
@@ -70,7 +72,13 @@ apply_windows_integration() {
 	font_installer="$source_root/scripts/windows/install-user-fonts.ps1"
 	configurator="$source_root/scripts/windows/configure-codex.py"
 	desktop_config="$source_root/platforms/windows/codex-desktop.toml"
-	for required in "$script" "$font_installer" "$configurator" "$desktop_config"; do
+	ssh_forwarder="$source_root/scripts/windows/apply-wsl-ssh-forward.ps1"
+	quest_hotspot="$source_root/scripts/windows/configure-quest-hotspot.ps1"
+	always_on="$source_root/scripts/windows/configure-always-on.ps1"
+	slack_presence="$source_root/scripts/windows/keep-slack-active.ps1"
+	vdd_settings="$source_root/platforms/windows/vdd_settings.xml"
+	sunshine_session="$source_root/scripts/windows/set-sunshine-display-session.ps1"
+	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$always_on" "$slack_presence" "$vdd_settings" "$sunshine_session"; do
 		[[ -f "$required" ]] || {
 			printf 'Windows integration file not found: %s\n' "$required" >&2
 			return 1
@@ -96,6 +104,10 @@ apply_windows_integration() {
 	fi
 	windows_home_linux="$(wslpath -u "$windows_home")"
 	local_appdata_linux="$(wslpath -u "$local_appdata")"
+	vdd_settings_target="$local_appdata_linux/dotfiles/virtual-display/vdd_settings.xml"
+	mkdir -p "$(dirname "$vdd_settings_target")"
+	cp "$vdd_settings" "$vdd_settings_target"
+	cp "$sunshine_session" "$local_appdata_linux/dotfiles/set-sunshine-display-session.ps1"
 	neovide_windows="$program_files\\Neovide\\neovide.exe"
 	[[ -f "$(wslpath -u "$neovide_windows")" ]] || {
 		printf 'Neovide executable not found after Windows package reconciliation: %s\n' "$neovide_windows" >&2
@@ -104,6 +116,28 @@ apply_windows_integration() {
 	mkdir -p "$local_appdata_linux/NvimWSL" "$local_appdata_linux/NeovideWSL"
 	cp "$source_root/scripts/windows/open-in-nvim.ps1" "$local_appdata_linux/NvimWSL/open-in-nvim.ps1"
 	cp "$source_root/scripts/windows/open-in-neovide.ps1" "$local_appdata_linux/NeovideWSL/open-in-neovide.ps1"
+	ssh_forwarder_target="$local_appdata_linux/dotfiles/apply-wsl-ssh-forward.ps1"
+	ssh_forwarder_target_windows="$local_appdata\\dotfiles\\apply-wsl-ssh-forward.ps1"
+	mkdir -p "$(dirname "$ssh_forwarder_target")"
+	cp "$ssh_forwarder" "$ssh_forwarder_target"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ssh_forwarder_target_windows" \
+		-Mode Ensure -DistroName "$WSL_DISTRO_NAME"
+	# The single-quoted expression is evaluated by PowerShell, not Bash.
+	# shellcheck disable=SC2016
+	if [[ "$(powershell.exe -NoLogo -NoProfile -Command '$env:COMPUTERNAME' | tr -d '\r')" == "TRACER" ]]; then
+		quest_hotspot_target="$local_appdata_linux/dotfiles/configure-quest-hotspot.ps1"
+		quest_hotspot_target_windows="$local_appdata\\dotfiles\\configure-quest-hotspot.ps1"
+		always_on_target="$local_appdata_linux/dotfiles/configure-always-on.ps1"
+		always_on_target_windows="$local_appdata\\dotfiles\\configure-always-on.ps1"
+		slack_presence_target="$local_appdata_linux/dotfiles/keep-slack-active.ps1"
+		slack_presence_target_windows="$local_appdata\\dotfiles\\keep-slack-active.ps1"
+		cp "$quest_hotspot" "$quest_hotspot_target"
+		cp "$always_on" "$always_on_target"
+		cp "$slack_presence" "$slack_presence_target"
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$quest_hotspot_target_windows" -Mode Ensure
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$always_on_target_windows"
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$slack_presence_target_windows" -Mode Ensure
+	fi
 
 	mkdir -p "$HOME/.codex/sqlite"
 	python3 "$configurator" \
