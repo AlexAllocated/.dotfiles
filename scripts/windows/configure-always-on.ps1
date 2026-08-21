@@ -4,9 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-	throw "The always-on workstation policy requires an elevated Windows PowerShell."
-}
+$isAdministrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 function Invoke-PowerCfg {
 	param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -17,19 +15,68 @@ function Invoke-PowerCfg {
 	}
 }
 
-foreach ($powerSource in @("ac", "dc")) {
-	Invoke-PowerCfg /change "monitor-timeout-$powerSource" 0
-	Invoke-PowerCfg /change "disk-timeout-$powerSource" 0
-	Invoke-PowerCfg /change "standby-timeout-$powerSource" 0
-	Invoke-PowerCfg /change "hibernate-timeout-$powerSource" 0
+function Test-PowerSettingZero {
+	param(
+		[Parameter(Mandatory = $true)][string]$Subgroup,
+		[Parameter(Mandatory = $true)][string]$Setting,
+		[switch]$IncludeHidden
+	)
+
+	$verb = if ($IncludeHidden) { "/qh" } else { "/query" }
+	$output = @(& powercfg.exe $verb SCHEME_CURRENT $Subgroup $Setting)
+	if ($LASTEXITCODE -ne 0) {
+		return $false
+	}
+	$indexes = @($output | Select-String -Pattern "Current (AC|DC) Power Setting Index:\s+0x([0-9a-fA-F]+)")
+	return $indexes.Count -eq 2 -and @($indexes | Where-Object {
+		[Convert]::ToUInt32($_.Matches[0].Groups[2].Value, 16) -ne 0
+	}).Count -eq 0
 }
 
-Invoke-PowerCfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0
-Invoke-PowerCfg /setdcvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0
-Invoke-PowerCfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0
-Invoke-PowerCfg /setdcvalueindex SCHEME_CURRENT SUB_SLEEP 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0
-Invoke-PowerCfg /hibernate off
-Invoke-PowerCfg /setactive SCHEME_CURRENT
+$machinePolicyCurrent =
+	(Test-PowerSettingZero -Subgroup "SUB_VIDEO" -Setting "VIDEOIDLE") -and
+	(Test-PowerSettingZero -Subgroup "SUB_DISK" -Setting "DISKIDLE") -and
+	(Test-PowerSettingZero -Subgroup "SUB_SLEEP" -Setting "STANDBYIDLE") -and
+	(Test-PowerSettingZero -Subgroup "SUB_SLEEP" -Setting "HIBERNATEIDLE") -and
+	(Test-PowerSettingZero -Subgroup "SUB_SLEEP" -Setting "HYBRIDSLEEP") -and
+	(Test-PowerSettingZero `
+		-Subgroup "SUB_SLEEP" `
+		-Setting "7bc4a2f9-d8fc-4469-b07b-33eb785aaca0" `
+		-IncludeHidden) -and
+	(Get-ItemPropertyValue `
+		-Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" `
+		-Name "HibernateEnabled" `
+		-ErrorAction SilentlyContinue) -eq 0 -and
+	(Get-ItemPropertyValue `
+		-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" `
+		-Name "InactivityTimeoutSecs" `
+		-ErrorAction SilentlyContinue) -eq 0 -and
+	(Get-ItemPropertyValue `
+		-Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" `
+		-Name "StartupBoostEnabled" `
+		-ErrorAction SilentlyContinue) -eq 0 -and
+	(Get-ItemPropertyValue `
+		-Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" `
+		-Name "BackgroundModeEnabled" `
+		-ErrorAction SilentlyContinue) -eq 0
+
+if ($isAdministrator) {
+	foreach ($powerSource in @("ac", "dc")) {
+		Invoke-PowerCfg /change "monitor-timeout-$powerSource" 0
+		Invoke-PowerCfg /change "disk-timeout-$powerSource" 0
+		Invoke-PowerCfg /change "standby-timeout-$powerSource" 0
+		Invoke-PowerCfg /change "hibernate-timeout-$powerSource" 0
+	}
+
+	Invoke-PowerCfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0
+	Invoke-PowerCfg /setdcvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0
+	Invoke-PowerCfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0
+	Invoke-PowerCfg /setdcvalueindex SCHEME_CURRENT SUB_SLEEP 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0
+	Invoke-PowerCfg /hibernate off
+	Invoke-PowerCfg /setactive SCHEME_CURRENT
+} elseif (-not $machinePolicyCurrent) {
+	throw "The always-on machine policy needs repair; rerun the Windows integration elevated."
+}
 
 $desktopPolicy = "HKCU:\Control Panel\Desktop"
 Set-ItemProperty -Path $desktopPolicy -Name ScreenSaveActive -Type String -Value "0"
@@ -40,13 +87,15 @@ $winlogonPolicy = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
 New-Item -Path $winlogonPolicy -Force | Out-Null
 Set-ItemProperty -Path $winlogonPolicy -Name EnableGoodbye -Type DWord -Value 0
 
-$systemPolicy = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
-Set-ItemProperty -Path $systemPolicy -Name InactivityTimeoutSecs -Type DWord -Value 0
+if ($isAdministrator) {
+	$systemPolicy = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+	Set-ItemProperty -Path $systemPolicy -Name InactivityTimeoutSecs -Type DWord -Value 0
 
-$edgePolicy = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
-New-Item -Path $edgePolicy -Force | Out-Null
-Set-ItemProperty -Path $edgePolicy -Name StartupBoostEnabled -Type DWord -Value 0
-Set-ItemProperty -Path $edgePolicy -Name BackgroundModeEnabled -Type DWord -Value 0
+	$edgePolicy = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
+	New-Item -Path $edgePolicy -Force | Out-Null
+	Set-ItemProperty -Path $edgePolicy -Name StartupBoostEnabled -Type DWord -Value 0
+	Set-ItemProperty -Path $edgePolicy -Name BackgroundModeEnabled -Type DWord -Value 0
+}
 
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 (Get-ItemProperty -Path $runKey).PSObject.Properties |

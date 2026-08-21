@@ -1,5 +1,5 @@
 param(
-   [ValidateSet("Ensure", "Install", "Start", "Stop", "Status", "Remove")]
+   [ValidateSet("Ensure", "Install", "Start", "Stop", "Status", "Optimize", "Remove")]
    [string]$Mode = "Ensure",
    [string]$Ssid = "Tracer-Quest-VR",
    [ValidateSet("Auto", "TwoPointFourGigahertz", "FiveGigahertz", "SixGigahertz")]
@@ -12,6 +12,182 @@ param(
 $ErrorActionPreference = "Stop"
 $TaskName = "Dotfiles Quest VR Hotspot"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$VrRadioDescription = "Qualcomm FastConnect 7800 Wi-Fi 7 High Band Simultaneous (HBS) Network Adapter"
+$VrRadioHardwareId = "PCI\VEN_17CB&DEV_1107&SUBSYS_E0F7105B"
+$VrRadioDriverVersion = [version]"3.1.0.1647"
+$VrRadioDriverUrl = "https://catalog.s.download.windowsupdate.com/d/msdownload/update/driver/drvs/2026/03/97313a84-6ee4-4750-9964-467fa1ee20c5_7b43725cd9ee65ff2cf46d9747fb4449df10cb79.cab"
+$VrRadioDriverSha256 = "A214042F404A309238B226ACCB9E9CA371DB79EF6DD456FA8F0512AA76885960"
+
+function Test-IsAdministrator {
+   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+   $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Get-VrRadioAdapters {
+   return @(Get-NetAdapter -IncludeHidden | Where-Object {
+      $_.InterfaceDescription -eq $VrRadioDescription -and
+      $_.Status -ne "Not Present"
+   })
+}
+
+function Get-VrRadio {
+   $adapter = Get-VrRadioAdapters | Where-Object { $_.Name -eq "Wi-Fi" } | Select-Object -First 1
+   if (-not $adapter) {
+      throw "Could not find Tracer's primary '$VrRadioDescription' adapter named Wi-Fi."
+   }
+   return $adapter
+}
+
+function Install-VrRadioDriver {
+   $radio = Get-VrRadio
+   $installedVersion = [version]$radio.DriverVersion
+   if ($installedVersion -ge $VrRadioDriverVersion) {
+      Write-Host "Quest radio driver is current: $installedVersion."
+      return
+   }
+   if (-not (Test-IsAdministrator)) {
+      throw "Quest radio driver $installedVersion is older than $VrRadioDriverVersion; rerun the Windows integration elevated."
+   }
+
+   $workDirectory = Join-Path $env:TEMP "dotfiles-quest-radio-$([guid]::NewGuid().ToString('N'))"
+   $cabPath = Join-Path $workDirectory "qualcomm-fastconnect-7800.cab"
+   $expandedPath = Join-Path $workDirectory "driver"
+   New-Item -ItemType Directory -Path $expandedPath -Force | Out-Null
+   try {
+      Write-Host "Downloading signed Qualcomm FastConnect driver $VrRadioDriverVersion from Microsoft Update Catalog..."
+      Invoke-WebRequest -UseBasicParsing -Uri $VrRadioDriverUrl -OutFile $cabPath
+      $actualHash = (Get-FileHash -LiteralPath $cabPath -Algorithm SHA256).Hash
+      if ($actualHash -ne $VrRadioDriverSha256) {
+         throw "Quest radio driver checksum mismatch: expected $VrRadioDriverSha256, received $actualHash."
+      }
+
+      & "$env:SystemRoot\System32\expand.exe" $cabPath -F:* $expandedPath | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+         throw "Could not expand the Quest radio driver CAB (exit code $LASTEXITCODE)."
+      }
+      $inf = Get-ChildItem -LiteralPath $expandedPath -Filter "qcwlan64.inf" | Select-Object -First 1
+      $catalog = Get-ChildItem -LiteralPath $expandedPath -Filter "qcwlan64.cat" | Select-Object -First 1
+      if (-not $inf -or -not $catalog) {
+         throw "The Quest radio driver package is missing qcwlan64.inf or qcwlan64.cat."
+      }
+      if (-not (Select-String -LiteralPath $inf.FullName -SimpleMatch $VrRadioHardwareId -Quiet)) {
+         throw "The Quest radio driver does not declare support for $VrRadioHardwareId."
+      }
+      $signature = Get-AuthenticodeSignature -LiteralPath $catalog.FullName
+      if (
+         $signature.Status -ne "Valid" -or
+         $signature.SignerCertificate.Subject -notmatch "Microsoft Windows Hardware Compatibility Publisher"
+      ) {
+         throw "The Quest radio driver catalog does not have a valid Microsoft hardware signature."
+      }
+
+      & "$env:SystemRoot\System32\pnputil.exe" /add-driver $inf.FullName /install
+      if ($LASTEXITCODE -ne 0) {
+         throw "PnPUtil could not install the Quest radio driver (exit code $LASTEXITCODE)."
+      }
+      Start-Sleep -Seconds 2
+      $newVersion = [version](Get-VrRadio).DriverVersion
+      if ($newVersion -lt $VrRadioDriverVersion) {
+         throw "Quest radio still reports driver $newVersion after installing $VrRadioDriverVersion."
+      }
+      Write-Host "Updated the Quest radio driver from $installedVersion to $newVersion."
+   } finally {
+      Remove-Item -LiteralPath $workDirectory -Recurse -Force -ErrorAction SilentlyContinue
+   }
+}
+
+function Set-VrRadioPerformancePolicy {
+   $isAdministrator = Test-IsAdministrator
+   $changedAdapters = @()
+   foreach ($radio in Get-VrRadioAdapters) {
+      try {
+         $power = Get-NetAdapterPowerManagement -Name $radio.Name -ErrorAction Stop
+         $roaming = Get-NetAdapterAdvancedProperty `
+            -Name $radio.Name `
+            -RegistryKeyword "roamPolicy" `
+            -ErrorAction Stop
+         $idleRestriction = Get-NetAdapterAdvancedProperty `
+            -Name $radio.Name `
+            -RegistryKeyword "*IdleRestriction" `
+            -ErrorAction Stop
+      } catch {
+         continue
+      }
+
+      $radioChanged = $false
+      if ($power.AllowComputerToTurnOffDevice.ToString() -ne "Disabled") {
+         if (-not $isAdministrator) {
+            throw "Quest radio power policy needs repair; rerun the Windows integration elevated."
+         }
+         $power.AllowComputerToTurnOffDevice = "Disabled"
+         $power | Set-NetAdapterPowerManagement -NoRestart
+         $radioChanged = $true
+      }
+      if ($idleRestriction.RegistryValue[0].ToString() -ne "1") {
+         if (-not $isAdministrator) {
+            throw "Quest radio idle policy needs repair; rerun the Windows integration elevated."
+         }
+         Set-NetAdapterAdvancedProperty `
+            -Name $radio.Name `
+            -RegistryKeyword "*IdleRestriction" `
+            -RegistryValue 1 `
+            -NoRestart
+         $radioChanged = $true
+      }
+      if ($roaming.RegistryValue[0].ToString() -ne "1") {
+         if (-not $isAdministrator) {
+            throw "Quest radio roaming policy needs repair; rerun the Windows integration elevated."
+         }
+         Set-NetAdapterAdvancedProperty `
+            -Name $radio.Name `
+            -RegistryKeyword "roamPolicy" `
+            -RegistryValue 1 `
+            -NoRestart
+         $radioChanged = $true
+      }
+      if ($radioChanged) {
+         $changedAdapters += $radio.Name
+      }
+   }
+
+   if ($changedAdapters.Count -gt 0) {
+      # Restarting Qualcomm's derived HBS interfaces can leave them disabled;
+      # cycling the primary adapter reinitializes the shared physical radio.
+      Restart-NetAdapter -Name (Get-VrRadio).Name -Confirm:$false
+      Write-Host "Applied the low-latency Quest radio power and roaming policy."
+   } else {
+      Write-Host "Quest radio power and roaming policy is current."
+   }
+}
+
+function Show-VrRadioStatus {
+   foreach ($radio in Get-VrRadioAdapters) {
+      try {
+         $power = Get-NetAdapterPowerManagement -Name $radio.Name -ErrorAction Stop
+         $roaming = Get-NetAdapterAdvancedProperty `
+            -Name $radio.Name `
+            -RegistryKeyword "roamPolicy" `
+            -ErrorAction Stop
+         $idleRestriction = Get-NetAdapterAdvancedProperty `
+            -Name $radio.Name `
+            -RegistryKeyword "*IdleRestriction" `
+            -ErrorAction Stop
+      } catch {
+         continue
+      }
+      [pscustomobject]@{
+         Radio = $radio.Name
+         Status = $radio.Status
+         DriverVersion = $radio.DriverVersion
+         DriverDate = $radio.DriverDate
+         AllowPowerOff = $power.AllowComputerToTurnOffDevice
+         SelectiveSuspend = $power.SelectiveSuspend
+         IdlePowerDownRestriction = $idleRestriction.DisplayValue
+         RoamingAggressiveness = $roaming.DisplayValue
+      } | Format-List
+   }
+}
 
 function Initialize-TetheringApi {
    Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -27,7 +203,14 @@ function Get-TetheringContext {
       return $null
    }
 
-   $manager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($profile)
+   try {
+      $manager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($profile)
+   } catch [System.Exception] {
+      # Immediately after a radio or uplink restart, NetworkInformation can
+      # advertise InternetAccess before the tethering service has registered
+      # the profile. Treat that short race like any other not-ready state.
+      return $null
+   }
    return [pscustomobject]@{
       Profile = $profile
       Manager = $manager
@@ -136,6 +319,7 @@ function Start-Hotspot {
 }
 
 function Show-HotspotStatus {
+   Show-VrRadioStatus
    Initialize-TetheringApi
    $context = Get-TetheringContext
    if (-not $context) {
@@ -187,6 +371,9 @@ function New-EventTrigger {
 }
 
 function Install-HotspotTask {
+   Install-VrRadioDriver
+   Set-VrRadioPerformancePolicy
+
    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
    $actionArguments = @(
       "-NoLogo",
@@ -230,6 +417,11 @@ function Remove-HotspotTask {
 switch ($Mode) {
    "Ensure" { Install-HotspotTask }
    "Install" { Install-HotspotTask }
+   "Optimize" {
+      Install-VrRadioDriver
+      Set-VrRadioPerformancePolicy
+      Start-Hotspot
+   }
    "Start" { Start-Hotspot }
    "Stop" {
       Initialize-TetheringApi

@@ -57,11 +57,11 @@ apply_windows_packages() {
 
 apply_windows_integration() {
 	local source_root="${1:-$REPO_ROOT}"
-	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot always_on slack_presence vdd_settings sunshine_session script_windows
-	local font_package font_directory_windows font_installer_windows
+	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot obs_configurator obs_wallpaper audioarray_configurator audioarray_endpoint_configurator audioarray_source audioarray_workspace docker_configurator always_on slack_presence vdd_settings sunshine_session wallpaper_configurator lg_display wallpaper_ultrawide wallpaper_ipad script_windows
+	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows audioarray_configurator_windows audioarray_source_windows docker_configurator_windows
 	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
 	local ssh_forwarder_target ssh_forwarder_target_windows quest_hotspot_target quest_hotspot_target_windows always_on_target always_on_target_windows slack_presence_target slack_presence_target_windows
-	local vdd_settings_target
+	local vdd_settings_target wallpaper_configurator_target wallpaper_configurator_target_windows lg_display_target lg_display_target_windows wallpaper_directory wallpaper_directory_windows minecraft_vr minecraft_desktop minecraft_graphics powerwash_configurator powerwash_launcher powerwash_configurator_target powerwash_configurator_target_windows
 	[[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
 	require_command nix
 	require_command powershell.exe
@@ -74,11 +74,27 @@ apply_windows_integration() {
 	desktop_config="$source_root/platforms/windows/codex-desktop.toml"
 	ssh_forwarder="$source_root/scripts/windows/apply-wsl-ssh-forward.ps1"
 	quest_hotspot="$source_root/scripts/windows/configure-quest-hotspot.ps1"
+	obs_configurator="$source_root/scripts/windows/configure-obs.ps1"
+	obs_wallpaper="$source_root/assets/wallpapers/pixel-meadow-hive-2560x1440.png"
+	audioarray_configurator="$source_root/scripts/windows/configure-audio-array.ps1"
+	audioarray_endpoint_configurator="$source_root/scripts/windows/configure-audioarray-endpoints.ps1"
+	audioarray_source="$source_root/packages/audioarray"
+	audioarray_workspace="$HOME/code/AudioArray"
+	wallpaper_configurator="$source_root/scripts/windows/configure-wallpapers.ps1"
+	lg_display="$source_root/scripts/windows/configure-lg-display.ps1"
+	wallpaper_ultrawide="$source_root/assets/wallpapers/pixel-meadow-hive-3440x1440.png"
+	wallpaper_ipad="$source_root/assets/wallpapers/pixel-meadow-hive-2732x2048.png"
+	docker_configurator="$source_root/scripts/windows/configure-docker-desktop.ps1"
 	always_on="$source_root/scripts/windows/configure-always-on.ps1"
 	slack_presence="$source_root/scripts/windows/keep-slack-active.ps1"
 	vdd_settings="$source_root/platforms/windows/vdd_settings.xml"
 	sunshine_session="$source_root/scripts/windows/set-sunshine-display-session.ps1"
-	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$always_on" "$slack_presence" "$vdd_settings" "$sunshine_session"; do
+	minecraft_vr="$source_root/scripts/windows/configure-minecraft-vr.ps1"
+	minecraft_desktop="$source_root/scripts/windows/configure-minecraft-desktop.ps1"
+	minecraft_graphics="$source_root/scripts/windows/minecraft-graphics-assets.ps1"
+	powerwash_configurator="$source_root/scripts/windows/configure-powerwash-simulator-2.ps1"
+	powerwash_launcher="$source_root/scripts/windows/PowerWashLauncher.cs"
+	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$obs_configurator" "$obs_wallpaper" "$audioarray_configurator" "$audioarray_endpoint_configurator" "$audioarray_source/Cargo.toml" "$wallpaper_configurator" "$lg_display" "$wallpaper_ultrawide" "$wallpaper_ipad" "$docker_configurator" "$always_on" "$slack_presence" "$vdd_settings" "$sunshine_session" "$minecraft_vr" "$minecraft_desktop" "$minecraft_graphics" "$powerwash_configurator" "$powerwash_launcher"; do
 		[[ -f "$required" ]] || {
 			printf 'Windows integration file not found: %s\n' "$required" >&2
 			return 1
@@ -93,6 +109,26 @@ apply_windows_integration() {
 	font_installer_windows="$(wslpath -w "$font_installer")"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$font_installer_windows" \
 		-FontDirectory "$font_directory_windows"
+	mkdir -p "$(dirname "$audioarray_workspace")"
+	if [[ -L "$audioarray_workspace" ]]; then
+		ln -sfn "$audioarray_source" "$audioarray_workspace"
+	elif [[ -e "$audioarray_workspace" ]]; then
+		printf 'Refusing to replace existing AudioArray workspace: %s\n' "$audioarray_workspace" >&2
+		return 1
+	else
+		ln -s "$audioarray_source" "$audioarray_workspace"
+	fi
+	audioarray_configurator_windows="$(wslpath -w "$audioarray_configurator")"
+	audioarray_source_windows="$(wslpath -w "$audioarray_source")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$audioarray_configurator_windows" \
+		-SourceDirectory "$audioarray_source_windows"
+	obs_configurator_windows="$(wslpath -w "$obs_configurator")"
+	obs_wallpaper_windows="$(wslpath -w "$obs_wallpaper")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$obs_configurator_windows" \
+		-WallpaperPath "$obs_wallpaper_windows"
+	docker_configurator_windows="$(wslpath -w "$docker_configurator")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$docker_configurator_windows" \
+		-DistroName "$WSL_DISTRO_NAME"
 
 	windows_home="$(powershell.exe -NoLogo -NoProfile -Command "\$env:USERPROFILE" | tr -d '\r')"
 	local_appdata="$(powershell.exe -NoLogo -NoProfile -Command "\$env:LOCALAPPDATA" | tr -d '\r')"
@@ -131,12 +167,42 @@ apply_windows_integration() {
 		always_on_target_windows="$local_appdata\\dotfiles\\configure-always-on.ps1"
 		slack_presence_target="$local_appdata_linux/dotfiles/keep-slack-active.ps1"
 		slack_presence_target_windows="$local_appdata\\dotfiles\\keep-slack-active.ps1"
+		wallpaper_configurator_target="$local_appdata_linux/dotfiles/configure-wallpapers.ps1"
+		wallpaper_configurator_target_windows="$local_appdata\\dotfiles\\configure-wallpapers.ps1"
+		lg_display_target="$local_appdata_linux/dotfiles/configure-lg-display.ps1"
+		lg_display_target_windows="$local_appdata\\dotfiles\\configure-lg-display.ps1"
+		wallpaper_directory="$local_appdata_linux/dotfiles/wallpapers"
+		wallpaper_directory_windows="$local_appdata\\dotfiles\\wallpapers"
 		cp "$quest_hotspot" "$quest_hotspot_target"
 		cp "$always_on" "$always_on_target"
 		cp "$slack_presence" "$slack_presence_target"
+		cp "$wallpaper_configurator" "$wallpaper_configurator_target"
+		cp "$lg_display" "$lg_display_target"
+		cp "$minecraft_vr" "$local_appdata_linux/dotfiles/configure-minecraft-vr.ps1"
+		cp "$minecraft_desktop" "$local_appdata_linux/dotfiles/configure-minecraft-desktop.ps1"
+		cp "$minecraft_graphics" "$local_appdata_linux/dotfiles/minecraft-graphics-assets.ps1"
+		powerwash_configurator_target="$local_appdata_linux/dotfiles/configure-powerwash-simulator-2.ps1"
+		powerwash_configurator_target_windows="$local_appdata\\dotfiles\\configure-powerwash-simulator-2.ps1"
+		cp "$powerwash_configurator" "$powerwash_configurator_target"
+		cp "$powerwash_launcher" "$local_appdata_linux/dotfiles/PowerWashLauncher.cs"
+		mkdir -p "$wallpaper_directory"
+		cp "$wallpaper_ultrawide" "$wallpaper_directory/pixel-meadow-hive-3440x1440.png"
+		cp "$wallpaper_ipad" "$wallpaper_directory/pixel-meadow-hive-2732x2048.png"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$quest_hotspot_target_windows" -Mode Ensure
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$lg_display_target_windows"
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$wallpaper_configurator_target_windows" \
+			-Mode Ensure \
+			-UltrawidePath "$wallpaper_directory_windows\\pixel-meadow-hive-3440x1440.png" \
+			-IpadPath "$wallpaper_directory_windows\\pixel-meadow-hive-2732x2048.png"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$always_on_target_windows"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$slack_presence_target_windows" -Mode Ensure
+		if powershell.exe -NoLogo -NoProfile -Command \
+			'if (Get-Process -Name "PowerWash Simulator 2" -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }'; then
+			printf 'PowerWash Simulator 2 is running; deferring its display-layout reconciliation until the next apply.\n'
+		else
+			powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \
+				"$powerwash_configurator_target_windows" -Mode Ensure
+		fi
 	fi
 
 	mkdir -p "$HOME/.codex/sqlite"

@@ -85,6 +85,20 @@ function Install-PresenceTask {
 		"-Mode", "Run"
 		"-IntervalSeconds", $IntervalSeconds
 	) -join " "
+	$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+	if (
+		$existingTask -and
+		$existingTask.Actions.Count -eq 1 -and
+		$existingTask.Actions[0].Execute -ieq $PowerShell -and
+		$existingTask.Actions[0].Arguments -eq $actionArguments -and
+		$existingTask.Principal.RunLevel.ToString() -eq "Limited"
+	) {
+		if ($existingTask.State.ToString() -ne "Running") {
+			Start-ScheduledTask -TaskName $TaskName
+		}
+		Write-Host "'$TaskName' is current with a $IntervalSeconds-second interval."
+		return
+	}
 	$action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
 	$trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
 	$principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited

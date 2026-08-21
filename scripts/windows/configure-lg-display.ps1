@@ -1,32 +1,23 @@
 param(
-	[ValidateSet("Start", "Stop")]
-	[string]$Mode = "Start",
-	[int]$Width = 2732,
-	[int]$Height = 2048,
-	[int]$RefreshRate = 120,
-	[string]$WallpaperScriptPath = "$env:LOCALAPPDATA\dotfiles\configure-wallpapers.ps1"
+	[int]$Width = 3440,
+	[int]$Height = 1440,
+	[int]$RefreshRate = 160
 )
 
 $ErrorActionPreference = "Stop"
 
-function Sync-DisplayWallpapers {
-	if (-not (Test-Path -LiteralPath $WallpaperScriptPath -PathType Leaf)) {
-		return
-	}
-	& $WallpaperScriptPath -Mode Apply
-}
-
-if (-not ([System.Management.Automation.PSTypeName]"Dotfiles.DisplayMode").Type) {
+if (-not ([System.Management.Automation.PSTypeName]"Dotfiles.LgDisplayMode").Type) {
 	Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 
 namespace Dotfiles {
-   public static class DisplayMode {
+   public static class LgDisplayMode {
       private const int ENUM_CURRENT_SETTINGS = -1;
       private const int CDS_UPDATEREGISTRY = 0x00000001;
       private const int CDS_TEST = 0x00000002;
       private const int DISP_CHANGE_SUCCESSFUL = 0;
+      private const int DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x00000001;
       private const int DM_PELSWIDTH = 0x00080000;
       private const int DM_PELSHEIGHT = 0x00100000;
       private const int DM_DISPLAYFREQUENCY = 0x00400000;
@@ -105,7 +96,8 @@ namespace Dotfiles {
          IntPtr lParam
       );
 
-      private static string FindVirtualDisplayName() {
+      private static string FindLgDisplayName(out bool attached) {
+         attached = false;
          for (var adapterIndex = 0; ; adapterIndex++) {
             var adapter = new DISPLAY_DEVICE();
             adapter.cb = Marshal.SizeOf(adapter);
@@ -122,18 +114,41 @@ namespace Dotfiles {
                var id = monitor.DeviceID ?? "";
                var name = monitor.DeviceString ?? "";
                if (
-                  id.IndexOf("MTT1337", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                  name.IndexOf("VDD by MTT", StringComparison.OrdinalIgnoreCase) >= 0
+                  id.IndexOf("GSM774B", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                  name.IndexOf("LG ULTRAGEAR", StringComparison.OrdinalIgnoreCase) >= 0
                ) {
+                  attached = (adapter.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) != 0;
                   return adapter.DeviceName;
                }
             }
          }
-         throw new InvalidOperationException("Could not find the VDD by MTT display output.");
+         return null;
       }
 
-      public static string Apply(int width, int height, int refreshRate) {
-         var deviceName = FindVirtualDisplayName();
+      public static string Ensure(int width, int height, int refreshRate) {
+         bool attached;
+         var deviceName = FindLgDisplayName(out attached);
+         if (deviceName == null) {
+            return "LG UltraGear is not connected; deferring its display-mode reconciliation.";
+         }
+         if (!attached) {
+            return "LG UltraGear is connected but inactive; deferring its display-mode reconciliation.";
+         }
+
+         var current = new DEVMODE();
+         current.dmSize = (short)Marshal.SizeOf(current);
+         if (!EnumDisplaySettings(deviceName, ENUM_CURRENT_SETTINGS, ref current)) {
+            throw new InvalidOperationException("Could not read the current LG UltraGear display mode.");
+         }
+         if (
+            current.dmPelsWidth == width &&
+            current.dmPelsHeight == height &&
+            current.dmDisplayFrequency == refreshRate
+         ) {
+            return String.Format("LG UltraGear is already {0}x{1} at {2} Hz.", width, height, refreshRate);
+         }
+
+         DEVMODE selected = new DEVMODE();
          var exactModeExists = false;
          for (var modeIndex = 0; ; modeIndex++) {
             var candidate = new DEVMODE();
@@ -146,49 +161,38 @@ namespace Dotfiles {
                candidate.dmPelsHeight == height &&
                candidate.dmDisplayFrequency == refreshRate
             ) {
+               selected = candidate;
                exactModeExists = true;
                break;
             }
          }
          if (!exactModeExists) {
             throw new InvalidOperationException(
-               String.Format("{0}x{1} at {2} Hz is not advertised by {3}.", width, height, refreshRate, deviceName)
+               String.Format("{0}x{1} at {2} Hz is not advertised by the LG UltraGear.", width, height, refreshRate)
             );
          }
 
-         var mode = new DEVMODE();
-         mode.dmSize = (short)Marshal.SizeOf(mode);
-         if (!EnumDisplaySettings(deviceName, ENUM_CURRENT_SETTINGS, ref mode)) {
-            throw new InvalidOperationException("Could not read the current VDD display mode.");
-         }
-         mode.dmPelsWidth = width;
-         mode.dmPelsHeight = height;
-         mode.dmDisplayFrequency = refreshRate;
-         mode.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
-
-         var testResult = ChangeDisplaySettingsEx(deviceName, ref mode, IntPtr.Zero, CDS_TEST, IntPtr.Zero);
+         selected.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+         var testResult = ChangeDisplaySettingsEx(deviceName, ref selected, IntPtr.Zero, CDS_TEST, IntPtr.Zero);
          if (testResult != DISP_CHANGE_SUCCESSFUL) {
-            throw new InvalidOperationException("Windows rejected the requested VDD mode during validation: " + testResult);
+            throw new InvalidOperationException("Windows rejected the requested LG mode during validation: " + testResult);
          }
-         var applyResult = ChangeDisplaySettingsEx(deviceName, ref mode, IntPtr.Zero, CDS_UPDATEREGISTRY, IntPtr.Zero);
+         var applyResult = ChangeDisplaySettingsEx(
+            deviceName,
+            ref selected,
+            IntPtr.Zero,
+            CDS_UPDATEREGISTRY,
+            IntPtr.Zero
+         );
          if (applyResult != DISP_CHANGE_SUCCESSFUL) {
-            throw new InvalidOperationException("Windows rejected the requested VDD mode: " + applyResult);
+            throw new InvalidOperationException("Windows rejected the requested LG mode: " + applyResult);
          }
 
-         return String.Format("{0} is now {1}x{2} at {3} Hz.", deviceName, width, height, refreshRate);
+         return String.Format("LG UltraGear is now {0}x{1} at {2} Hz.", width, height, refreshRate);
       }
    }
 }
 '@
 }
 
-if ($Mode -eq "Stop") {
-	Sync-DisplayWallpapers
-	Write-Host "Sunshine's display manager will restore the pre-stream topology."
-	exit 0
-}
-
-& "$env:WINDIR\System32\DisplaySwitch.exe" /external
-Start-Sleep -Seconds 2
-Write-Host ([Dotfiles.DisplayMode]::Apply($Width, $Height, $RefreshRate))
-Sync-DisplayWallpapers
+Write-Host ([Dotfiles.LgDisplayMode]::Ensure($Width, $Height, $RefreshRate))

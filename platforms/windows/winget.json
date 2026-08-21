@@ -25,6 +25,9 @@
 					"PackageIdentifier": "LizardByte.Sunshine"
 				},
 				{
+					"PackageIdentifier": "MullvadVPN.MullvadVPN"
+				},
+				{
 					"PackageIdentifier": "VirtualDrivers.Virtual-Display-Driver"
 				},
 				{
@@ -37,6 +40,15 @@
 					"PackageIdentifier": "AgileBits.1Password"
 				},
 				{
+					"PackageIdentifier": "AgileBits.1Password.CLI"
+				},
+				{
+					"PackageIdentifier": "dorssel.usbipd-win"
+				},
+				{
+					"PackageIdentifier": "Docker.DockerDesktop"
+				},
+				{
 					"PackageIdentifier": "DuongDieuPhap.ImageGlass"
 				},
 				{
@@ -46,13 +58,34 @@
 					"PackageIdentifier": "SlackTechnologies.Slack"
 				},
 				{
+					"PackageIdentifier": "LinearOrbit.Linear"
+				},
+				{
 					"PackageIdentifier": "Neovide.Neovide"
 				},
 				{
 					"PackageIdentifier": "OBSProject.OBSStudio"
 				},
 				{
+					"PackageIdentifier": "Rustlang.Rustup"
+				},
+				{
+					"PackageIdentifier": "Microsoft.VisualStudio.2022.BuildTools"
+				},
+				{
+					"PackageIdentifier": "Microsoft.PowerToys"
+				},
+				{
 					"PackageIdentifier": "qBittorrent.qBittorrent"
+				},
+				{
+					"PackageIdentifier": "PrismLauncher.PrismLauncher"
+				},
+				{
+					"PackageIdentifier": "Plex.Plex"
+				},
+				{
+					"PackageIdentifier": "NirSoft.SoundVolumeView"
 				},
 				{
 					"PackageIdentifier": "Spotify.Spotify"
@@ -76,6 +109,12 @@
 		},
 		{
 			"Packages": [
+				{
+					"PackageIdentifier": "9N0866FS04W8"
+				},
+				{
+					"PackageIdentifier": "9PJ0NKL8MCSJ"
+				},
 				{
 					"PackageIdentifier": "XP8CLZL93F5Z4P"
 				},

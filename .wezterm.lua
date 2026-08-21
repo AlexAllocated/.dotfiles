@@ -81,6 +81,9 @@ if wezterm.target_triple:match("windows") then
 	config.default_cwd = "/home/alx"
 	-- config.default_prog = { "wsl.exe" }
 	config.win32_system_backdrop = "Disable" -- ["Auto", "Acrylic", "Mica", "Tabbed" "Disable"]
+	-- Keep native Windows chrome so the window has a conventional draggable
+	-- title bar even when the terminal tab bar is hidden.
+	config.window_decorations = "TITLE|RESIZE"
 elseif wezterm.target_triple:match("linux") then
 	-- Terminal rows are whole cells. Keep any unavoidable vertical remainder at
 	-- the bottom, away from tmux's top-anchored status line. Windows stable does

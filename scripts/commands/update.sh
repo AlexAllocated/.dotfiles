@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 run_neovim_automation() {
-	if command_exists mise; then
+	if command_exists mise && ! is_nixos; then
 		local nvim_xdg_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
 		local nvim_xdg_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 		local nvim_xdg_data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -22,9 +22,13 @@ run_neovim_automation() {
 			XDG_DATA_HOME="$nvim_xdg_data_home" \
 			XDG_STATE_HOME="$nvim_xdg_state_home" \
 			nvim "$@"
-	else
-		nvim "$@"
+		return
 	fi
+
+	# NixOS profiles already declare Neovim and all of its build-time helpers.
+	# Entering the repository's Mise environment here would install duplicate
+	# upstream runtimes just to refresh a lockfile.
+	nvim "$@"
 }
 
 stage_repo() {

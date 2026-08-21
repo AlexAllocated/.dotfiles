@@ -18,8 +18,26 @@ in
       sourceRoot + "/scripts/windows/configure-always-on.ps1";
     ".local/share/dotfiles/windows/configure-quest-hotspot.ps1".source =
       sourceRoot + "/scripts/windows/configure-quest-hotspot.ps1";
+    ".local/share/dotfiles/windows/configure-obs.ps1".source =
+      sourceRoot + "/scripts/windows/configure-obs.ps1";
+    ".local/share/dotfiles/windows/configure-audio-array.ps1".source =
+      sourceRoot + "/scripts/windows/configure-audio-array.ps1";
+    ".local/share/dotfiles/windows/configure-wallpapers.ps1".source =
+      sourceRoot + "/scripts/windows/configure-wallpapers.ps1";
+    ".local/share/dotfiles/windows/configure-lg-display.ps1".source =
+      sourceRoot + "/scripts/windows/configure-lg-display.ps1";
     ".local/share/dotfiles/windows/configure-sunshine-virtual-display.ps1".source =
       sourceRoot + "/scripts/windows/configure-sunshine-virtual-display.ps1";
+    ".local/share/dotfiles/windows/configure-minecraft-vr.ps1".source =
+      sourceRoot + "/scripts/windows/configure-minecraft-vr.ps1";
+    ".local/share/dotfiles/windows/configure-minecraft-desktop.ps1".source =
+      sourceRoot + "/scripts/windows/configure-minecraft-desktop.ps1";
+    ".local/share/dotfiles/windows/configure-powerwash-simulator-2.ps1".source =
+      sourceRoot + "/scripts/windows/configure-powerwash-simulator-2.ps1";
+    ".local/share/dotfiles/windows/PowerWashLauncher.cs".source =
+      sourceRoot + "/scripts/windows/PowerWashLauncher.cs";
+    ".local/share/dotfiles/windows/minecraft-graphics-assets.ps1".source =
+      sourceRoot + "/scripts/windows/minecraft-graphics-assets.ps1";
     ".local/share/dotfiles/windows/install-user-fonts.ps1".source =
       sourceRoot + "/scripts/windows/install-user-fonts.ps1";
     ".local/share/dotfiles/windows/install-virtual-display.ps1".source =

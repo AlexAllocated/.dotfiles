@@ -1,7 +1,8 @@
 param(
 	[string]$ConfigurationPath = "$env:ProgramFiles\Sunshine\config\sunshine.conf",
 	[string]$OutputStatePath = "$env:LOCALAPPDATA\dotfiles\virtual-display\sunshine-output-name.txt",
-	[string]$ServiceName = "SunshineService"
+	[string]$ServiceName = "SunshineService",
+	[string]$StreamingMixName = "Speakers (Steam Streaming Speakers)"
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +38,14 @@ if ($outputName -notmatch '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A
 New-Item -ItemType Directory -Path (Split-Path -Parent $OutputStatePath) -Force | Out-Null
 [IO.File]::WriteAllText($OutputStatePath, "$outputName`r`n", [Text.UTF8Encoding]::new($false))
 
+$audioInfoPath = Join-Path $env:ProgramFiles "Sunshine\tools\audio-info.exe"
+if (-not (Test-Path -LiteralPath $audioInfoPath -PathType Leaf)) {
+	throw "Sunshine audio endpoint inventory is missing: $audioInfoPath"
+}
+$audioInventory = (& $audioInfoPath 2>&1 | Out-String)
+if ($audioInventory -notmatch "(?m)^Device name\s*:\s*$([regex]::Escape($StreamingMixName))\s*$") {
+	throw "AudioArray's streaming-mix endpoint is unavailable to Sunshine: $StreamingMixName"
+}
 $settings = [ordered]@{
 	output_name = $outputName
 	dd_configuration_option = "ensure_only_display"
@@ -44,12 +53,17 @@ $settings = [ordered]@{
 	dd_refresh_rate_option = "auto"
 	dd_hdr_option = "auto"
 	dd_config_revert_on_disconnect = "enabled"
+	# Sunshine makes this sink the Windows default only while a client is
+	# connected. AudioArray observes that real endpoint transition directly.
+	virtual_sink = $StreamingMixName
+	install_steam_audio_drivers = "disabled"
 }
 
 $obsoleteSettings = @(
-	"global_prep_cmd"
+	"audio_sink"
 	"dd_manual_resolution"
 	"dd_manual_refresh_rate"
+	"global_prep_cmd"
 )
 
 $lines = if (Test-Path -LiteralPath $ConfigurationPath) {
@@ -108,3 +122,4 @@ Restart-Service -Name $ServiceName -Force
 
 Write-Host "Sunshine now targets $outputName (VDD by MTT)."
 Write-Host "Resolution, refresh rate, and HDR now follow the Moonlight client request."
+Write-Host "AudioArray now follows Sunshine's real $StreamingMixName default-device transitions."

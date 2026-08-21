@@ -52,7 +52,13 @@ in
     networking.hostName = "";
     time.timeZone = "America/Denver";
 
-    programs.zsh.enable = true;
+    programs = {
+      zsh.enable = true;
+      # Project-local Mise environments commonly provide upstream binaries.
+      # Let those dynamically linked Linux tools run inside NixOS-WSL while
+      # keeping the workstation's declared toolchain Nix-managed.
+      nix-ld.enable = true;
+    };
     security.sudo.wheelNeedsPassword = false;
 
     services.openssh = {
@@ -208,10 +214,6 @@ in
       interop = {
         register = true;
         includePath = true;
-      };
-      ssh-agent = {
-        enable = true;
-        users = [ cfg.user ];
       };
       docker-desktop.enable = true;
       wslConf = {

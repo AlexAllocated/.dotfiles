@@ -68,13 +68,17 @@ rec {
 
   development =
     (with pkgs; [
+      actionlint
       cargo
       cmake
+      ffmpeg-headless
       gcc
       gnumake
       gnugrep
       go
       gnupg
+      imagemagick
+      librsvg
       lua
       mise
       ninja
@@ -83,10 +87,13 @@ rec {
       python3
       rust-analyzer
       rustc
+      rustfmt
       shellcheck
+      sqlite
       stylua
       uv
     ])
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux (with pkgs; [ psmisc ])
     ++ optionalPkgs pkgs [
       "docker-client"
       "dotnet-sdk"

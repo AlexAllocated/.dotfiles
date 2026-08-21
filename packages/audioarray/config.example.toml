@@ -1,0 +1,89 @@
+# VAC's playback and recording endpoints share these semantic names but occupy
+# opposite device directions. AudioArray deliberately refuses ambiguous matches.
+[cables]
+game = "AudioArray Game (Virtual Audio Cable)"
+comms = "AudioArray Comms (Virtual Audio Cable)"
+music = "AudioArray Music (Virtual Audio Cable)"
+clean_mic = "AudioArray Clean Mic (Virtual Audio Cable)"
+
+[monitor]
+# On first launch, "default" remembers the current physical Windows playback
+# device. AudioArray then makes Game the Windows default and treats any later
+# physical choice in the Windows picker as a request to change the monitor at
+# the end of every bus. The remembered choice is machine-local.
+output = "default"
+# Sunshine makes this endpoint the Windows default during Moonlight sessions.
+# AudioArray observes that real transition, temporarily sends the complete mix
+# here, then falls back through remembered physical outputs at disconnect.
+remote_output = "Speakers (Steam Streaming Speakers)"
+# AudioArray detects the OculusDash runtime while Quest Link is active and
+# routes the complete bus mix here without replacing the remembered local
+# output. Configure Meta Horizon to preserve Windows audio defaults so Game,
+# Comms, and Clean Mic remain stable application-facing endpoints.
+vr_output = "Headphones (Oculus Virtual Audio Device)"
+latency_ms = 35
+game_gain = 1.0
+comms_gain = 1.0
+music_gain = 1.0
+
+[microphone]
+# On first launch, "default" remembers the current physical Windows recording
+# device. AudioArray then makes Clean Mic the Windows default and treats any
+# later physical choice in the Windows picker as the raw microphone feeding
+# DeepFilterNet and Clean Mic. Physical inputs and outputs are remembered in
+# recency order; an unplugged selection falls back to the next usable device.
+input = "default"
+# Quest Link is a session override, not a remembered physical preference. When
+# Meta makes the Oculus headphones active, its microphone temporarily becomes
+# the raw source feeding DeepFilterNet and Clean Mic. Disconnecting Quest
+# automatically restores the most recent available local microphone.
+vr_input = "Headset Microphone (Oculus Virtual Audio Device)"
+latency_ms = 45
+gain = 1.0
+
+[noise_suppression]
+enabled = true
+engine = "deepfilternet3"
+# Keep ten percent of the original signal under the enhanced signal. This still
+# provides strong suppression without letting the model erase quiet syllables.
+# The interface presents this 20 dB default as 50% intensity on a 0-40 dB
+# scale. UI choices live in machine-local controls.toml and override this base.
+attenuation_limit_db = 20.0
+# The post-filter adds extra suppression after inference and is unnecessary for
+# a communications mic where speech continuity matters more than total silence.
+post_filter_beta = 0.0
+
+# These are persisted Windows per-app endpoint preferences. AudioArray applies
+# them whenever it sees the process, so reinstalls and process replacement do
+# not silently bypass the graph. Unmatched applications inherit the Windows
+# default Game bus. Only applications that belong on Comms or Music require an
+# explicit output route.
+[[routes]]
+process = "Discord.exe"
+output = "comms"
+input = "clean_mic"
+
+[[routes]]
+process = "Vesktop.exe"
+output = "comms"
+input = "clean_mic"
+
+[[routes]]
+process = "Spotify.exe"
+output = "music"
+
+[[routes]]
+process = "RustClient.exe"
+output = "game"
+
+[[routes]]
+process = "Wow.exe"
+output = "game"
+
+[[routes]]
+process = "Diablo IV.exe"
+output = "game"
+
+[[routes]]
+process = "Overwatch.exe"
+output = "game"

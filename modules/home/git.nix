@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   toolsets = import ../../lib/toolsets.nix { inherit lib pkgs; };
 in
@@ -21,6 +26,13 @@ in
         core = {
           editor = "nvim";
           pager = "delta";
+        }
+        // lib.optionalAttrs (config.dotfiles.profile == "nixos-wsl") {
+          # 1Password owns the Windows OpenSSH agent pipe. Using ssh.exe at
+          # Git's configuration layer also covers non-interactive callers such
+          # as Codex Desktop, which may not inherit an interactive shell's
+          # GIT_SSH_COMMAND environment variable.
+          sshCommand = "ssh.exe -o StrictHostKeyChecking=accept-new";
         };
         alias = {
           st = "status -sb";
