@@ -89,6 +89,13 @@ accept_candidate_locks() {
 	done
 }
 
+accept_candidate_neovim_lock() {
+	local candidate="$1"
+	if [[ -f "$candidate/nvim/lazy-lock.json" ]]; then
+		cp "$candidate/nvim/lazy-lock.json" "$REPO_ROOT/nvim/lazy-lock.json"
+	fi
+}
+
 sync_live_neovim_runtime() (
 	local config_home
 	command_exists nvim || return 0

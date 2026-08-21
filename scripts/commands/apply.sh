@@ -105,7 +105,7 @@ revalidate_and_reapply_profile() {
 
 apply_with_update() {
 	local profile="$1"
-	local rebased=0
+	local apply_status=0 rebased=0 sync_status=0
 	sync_before_update
 	if [[ "$profile" == "macos-managed" ]]; then
 		DOTFILES_SKIP_NVIM_PRIME=1 apply_macos_managed 1
@@ -118,11 +118,27 @@ apply_with_update() {
 		trap_remove_on_exit "$work"
 		prepare_update_candidate "$candidate" "$work"
 		printf 'Applying %s from the validated staging checkout...\n' "$profile"
-		apply_profile "$profile" "$candidate"
-		accept_candidate_locks "$candidate"
-		sync_live_neovim_runtime
+		apply_profile "$profile" "$candidate" || apply_status=$?
+		# The candidate pins have already passed the full flake evaluation. Keep
+		# the editor runtime reconciled even when a later host-integration step
+		# fails, so opening Neovim does not perform the deferred work itself.
+		if ((apply_status == 0)); then
+			accept_candidate_locks "$candidate"
+		else
+			# Do not accept a flake lock whose build or application failed. The
+			# independently validated Neovim lock is safe to reconcile on its own.
+			accept_candidate_neovim_lock "$candidate"
+		fi
+		sync_live_neovim_runtime || sync_status=$?
 		trap - EXIT
 		rm -rf "$work"
+		if ((apply_status != 0)); then
+			printf 'Profile application failed with status %d after validated Neovim pins were reconciled.\n' "$apply_status" >&2
+			return "$apply_status"
+		fi
+		if ((sync_status != 0)); then
+			return "$sync_status"
+		fi
 		printf 'Updated pins passed validation and were applied to %s.\n' "$profile"
 	fi
 	commit_updates

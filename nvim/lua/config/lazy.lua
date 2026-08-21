@@ -108,9 +108,11 @@ require("lazy").setup({
 	},
 	install = { colorscheme = { "tokyonight", "catppuccin", "gruvbox" } },
 	checker = {
-		enabled = true, -- check for plugin updates periodically
-		notify = false, -- notify on update
-	}, -- automatically check for plugin updates
+		-- updoot updates and validates the tracked lockfile, then restores the
+		-- active runtime from it. Avoid a second, unpinned network check during
+		-- ordinary editor startup.
+		enabled = false,
+	},
 	performance = {
 		rtp = {
 			-- disable some rtp plugins
