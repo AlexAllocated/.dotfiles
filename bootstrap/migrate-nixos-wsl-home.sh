@@ -134,13 +134,13 @@ rsync "${rsync_args[@]}" "$codex_snapshot/" "$target_user@$target_ip:/home/$targ
 verification_failed=0
 while IFS= read -r relative; do
 	[[ "$relative" == .codex/sqlite ]] && continue
-	if rsync "${rsync_args[@]}" --checksum --dry-run --itemize-changes \
+	if rsync "${rsync_args[@]}" --info=none --checksum --dry-run --itemize-changes \
 		"$HOME/./$relative" "$target_user@$target_ip:/home/$target_user/" | grep -q .; then
 		printf 'Verification mismatch: %s\n' "$relative" >&2
 		verification_failed=1
 	fi
 done <"$manifest_path"
-if rsync "${rsync_args[@]}" --checksum --dry-run --itemize-changes \
+if rsync "${rsync_args[@]}" --info=none --checksum --dry-run --itemize-changes \
 	"$codex_snapshot/" "$target_user@$target_ip:/home/$target_user/.codex/sqlite/" | grep -q .; then
 	printf 'Verification mismatch: .codex/sqlite\n' >&2
 	verification_failed=1
