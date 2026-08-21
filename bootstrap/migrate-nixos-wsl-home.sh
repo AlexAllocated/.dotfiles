@@ -31,6 +31,10 @@ done
 paths=(
 	.aws
 	.azure
+	.codex/auth.json
+	.codex/config.toml
+	.codex/history.jsonl
+	.codex/installation_id
 	.config/direnv
 	.config/gh
 	.config/git/identity
@@ -95,7 +99,7 @@ $ssh_command "$target_user@$target_ip" 'true'
 
 rsync_args=(
 	-aHAX
-	--numeric-ids
+	--no-group
 	--protect-args
 	--relative
 	--info=progress2
