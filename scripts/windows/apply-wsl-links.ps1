@@ -1,5 +1,5 @@
 param(
-   [string]$DistroName = "NixOS",
+   [string]$DistroName = "Ubuntu-26.04",
    [string]$LinuxHome = ""
 )
 
@@ -437,7 +437,7 @@ Register-TextEditorOpenWith `
    -Command $nvimCommand `
    -IconPath ([System.IO.Path]::ChangeExtension($launcherPath, ".ico")) `
    -Label "Neovim (WSL)" `
-   -Description "Open text files in Neovim inside NixOS WSL" `
+   -Description "Open text files in Neovim inside $DistroName WSL" `
    -ContextMenuName "NvimWSL" `
    -ContextMenuVerb "Edit with Neovim (WSL)"
 
@@ -461,7 +461,7 @@ Register-TextEditorOpenWith `
    -Command $neovideCommand `
    -IconPath $neovide `
    -Label "Neovide (WSL)" `
-   -Description "Open text files in Neovide using Neovim inside NixOS WSL" `
+   -Description "Open text files in Neovide using Neovim inside $DistroName WSL" `
    -ContextMenuName "NeovideWSL" `
    -ContextMenuVerb "Edit with Neovide (WSL)"
 

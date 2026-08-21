@@ -43,6 +43,7 @@ Profiles:
   tracer
   chev-desktop
   nixos-wsl
+  ubuntu-wsl
   linux
   macos-managed
   macos

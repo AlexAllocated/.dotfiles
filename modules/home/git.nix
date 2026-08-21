@@ -27,7 +27,7 @@ in
           editor = "nvim";
           pager = "delta";
         }
-        // lib.optionalAttrs (config.dotfiles.profile == "nixos-wsl") {
+        // lib.optionalAttrs config.dotfiles.isWsl {
           # 1Password owns the Windows OpenSSH agent pipe. Using ssh.exe at
           # Git's configuration layer also covers non-interactive callers such
           # as Codex Desktop, which may not inherit an interactive shell's

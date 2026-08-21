@@ -1,5 +1,5 @@
 param(
-   [string]$DistroName = "NixOS"
+   [string]$DistroName = "Ubuntu-26.04"
 )
 
 $ErrorActionPreference = "Stop"

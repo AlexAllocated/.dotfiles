@@ -7,7 +7,7 @@
 let
   cfg = config.dotfiles;
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
-  nativeLinux = pkgs.stdenv.hostPlatform.isLinux && cfg.profile != "nixos-wsl";
+  nativeLinux = pkgs.stdenv.hostPlatform.isLinux && !cfg.isWsl;
   workstation = cfg.profile == "nixos-desktop";
   terminalFont = pkgs.nerd-fonts.bigblue-terminal;
   canonicalTmuxSocket = "/run/dotfiles-durable-tmux/tmux.sock";

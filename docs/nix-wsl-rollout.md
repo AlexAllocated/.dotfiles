@@ -1,47 +1,31 @@
-# NixOS-WSL Rollout
+# Ubuntu-WSL Rollout
 
-NixOS is the primary WSL target.
+Ubuntu 26.04 with standalone Home Manager is the primary WSL target. NixOS-WSL
+is retained only while an existing home is being verified during migration.
 
 ## Install side-by-side
 
-On a fresh Windows host, first run this from an elevated Windows PowerShell:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\bootstrap\nixos-wsl.ps1 -EnsureWindowsFeatures -NoLaunch
-```
-
-The bootstrap explicitly enables `Microsoft-Windows-Subsystem-Linux` and
-`VirtualMachinePlatform`, updates the WSL runtime, and makes WSL 2 the default.
-If either feature was newly enabled, it stops and requests a Windows reboot;
-run the same command again afterward to install the pinned NixOS-WSL image.
-
-Alternatively, from an existing WSL control-plane distro whose Windows host is
-already WSL 2-ready:
+From an existing WSL control-plane distro:
 
 ```sh
-./dot-bootstrap nixos-wsl
+./dot-bootstrap ubuntu-wsl
 ```
 
-The bootstrap installs a WSL distro named `NixOS` in `D:\WSL\NixOS` using the
-latest `nixos.wsl` asset from NixOS-WSL.
+The bootstrap installs `Ubuntu-26.04`, creates `alx`, enables systemd, installs
+the small apt-owned system foundation and Determinate Nix, then activates Home
+Manager. It terminates the new distro once to apply `/etc/wsl.conf`; routine
+Home Manager generations never require that restart.
 
 ## First apply
 
-Inside the new distro:
+Inside the new distro, routine application is live:
 
 ```sh
-git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.dotfiles
-cd ~/.dotfiles
-./scripts/dotctl apply nixos-wsl
-wsl.exe -t NixOS
+dotctl apply ubuntu-wsl
 dotctl doctor
 ```
 
-The NixOS-WSL profile declares `alx` as the default user with `/home/alx` as
-its home directory. Existing installations migrate `/home/alex` atomically and
-retain it as a compatibility link so historical workspace paths remain valid.
-It also installs or upgrades the Windows applications in
+The Ubuntu-WSL profile declares `/home/alx` and installs or upgrades the Windows applications in
 `platforms/windows/winget.json` through WinGet.
 
 That manifest carries the workstation choices that remain useful on Windows:

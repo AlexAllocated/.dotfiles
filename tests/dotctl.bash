@@ -22,11 +22,13 @@ assert_equal() {
 
 assert_equal "path:$repo_root#linux" "$(flake_ref_for_profile linux)"
 assert_equal "path:$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
+assert_equal "path:$repo_root#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
 assert_equal "path:$repo_root#tracer" "$(flake_ref_for_profile tracer)"
 assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
 assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
 assert_equal "path:/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
+assert_equal "path:/tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
 
@@ -43,6 +45,14 @@ detected_tracer="$({
 	detect_profile
 })"
 assert_equal "tracer" "$detected_tracer"
+
+detected_ubuntu_wsl="$({
+	WSL_DISTRO_NAME="Ubuntu-26.04"
+	is_nixos() { return 1; }
+	uname() { printf 'Linux\n'; }
+	detect_profile
+})"
+assert_equal "ubuntu-wsl" "$detected_ubuntu_wsl"
 
 profile_apply="$({
 	require_command() { :; }

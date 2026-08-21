@@ -69,14 +69,14 @@ if wezterm.target_triple:match("windows") then
 	end
 
 	config.wsl_domains = {}
-	local nixos = available.NixOS
-	if nixos then
-		-- Do not inherit a stale pre-migration username from WezTerm's WSL
-		-- discovery cache. NixOS-WSL's declared login is alx.
-		nixos.username = "alx"
-		nixos.default_cwd = "/home/alx"
-		table.insert(config.wsl_domains, nixos)
-		config.default_domain = nixos.name
+	local preferred = available["Ubuntu-26.04"] or available.NixOS
+	if preferred then
+		-- Do not inherit a stale username or working directory from WezTerm's
+		-- WSL discovery cache while the side-by-side migration is in progress.
+		preferred.username = "alx"
+		preferred.default_cwd = "/home/alx"
+		table.insert(config.wsl_domains, preferred)
+		config.default_domain = preferred.name
 	end
 	config.default_cwd = "/home/alx"
 	-- config.default_prog = { "wsl.exe" }

@@ -1,7 +1,7 @@
 param(
    [Parameter(Mandatory = $true, Position = 0)]
    [string]$InputValue,
-   [string]$DistroName = "NixOS",
+   [string]$DistroName = "Ubuntu-26.04",
    [switch]$DryRun
 )
 
@@ -53,7 +53,7 @@ if (-not $neovide) {
    $neovide = Join-Path $env:ProgramFiles "Neovide\neovide.exe"
 }
 if (-not (Test-Path -LiteralPath $neovide)) {
-   throw "Neovide was not found. Run dotctl apply nixos-wsl to install Windows applications."
+   throw "Neovide was not found. Run dotctl apply ubuntu-wsl to install Windows applications."
 }
 
 $neovideArgs = @("--wsl", $linuxPath)

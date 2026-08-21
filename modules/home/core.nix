@@ -439,6 +439,14 @@ in
       description = "Named dotfiles target profile.";
     };
 
+    isWsl = lib.mkOption {
+      type = lib.types.bool;
+      default = lib.hasSuffix "-wsl" config.dotfiles.profile;
+      readOnly = true;
+      internal = true;
+      description = "Whether the active Home Manager profile targets WSL.";
+    };
+
     source = lib.mkOption {
       type = lib.types.path;
       default = ../..;

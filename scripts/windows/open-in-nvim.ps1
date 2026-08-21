@@ -1,7 +1,7 @@
 param(
    [Parameter(Mandatory = $true, Position = 0)]
    [string]$InputValue,
-   [string]$DistroName = "NixOS",
+   [string]$DistroName = "Ubuntu-26.04",
    [string]$LinuxUser = "alx",
    [switch]$NewTab,
    [switch]$DryRun

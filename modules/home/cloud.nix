@@ -7,7 +7,7 @@
 let
   cfg = config.dotfiles;
   toolsets = import ../../lib/toolsets.nix { inherit lib pkgs; };
-  nativeLinux = pkgs.stdenv.hostPlatform.isLinux && cfg.profile != "nixos-wsl";
+  nativeLinux = pkgs.stdenv.hostPlatform.isLinux && !cfg.isWsl;
 in
 {
   imports = [ ./core.nix ];

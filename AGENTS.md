@@ -2,25 +2,25 @@
 
 ## Project Structure & Module Organization
 
-- `flake.nix` is the primary Nix entrypoint. NixOS-WSL is the first-class host; Home Manager handles shared user config; nix-darwin handles personal macOS. `macos-managed` in `scripts/dotctl` is the host-native company Mac path when Nix is not allowed.
+- `flake.nix` is the primary Nix entrypoint. Ubuntu WSL with standalone Home Manager is the first-class Windows development host; nix-darwin handles personal macOS. `macos-managed` in `scripts/dotctl` is the host-native company Mac path when Nix is not allowed.
 - `modules/home/`, `modules/nixos/`, `modules/darwin/`, and `modules/docker/` hold reusable Nix modules. `homeModules.*` is the public Home Manager module API. `docs/nix-wsl-rollout.md` documents the side-by-side WSL rollout.
-- `dot-bootstrap` installs the side-by-side `NixOS` WSL distro from an existing control-plane distro.
+- `dot-bootstrap` installs and bootstraps the side-by-side `Ubuntu-26.04` WSL distro from an existing control-plane distro.
 - `scripts/dotctl` is the small maintenance dispatcher. Shared helpers live under `scripts/lib/`, commands under `scripts/commands/`, and non-Nix platform profiles under `scripts/profiles/`.
-- The NixOS-WSL profile uses `alx` as the default Linux user.
+- The Ubuntu-WSL profile uses `alx` as the default Linux user.
 - Editor configs live in `nvim/` (LazyVim-based Lua modules), `neovide/` (native and Windows-WSL GUI profiles), and `wezterm/` (terminal profiles and color schemes). Auxiliary Windows configs live in `komorebi/`.
 - Reusable package capabilities are defined once in `lib/toolsets.nix`; host-native manifests live at `platforms/macos-managed/Brewfile` and `platforms/windows/winget.json`. Helper binaries land in `bin/`.
 
 ## Build, Test, and Development Commands
 
 - `dotctl check` runs the flake checks when Nix is available.
-- `dotctl apply nixos-wsl` installs the next NixOS-WSL boot generation and reconciles Windows host applications through WinGet; restart the distro afterward.
+- `dotctl apply ubuntu-wsl` activates Home Manager live and reconciles Windows host applications through WinGet.
 - `dotctl apply linux` applies the generic Linux Home Manager profile.
 - `dotctl apply macos-managed` applies host-native macOS setup with Homebrew and symlinks, no Nix.
 - `dotctl apply --update` refreshes repo-managed pins, runs flake checks, reapplies the detected profile, then commits and pushes all dotfiles changes; `updoot` aliases to this in the Home Manager shell.
-- `./dot-bootstrap nixos-wsl` installs the side-by-side `NixOS` WSL distro.
+- `./dot-bootstrap ubuntu-wsl` installs and configures the side-by-side Ubuntu WSL distro.
 - `nix build .#docker-linux` builds the full Linux container image on AMD64 or ARM64 Linux.
 - `nix build .#docker-pocket-knife` builds the slim repair container image.
-- `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS` updates Windows-side app links to the WSL repo copy.
+- `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName Ubuntu-26.04` updates Windows-side app links to the WSL repo copy.
 
 ## Coding Style & Naming Conventions
 
@@ -34,12 +34,12 @@
 
 - For Nix changes, run `nix flake check --all-systems` or `dotctl check` once Nix is available.
 - On the native NixOS workstation, finish an approved configuration change by building and switching to the complete intended `chev-desktop` generation, then verify the affected live behavior. Do not activate from a partial clean tree that omits related pending configuration. Never reboot without Alex's explicit approval.
-- For the WSL target, run `sudo nixos-rebuild build --flake .#wsl` or `sudo nixos-rebuild boot --flake .#wsl`.
+- For the WSL target, run `home-manager build --flake .#ubuntu-wsl`.
 - For the standalone Linux target, run `home-manager build --flake .#linux`.
 - For container image changes, run `nix build .#docker-pocket-knife` and, when practical, `nix build .#docker-linux`.
 - For Neovim config updates, run `nvim --headless "+Lazy! sync" +qa` to catch plugin errors.
 - WezTerm changes should be loaded with `wezterm start --config-file $PWD/.wezterm.lua` to verify profiles.
-- After modifying Windows integration behavior, run `dotctl apply nixos-wsl` when practical. For a link-only check, run `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS`, then inspect the links, editor registrations, and Codex handlers from Windows.
+- After modifying Windows integration behavior, run `dotctl apply ubuntu-wsl` when practical. For a link-only check, run `pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName Ubuntu-26.04`, then inspect the links, editor registrations, and Codex handlers from Windows.
 
 ## Commit & Pull Request Guidelines
 

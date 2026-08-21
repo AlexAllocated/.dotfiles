@@ -1,14 +1,16 @@
 param(
    [ValidateSet("Ensure", "Install", "Refresh", "Remove")]
    [string]$Mode = "Ensure",
-   [string]$DistroName = "NixOS",
+   [string]$DistroName = "Ubuntu-26.04",
    [int]$WindowsPort = 22,
    [int]$LinuxPort = 22
 )
 
 $ErrorActionPreference = "Stop"
-$TaskName = "Dotfiles NixOS-WSL SSH Forward"
-$FirewallRuleName = "Dotfiles-NixOS-WSL-SSH"
+$TaskName = "Dotfiles WSL SSH Forward"
+$FirewallRuleName = "Dotfiles-WSL-SSH"
+$LegacyTaskName = "Dotfiles NixOS-WSL SSH Forward"
+$LegacyFirewallRuleName = "Dotfiles-NixOS-WSL-SSH"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $Wsl = "$env:SystemRoot\System32\wsl.exe"
 
@@ -69,17 +71,17 @@ function Test-ForwardTaskCurrent {
 
 function Get-WslAddress {
    & $Wsl --distribution $DistroName --user root --exec `
-      /run/current-system/sw/bin/systemctl is-active --quiet sshd.service
+      /bin/sh -lc "systemctl is-active --quiet ssh.service || systemctl is-active --quiet sshd.service"
    if ($LASTEXITCODE -ne 0) {
       & $Wsl --distribution $DistroName --user root --exec `
-         /run/current-system/sw/bin/systemctl start sshd.service
+         /bin/sh -lc "systemctl start ssh.service || systemctl start sshd.service"
       if ($LASTEXITCODE -ne 0) {
-         throw "Could not start sshd.service inside the $DistroName distro."
+         throw "Could not start the SSH service inside the $DistroName distro."
       }
    }
 
    $addressOutput = & $Wsl --distribution $DistroName --user root --exec `
-      /run/current-system/sw/bin/ip -4 -o address show dev eth0 scope global
+      /bin/sh -lc "ip -4 -o address show dev eth0 scope global"
    if ($LASTEXITCODE -ne 0) {
       throw "Could not read the $DistroName eth0 address."
    }
@@ -105,8 +107,8 @@ function Set-FirewallRule {
    if (-not $rule) {
       $rule = New-NetFirewallRule `
          -Name $FirewallRuleName `
-         -DisplayName "NixOS-WSL SSH from the private LAN" `
-         -Description "Allow the Windows port $WindowsPort forward to the key-only NixOS-WSL SSH server." `
+         -DisplayName "WSL SSH from the private LAN" `
+         -Description "Allow Windows port $WindowsPort to reach the key-only SSH server in $DistroName." `
          -Enabled True `
          -Profile Private `
          -Direction Inbound `
@@ -162,6 +164,8 @@ function Install-Forward {
    }
 
    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+   Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false -ErrorAction SilentlyContinue
+   Remove-NetFirewallRule -Name $LegacyFirewallRuleName -ErrorAction SilentlyContinue
    $actionArguments = Get-ForwardTaskActionArguments
    $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
@@ -191,7 +195,9 @@ function Remove-Forward {
       throw "Removing the Windows SSH forward requires elevation."
    }
    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+   Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false -ErrorAction SilentlyContinue
    Remove-NetFirewallRule -Name $FirewallRuleName -ErrorAction SilentlyContinue
+   Remove-NetFirewallRule -Name $LegacyFirewallRuleName -ErrorAction SilentlyContinue
    & netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$WindowsPort | Out-Null
    Write-Host "Removed the $DistroName SSH forward, firewall rule, and scheduled task."
 }

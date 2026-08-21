@@ -428,7 +428,7 @@ def rewrite_workspace_roots(path: Path, source_home: Path) -> int:
     changed = 0
     keys = ("electron-saved-workspace-roots", "project-order", "active-workspace-roots")
     prefix = re.compile(r"^\\\\(?:wsl\$|wsl\.localhost)\\[^\\]+\\home\\[^\\]+", re.I)
-    distro = os.environ.get("WSL_DISTRO_NAME", "NixOS")
+    distro = os.environ.get("WSL_DISTRO_NAME", "Ubuntu-26.04")
     linux_home = str(source_home.parent).replace("/", "\\")
     replacement = rf"\\wsl.localhost\{distro}{linux_home}"
     for key in keys:
@@ -644,22 +644,21 @@ def migrate(args: argparse.Namespace) -> int:
     print(f"Windows rollback archive: {windows_archive}")
 
     if args.skip_nix_apply:
-        print("Skipped the NixOS boot-generation update as requested.")
+        print("Skipped the WSL Home Manager update as requested.")
     else:
         dotctl = Path(__file__).resolve().parents[1] / "dotctl"
-        print("Installing the NixOS-WSL boot generation with the shared-store environment ...")
-        result = subprocess.run([str(dotctl), "apply", "nixos-wsl"], check=False)
+        profile = "ubuntu-wsl" if os.environ.get("WSL_DISTRO_NAME") == "Ubuntu-26.04" else "nixos-wsl"
+        print(f"Applying the {profile} profile with the shared-store environment ...")
+        result = subprocess.run([str(dotctl), "apply", profile], check=False)
         if result.returncode != 0:
             print(
-                "The data migration succeeded, but the NixOS generation failed to install. "
-                "Run: dotctl apply nixos-wsl",
+                f"The data migration succeeded, but the {profile} profile failed to apply. "
+                f"Run: dotctl apply {profile}",
                 file=sys.stderr,
             )
             return result.returncode
 
-    print("Cutover is complete. Restart NixOS WSL before opening either client:")
-    print("  wsl.exe -t NixOS")
-    print("After restart, use one active writer at a time and run: dotctl codex-share doctor")
+    print("Cutover is complete. Use one active writer at a time and run: dotctl codex-share doctor")
     return 0
 
 

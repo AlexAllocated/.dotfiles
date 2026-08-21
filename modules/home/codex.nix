@@ -52,7 +52,7 @@ in
           pkgs.bun
           pkgs.nodejs
         ]
-      else if cfg.profile == "nixos-wsl" then
+      else if cfg.isWsl then
         [
           wslCodex
           pkgs.bun
@@ -62,18 +62,12 @@ in
         toolsets.agent;
 
     home.sessionVariables = lib.mkMerge [
-      (lib.optionalAttrs
-        (builtins.elem cfg.profile [
-          "nixos-wsl"
-          "nixos-desktop"
-        ])
-        {
-          # Keep SQLite on the native Linux filesystem. WSL shares config/auth with
-          # Windows; the native desktop imports a private migration copy at install.
-          CODEX_SQLITE_HOME = "${config.home.homeDirectory}/.codex/sqlite";
-        }
-      )
-      (lib.optionalAttrs (cfg.profile == "nixos-wsl") {
+      (lib.optionalAttrs (cfg.isWsl || cfg.profile == "nixos-desktop") {
+        # Keep SQLite on the native Linux filesystem. WSL shares config/auth with
+        # Windows; the native desktop imports a private migration copy at install.
+        CODEX_SQLITE_HOME = "${config.home.homeDirectory}/.codex/sqlite";
+      })
+      (lib.optionalAttrs cfg.isWsl {
         # SSH logins do not inherit Windows' appended PATH, so discovery via
         # powershell.exe is not reliable there. The first-class WSL profile
         # deliberately uses the same account name on both sides.

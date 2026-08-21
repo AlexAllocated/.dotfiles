@@ -268,6 +268,12 @@
         profile = "linux";
         homeDirectory = "/home/${linuxUser}";
       };
+      ubuntuWslHomeConfiguration = mkHome {
+        user = wslUser;
+        system = "x86_64-linux";
+        profile = "ubuntu-wsl";
+        homeDirectory = "/home/${wslUser}";
+      };
       macosHomeConfiguration = mkHome {
         user = darwinUser;
         system = "aarch64-darwin";
@@ -352,6 +358,7 @@
 
       homeConfigurations = {
         linux = linuxHomeConfiguration;
+        ubuntu-wsl = ubuntuWslHomeConfiguration;
         macos-arm64 = macosHomeConfiguration;
         macos = self.homeConfigurations.macos-arm64;
       };

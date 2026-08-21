@@ -1,7 +1,7 @@
 # Portable personal environments
 
 This repository builds a consistent shell and developer environment across
-NixOS-WSL, generic Linux, and macOS. Nix is the primary configuration engine,
+Ubuntu WSL, generic Linux, NixOS, and macOS. Nix is the primary configuration engine,
 Home Manager provides reusable user-level capabilities, and Homebrew supports
 company-managed Macs where Nix is unavailable.
 
@@ -12,15 +12,15 @@ The final pre-Nix version is preserved by the `pre-nix` tag.
 | Profile         | Configuration owner         | Intended use                                  |
 | --------------- | --------------------------- | --------------------------------------------- |
 | `chev-desktop`  | NixOS + Home Manager        | Native NVIDIA gaming and development desktop  |
-| `nixos-wsl`     | NixOS + Home Manager        | Primary Windows development environment       |
+| `ubuntu-wsl`    | Home Manager                | Primary Windows development environment       |
+| `nixos-wsl`     | NixOS + Home Manager        | Legacy WSL migration source                   |
 | `linux`         | Home Manager                | Ubuntu and other Linux distributions with Nix |
 | `macos-managed` | Homebrew + repository links | Macs where `/nix` cannot be installed         |
 | `macos`         | Home Manager                | Apple Silicon Macs without nix-darwin         |
 | `darwin-macos`  | nix-darwin + Home Manager   | Personally managed Apple Silicon Macs         |
 
-Flake outputs use `wsl`, `linux`, and `macos-arm64` consistently inside their
-respective NixOS, Home Manager, and nix-darwin namespaces. The shorter macOS
-profile names remain as compatibility aliases.
+Flake outputs use `ubuntu-wsl`, `linux`, and `macos-arm64` for Home Manager.
+The shorter macOS profile names remain as compatibility aliases.
 
 `dotctl` detects the normal profile automatically, so routine maintenance is:
 
@@ -42,7 +42,7 @@ change and fetches again. Any late upstream changes are rebased, validated, and
 reapplied before the current branch is pushed. `dotctl update` refreshes pins
 without applying, committing, or pushing them.
 
-On NixOS-WSL, apply and `updoot` also reconcile the latest Windows applications
+On Ubuntu WSL, apply and `updoot` also reconcile the latest Windows applications
 declared in `platforms/windows/winget.json` through WinGet. Neovide, WezTerm,
 1Password, and the Codex desktop app are managed there.
 
@@ -63,26 +63,24 @@ cd ~/.dotfiles
 The first apply prompts for a machine-local Git author name and email. For
 unattended setup, set `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 
-### NixOS-WSL
+### Ubuntu WSL
 
 From an existing WSL distribution:
 
 ```sh
 cd ~/.dotfiles
-./dot-bootstrap nixos-wsl
+./dot-bootstrap ubuntu-wsl
 ```
 
-The bootstrap downloads a pinned NixOS-WSL image, verifies its checksum, and
-installs it beside the existing distribution. Inside the new distribution:
+The bootstrap installs Ubuntu 26.04 beside the existing distribution, creates
+the `alx` account, installs Determinate Nix, and activates standalone Home
+Manager. Subsequent generations apply live:
 
 ```sh
-git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.dotfiles
-cd ~/.dotfiles
-./scripts/dotctl apply nixos-wsl
-wsl.exe -t NixOS
+dotctl apply ubuntu-wsl
 ```
 
-After reopening NixOS, run `dotctl doctor`. See
+Run `dotctl doctor` afterward. See
 [`docs/nix-wsl-rollout.md`](docs/nix-wsl-rollout.md) for Windows links and the
 optional shared Codex conversation migration.
 
@@ -254,7 +252,7 @@ Checks cover Nix formatting and evaluation, ShellCheck, Bash syntax, Lua syntax,
 Stylua, Python compilation, the public Home Manager module API, and container
 smoke tests in CI.
 
-The NixOS-WSL profile also reconciles the Windows side of the workstation. It
+The Ubuntu-WSL profile also reconciles the Windows side of the workstation. It
 installs or updates WezTerm, Neovide, and the official ChatGPT/Codex desktop app
 through WinGet; installs the locked BigBlueTerm Nerd Font; deploys Neovide
 settings; maintains WSL-backed application links; and registers terminal
@@ -265,7 +263,7 @@ Existing Windows files are backed up before replacement. The link reconciler
 can still be run directly for troubleshooting:
 
 ```powershell
-pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName NixOS
+pwsh ./scripts/windows/apply-wsl-links.ps1 -DistroName Ubuntu-26.04
 ```
 
 Codex CLI and desktop share the Windows Codex home while keeping SQLite on WSL

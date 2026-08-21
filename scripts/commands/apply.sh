@@ -61,6 +61,20 @@ apply_profile() {
 			apply_windows_integration "$REPO_ROOT"
 			printf 'NixOS-WSL generation installed. Restart with: wsl.exe -t NixOS\n'
 			;;
+		ubuntu-wsl)
+			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
+			require_command nix
+			if command_exists home-manager; then
+				home-manager switch -b hm-backup --flake "$flake_ref"
+			else
+				local activation
+				activation="$(nix build "path:$source_root#homeConfigurations.ubuntu-wsl.activationPackage" --no-link --print-out-paths)"
+				"$activation/activate"
+			fi
+			apply_windows_packages "$source_root"
+			apply_windows_integration "$REPO_ROOT"
+			printf 'Ubuntu-WSL Home Manager generation activated live.\n'
+			;;
 		darwin-macos)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command darwin-rebuild
