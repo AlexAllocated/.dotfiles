@@ -10,6 +10,7 @@ codex_snapshot="$state_root/codex-sqlite"
 manifest_path="$state_root/source-paths.txt"
 migration_authorized_keys=/etc/ssh/dotfiles-wsl-migration-authorized_keys
 migration_sshd_config=/etc/ssh/sshd_config.d/10-dotfiles-wsl-migration.conf
+target_keepalive_pid=
 
 [[ "${WSL_DISTRO_NAME:-}" == "NixOS" ]] || {
 	printf 'Run this helper from the source NixOS WSL distro.\n' >&2
@@ -89,6 +90,10 @@ cleanup_migration_access() {
 	wsl.exe --distribution "$target_distro" --user root --exec /bin/bash -lc \
 		"rm -f '$migration_authorized_keys' '$migration_sshd_config'; systemctl reload ssh.service || systemctl restart ssh.service" \
 		>/dev/null 2>&1 || true
+	if [[ -n "$target_keepalive_pid" ]]; then
+		kill "$target_keepalive_pid" 2>/dev/null || true
+		wait "$target_keepalive_pid" 2>/dev/null || true
+	fi
 	rm -f "$key_path" "$key_path.pub"
 }
 trap cleanup_migration_access EXIT
@@ -96,6 +101,9 @@ trap cleanup_migration_access EXIT
 wsl.exe --distribution "$target_distro" --user root --exec /bin/bash -lc \
 	"install -d -m 0755 /etc/ssh/sshd_config.d; printf '%s\\n' '$public_key' >'$migration_authorized_keys'; chmod 0644 '$migration_authorized_keys'; printf '%s\\n' 'AuthorizedKeysFile .ssh/authorized_keys $migration_authorized_keys' >'$migration_sshd_config'; systemctl restart ssh.service" \
 	>/dev/null
+wsl.exe --distribution "$target_distro" --user "$target_user" --exec /bin/sleep infinity \
+	>/dev/null 2>&1 &
+target_keepalive_pid=$!
 
 target_ip="$(
 	wsl.exe --distribution "$target_distro" --user root --exec /bin/hostname -I \
