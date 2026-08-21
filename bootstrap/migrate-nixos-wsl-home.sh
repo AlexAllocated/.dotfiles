@@ -94,7 +94,7 @@ cleanup_migration_access() {
 trap cleanup_migration_access EXIT
 
 wsl.exe --distribution "$target_distro" --user root --exec /bin/bash -lc \
-	"install -d -m 0755 /etc/ssh/sshd_config.d; printf '%s\\n' '$public_key' >'$migration_authorized_keys'; chmod 0600 '$migration_authorized_keys'; printf '%s\\n' 'AuthorizedKeysFile .ssh/authorized_keys $migration_authorized_keys' >'$migration_sshd_config'; systemctl restart ssh.service" \
+	"install -d -m 0755 /etc/ssh/sshd_config.d; printf '%s\\n' '$public_key' >'$migration_authorized_keys'; chmod 0644 '$migration_authorized_keys'; printf '%s\\n' 'AuthorizedKeysFile .ssh/authorized_keys $migration_authorized_keys' >'$migration_sshd_config'; systemctl restart ssh.service" \
 	>/dev/null
 
 target_ip="$(
