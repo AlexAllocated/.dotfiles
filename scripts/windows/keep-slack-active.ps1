@@ -91,7 +91,14 @@ function Install-PresenceTask {
 		$existingTask.Actions.Count -eq 1 -and
 		$existingTask.Actions[0].Execute -ieq $PowerShell -and
 		$existingTask.Actions[0].Arguments -eq $actionArguments -and
-		$existingTask.Principal.RunLevel.ToString() -eq "Limited"
+		$existingTask.Principal.RunLevel.ToString() -eq "Limited" -and
+		$existingTask.Triggers.Count -eq 1 -and
+		$existingTask.Triggers[0].CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and
+		$existingTask.Settings.ExecutionTimeLimit -eq "PT0S" -and
+		$existingTask.Settings.MultipleInstances.ToString() -eq "IgnoreNew" -and
+		$existingTask.Settings.RestartCount -eq 3 -and
+		$existingTask.Settings.RestartInterval -eq "PT1M" -and
+		$existingTask.Settings.StartWhenAvailable -eq $true
 	) {
 		if ($existingTask.State.ToString() -ne "Running") {
 			Start-ScheduledTask -TaskName $TaskName

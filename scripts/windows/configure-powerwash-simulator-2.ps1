@@ -123,6 +123,15 @@ function Build-HiddenLauncher {
 	if (-not (Test-Path -LiteralPath $SourcePath)) {
 		throw "The PowerWash hidden-launcher source is missing: $SourcePath"
 	}
+	$stampPath = "$DestinationPath.source.sha256"
+	$sourceHash = (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash
+	if (
+		(Test-Path -LiteralPath $DestinationPath -PathType Leaf) -and
+		(Test-Path -LiteralPath $stampPath -PathType Leaf) -and
+		(Get-Content -LiteralPath $stampPath -Raw).Trim() -eq $sourceHash
+	) {
+		return $false
+	}
 
 	$temporaryLauncher = "$DestinationPath.build.exe"
 	Remove-Item -LiteralPath $temporaryLauncher -Force -ErrorAction SilentlyContinue
@@ -133,6 +142,8 @@ function Build-HiddenLauncher {
 	[void]$compilerParameters.ReferencedAssemblies.Add("System.dll")
 	Add-Type -Path $SourcePath -CompilerParameters $compilerParameters
 	Move-Item -LiteralPath $temporaryLauncher -Destination $DestinationPath -Force
+	Set-Content -LiteralPath $stampPath -Value $sourceHash -Encoding ASCII
+	return $true
 }
 
 function Set-SteamLaunchOptions {
@@ -266,6 +277,9 @@ function Set-PowerWashPreferences {
 	$settings.Resolution = "$TargetWidth x $TargetHeight"
 	$settings.WindowMode = $WindowMode
 	$updatedJson = $settings | ConvertTo-Json -Compress -Depth 100
+	if ($updatedJson -eq $json) {
+		return $false
+	}
 	$updatedPayload = [Text.Encoding]::UTF8.GetBytes($updatedJson)
 	$updatedLength = ConvertTo-7BitEncodedInteger -Value $updatedPayload.Length
 
@@ -285,6 +299,7 @@ function Set-PowerWashPreferences {
 	} finally {
 		Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
 	}
+	return $true
 }
 
 function Set-UnityDisplayPreferences {
@@ -306,7 +321,10 @@ function Set-UnityDisplayPreferences {
 		"Screenmanager Window Position Y_h4088080502" = $WindowY
 	}
 	foreach ($entry in $playerPrefs.GetEnumerator()) {
-		Set-ItemProperty -Path $playerPrefsPath -Name $entry.Key -Type DWord -Value $entry.Value
+		$current = Get-ItemPropertyValue -Path $playerPrefsPath -Name $entry.Key -ErrorAction SilentlyContinue
+		if ($current -ne $entry.Value) {
+			Set-ItemProperty -Path $playerPrefsPath -Name $entry.Key -Type DWord -Value $entry.Value
+		}
 	}
 }
 
@@ -396,11 +414,22 @@ if (-not (Test-Path -LiteralPath $backupPath)) {
 $launcherDirectory = Split-Path -Parent $launcherPath
 New-Item -ItemType Directory -Path $launcherDirectory -Force | Out-Null
 if (([IO.Path]::GetFullPath($PSCommandPath)) -ne ([IO.Path]::GetFullPath($launcherPath))) {
-	Copy-Item -LiteralPath $PSCommandPath -Destination $launcherPath -Force
+	if (
+		-not (Test-Path -LiteralPath $launcherPath -PathType Leaf) -or
+		(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash -ne
+			(Get-FileHash -LiteralPath $launcherPath -Algorithm SHA256).Hash
+	) {
+		Copy-Item -LiteralPath $PSCommandPath -Destination $launcherPath -Force
+	}
 }
-Build-HiddenLauncher `
+$launcherChanged = Build-HiddenLauncher `
 	-SourcePath $hiddenLauncherSourcePath `
 	-DestinationPath $hiddenLauncherPath
+if ($launcherChanged) {
+	Write-Host "Updated the PowerWash Simulator 2 adaptive launcher."
+} else {
+	Write-Host "PowerWash Simulator 2 adaptive launcher is current."
+}
 
 $steamRunning = [bool](Get-Process -Name "steam" -ErrorAction SilentlyContinue)
 if ($steamRunning) {

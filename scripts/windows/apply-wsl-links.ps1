@@ -10,6 +10,24 @@ trap {
    exit 1
 }
 
+$script:AssociationChangeCount = 0
+
+function Copy-FileIfChanged {
+   param(
+      [Parameter(Mandatory = $true)][string]$Source,
+      [Parameter(Mandatory = $true)][string]$Destination
+   )
+   if (
+      (Test-Path -LiteralPath $Destination -PathType Leaf) -and
+      (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash -eq
+         (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash
+   ) {
+      return $false
+   }
+   Copy-Item -LiteralPath $Source -Destination $Destination -Force
+   return $true
+}
+
 function Normalize-WslTarget {
    param([string]$RelativePath)
    $relative = $RelativePath -replace "/", "\"
@@ -91,14 +109,49 @@ function Set-RegistryString {
       [string]$Value
    )
 
-   if (-not (Test-Path -LiteralPath $Path)) {
+   $pathExists = Test-Path -LiteralPath $Path
+   if (-not $pathExists) {
       New-Item -Path $Path -Force | Out-Null
+   }
+   $current = if ($Name) {
+      Get-ItemPropertyValue -Path $Path -Name $Name -ErrorAction SilentlyContinue
+   } else {
+      (Get-Item -LiteralPath $Path).GetValue("")
+   }
+   if ($pathExists -and $current -ceq $Value) {
+      return
    }
    if ($Name) {
       Set-ItemProperty -Path $Path -Name $Name -Value $Value
    } else {
       Set-Item -Path $Path -Value $Value
    }
+   $script:AssociationChangeCount++
+}
+
+function Set-RegistryKeyValue {
+   param(
+      [Parameter(Mandatory = $true)]$Key,
+      [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Name,
+      [Parameter(Mandatory = $true)]$Value,
+      [Microsoft.Win32.RegistryValueKind]$Kind = [Microsoft.Win32.RegistryValueKind]::String
+   )
+
+   $exists = $Key.GetValueNames() -contains $Name
+   if ($exists) {
+      $current = $Key.GetValue($Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+      $equal = if ($current -is [byte[]] -and $Value -is [byte[]]) {
+         [Convert]::ToBase64String($current) -ceq [Convert]::ToBase64String($Value)
+      } else {
+         $current -ceq $Value
+      }
+      if ($equal) {
+         return $false
+      }
+   }
+   $Key.SetValue($Name, $Value, $Kind)
+   $script:AssociationChangeCount++
+   return $true
 }
 
 function Convert-PngToIco {
@@ -208,6 +261,16 @@ function Build-NvimLauncher {
    $iconPngPath = Join-Path $DestinationDirectory "Neovim.png"
    $launcherPath = Join-Path $DestinationDirectory "NvimWSL.exe"
    $temporaryLauncher = Join-Path $DestinationDirectory "NvimWSL.build.exe"
+   $sourceStamp = Join-Path $DestinationDirectory "NvimWSL.source.sha256"
+   $sourceHash = (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash
+   if (
+      (Test-Path -LiteralPath $launcherPath -PathType Leaf) -and
+      (Test-Path -LiteralPath $iconPath -PathType Leaf) -and
+      (Test-Path -LiteralPath $sourceStamp -PathType Leaf) -and
+      (Get-Content -LiteralPath $sourceStamp -Raw).Trim() -eq $sourceHash
+   ) {
+      return $launcherPath
+   }
 
    Add-Type -AssemblyName System.Drawing
    # Official Neovim runtime icon:
@@ -236,6 +299,7 @@ function Build-NvimLauncher {
    $compilerParameters.ReferencedAssemblies.Add("System.dll") | Out-Null
    Add-Type -Path $SourcePath -CompilerParameters $compilerParameters
    Move-Item -LiteralPath $temporaryLauncher -Destination $launcherPath -Force
+   Set-Content -LiteralPath $sourceStamp -Value $sourceHash -Encoding ASCII
    return $launcherPath
 }
 
@@ -252,6 +316,7 @@ function Register-TextEditorOpenWith {
       [string]$ContextMenuVerb
    )
 
+   $changeCountBefore = $script:AssociationChangeCount
    $classes = "HKCU:\Software\Classes"
    $progIdPath = Join-Path $classes $ProgId
 
@@ -274,11 +339,11 @@ function Register-TextEditorOpenWith {
 
    $contextMenu = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\*\shell\$ContextMenuName")
    try {
-      $contextMenu.SetValue("MUIVerb", $ContextMenuVerb)
-      $contextMenu.SetValue("Icon", "$IconPath,0")
+      $null = Set-RegistryKeyValue -Key $contextMenu -Name "MUIVerb" -Value $ContextMenuVerb
+      $null = Set-RegistryKeyValue -Key $contextMenu -Name "Icon" -Value "$IconPath,0"
       $contextCommand = $contextMenu.CreateSubKey("command")
       try {
-         $contextCommand.SetValue("", $Command)
+         $null = Set-RegistryKeyValue -Key $contextCommand -Name "" -Value $Command
       } finally {
          $contextCommand.Dispose()
       }
@@ -305,7 +370,11 @@ function Register-TextEditorOpenWith {
       $subKey = "Software\Classes\$extension\OpenWithProgids"
       $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($subKey)
       try {
-         $key.SetValue($ProgId, (New-Object byte[] 0), [Microsoft.Win32.RegistryValueKind]::None)
+         $null = Set-RegistryKeyValue `
+            -Key $key `
+            -Name $ProgId `
+            -Value (New-Object byte[] 0) `
+            -Kind ([Microsoft.Win32.RegistryValueKind]::None)
       } finally {
          $key.Dispose()
       }
@@ -315,7 +384,10 @@ function Register-TextEditorOpenWith {
       Set-RegistryString (Join-Path $applicationRegistryPath "SupportedTypes") $extension ""
    }
 
-   if (-not ([System.Management.Automation.PSTypeName]"Dotfiles.AssociationNotifier").Type) {
+   if (
+      $script:AssociationChangeCount -gt $changeCountBefore -and
+      -not ([System.Management.Automation.PSTypeName]"Dotfiles.AssociationNotifier").Type
+   ) {
       Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -327,10 +399,13 @@ namespace Dotfiles {
 }
 '@
    }
-   [Dotfiles.AssociationNotifier]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
-   & "$env:SystemRoot\System32\ie4uinit.exe" -show
-
-   Write-Host "Registered $Label for $($textExtensions.Count) text-oriented file extensions."
+   if ($script:AssociationChangeCount -gt $changeCountBefore) {
+      [Dotfiles.AssociationNotifier]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+      & "$env:SystemRoot\System32\ie4uinit.exe" -show
+      Write-Host "Updated $Label registration for $($textExtensions.Count) text-oriented file extensions."
+   } else {
+      Write-Host "$Label registration is current."
+   }
 }
 
 if (-not $LinuxHome) {
@@ -350,7 +425,7 @@ Set-Symlink "whkd config" (Join-Path $env:USERPROFILE ".config\whkdrc") (Normali
 $launcherDirectory = Join-Path $env:LOCALAPPDATA "NvimWSL"
 New-Item -ItemType Directory -Force -Path $launcherDirectory | Out-Null
 $launcherScript = Join-Path $launcherDirectory "open-in-nvim.ps1"
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot "open-in-nvim.ps1") -Destination $launcherScript -Force
+$null = Copy-FileIfChanged -Source (Join-Path $PSScriptRoot "open-in-nvim.ps1") -Destination $launcherScript
 $launcherPath = Build-NvimLauncher `
    (Join-Path $PSScriptRoot "NvimWSL.cs") `
    $launcherDirectory
@@ -375,10 +450,9 @@ if (-not (Test-Path -LiteralPath $neovide)) {
 }
 $neovideLauncherDirectory = Join-Path $env:LOCALAPPDATA "NeovideWSL"
 New-Item -ItemType Directory -Force -Path $neovideLauncherDirectory | Out-Null
-Copy-Item `
-   -LiteralPath (Join-Path $PSScriptRoot "open-in-neovide.ps1") `
-   -Destination (Join-Path $neovideLauncherDirectory "open-in-neovide.ps1") `
-   -Force
+$null = Copy-FileIfChanged `
+   -Source (Join-Path $PSScriptRoot "open-in-neovide.ps1") `
+   -Destination (Join-Path $neovideLauncherDirectory "open-in-neovide.ps1")
 $neovideCommand = '"{0}" --wsl "%1"' -f $neovide
 Register-TextEditorOpenWith `
    -ProgId "NeovideWSL.Text" `

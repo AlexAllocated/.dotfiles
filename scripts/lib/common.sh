@@ -11,6 +11,17 @@ require_command() {
 	fi
 }
 
+copy_if_changed() {
+	local source="$1"
+	local destination="$2"
+	mkdir -p "$(dirname "$destination")"
+	if [[ -f "$destination" ]] && cmp -s "$source" "$destination"; then
+		return 0
+	fi
+	cp "$source" "$destination"
+	printf 'Updated Windows integration file: %s\n' "$destination"
+}
+
 apply_windows_packages() {
 	local source_root="${1:-$REPO_ROOT}"
 	local script manifest neovide_config script_windows manifest_windows roaming_windows roaming_linux neovide_target
@@ -111,7 +122,9 @@ apply_windows_integration() {
 		-FontDirectory "$font_directory_windows"
 	mkdir -p "$(dirname "$audioarray_workspace")"
 	if [[ -L "$audioarray_workspace" ]]; then
-		ln -sfn "$audioarray_source" "$audioarray_workspace"
+		if [[ "$(readlink "$audioarray_workspace")" != "$audioarray_source" ]]; then
+			ln -sfn "$audioarray_source" "$audioarray_workspace"
+		fi
 	elif [[ -e "$audioarray_workspace" ]]; then
 		printf 'Refusing to replace existing AudioArray workspace: %s\n' "$audioarray_workspace" >&2
 		return 1
@@ -141,21 +154,18 @@ apply_windows_integration() {
 	windows_home_linux="$(wslpath -u "$windows_home")"
 	local_appdata_linux="$(wslpath -u "$local_appdata")"
 	vdd_settings_target="$local_appdata_linux/dotfiles/virtual-display/vdd_settings.xml"
-	mkdir -p "$(dirname "$vdd_settings_target")"
-	cp "$vdd_settings" "$vdd_settings_target"
-	cp "$sunshine_session" "$local_appdata_linux/dotfiles/set-sunshine-display-session.ps1"
+	copy_if_changed "$vdd_settings" "$vdd_settings_target"
+	copy_if_changed "$sunshine_session" "$local_appdata_linux/dotfiles/set-sunshine-display-session.ps1"
 	neovide_windows="$program_files\\Neovide\\neovide.exe"
 	[[ -f "$(wslpath -u "$neovide_windows")" ]] || {
 		printf 'Neovide executable not found after Windows package reconciliation: %s\n' "$neovide_windows" >&2
 		return 1
 	}
-	mkdir -p "$local_appdata_linux/NvimWSL" "$local_appdata_linux/NeovideWSL"
-	cp "$source_root/scripts/windows/open-in-nvim.ps1" "$local_appdata_linux/NvimWSL/open-in-nvim.ps1"
-	cp "$source_root/scripts/windows/open-in-neovide.ps1" "$local_appdata_linux/NeovideWSL/open-in-neovide.ps1"
+	copy_if_changed "$source_root/scripts/windows/open-in-nvim.ps1" "$local_appdata_linux/NvimWSL/open-in-nvim.ps1"
+	copy_if_changed "$source_root/scripts/windows/open-in-neovide.ps1" "$local_appdata_linux/NeovideWSL/open-in-neovide.ps1"
 	ssh_forwarder_target="$local_appdata_linux/dotfiles/apply-wsl-ssh-forward.ps1"
 	ssh_forwarder_target_windows="$local_appdata\\dotfiles\\apply-wsl-ssh-forward.ps1"
-	mkdir -p "$(dirname "$ssh_forwarder_target")"
-	cp "$ssh_forwarder" "$ssh_forwarder_target"
+	copy_if_changed "$ssh_forwarder" "$ssh_forwarder_target"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ssh_forwarder_target_windows" \
 		-Mode Ensure -DistroName "$WSL_DISTRO_NAME"
 	# The single-quoted expression is evaluated by PowerShell, not Bash.
@@ -173,21 +183,20 @@ apply_windows_integration() {
 		lg_display_target_windows="$local_appdata\\dotfiles\\configure-lg-display.ps1"
 		wallpaper_directory="$local_appdata_linux/dotfiles/wallpapers"
 		wallpaper_directory_windows="$local_appdata\\dotfiles\\wallpapers"
-		cp "$quest_hotspot" "$quest_hotspot_target"
-		cp "$always_on" "$always_on_target"
-		cp "$slack_presence" "$slack_presence_target"
-		cp "$wallpaper_configurator" "$wallpaper_configurator_target"
-		cp "$lg_display" "$lg_display_target"
-		cp "$minecraft_vr" "$local_appdata_linux/dotfiles/configure-minecraft-vr.ps1"
-		cp "$minecraft_desktop" "$local_appdata_linux/dotfiles/configure-minecraft-desktop.ps1"
-		cp "$minecraft_graphics" "$local_appdata_linux/dotfiles/minecraft-graphics-assets.ps1"
+		copy_if_changed "$quest_hotspot" "$quest_hotspot_target"
+		copy_if_changed "$always_on" "$always_on_target"
+		copy_if_changed "$slack_presence" "$slack_presence_target"
+		copy_if_changed "$wallpaper_configurator" "$wallpaper_configurator_target"
+		copy_if_changed "$lg_display" "$lg_display_target"
+		copy_if_changed "$minecraft_vr" "$local_appdata_linux/dotfiles/configure-minecraft-vr.ps1"
+		copy_if_changed "$minecraft_desktop" "$local_appdata_linux/dotfiles/configure-minecraft-desktop.ps1"
+		copy_if_changed "$minecraft_graphics" "$local_appdata_linux/dotfiles/minecraft-graphics-assets.ps1"
 		powerwash_configurator_target="$local_appdata_linux/dotfiles/configure-powerwash-simulator-2.ps1"
 		powerwash_configurator_target_windows="$local_appdata\\dotfiles\\configure-powerwash-simulator-2.ps1"
-		cp "$powerwash_configurator" "$powerwash_configurator_target"
-		cp "$powerwash_launcher" "$local_appdata_linux/dotfiles/PowerWashLauncher.cs"
-		mkdir -p "$wallpaper_directory"
-		cp "$wallpaper_ultrawide" "$wallpaper_directory/pixel-meadow-hive-3440x1440.png"
-		cp "$wallpaper_ipad" "$wallpaper_directory/pixel-meadow-hive-2732x2048.png"
+		copy_if_changed "$powerwash_configurator" "$powerwash_configurator_target"
+		copy_if_changed "$powerwash_launcher" "$local_appdata_linux/dotfiles/PowerWashLauncher.cs"
+		copy_if_changed "$wallpaper_ultrawide" "$wallpaper_directory/pixel-meadow-hive-3440x1440.png"
+		copy_if_changed "$wallpaper_ipad" "$wallpaper_directory/pixel-meadow-hive-2732x2048.png"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$quest_hotspot_target_windows" -Mode Ensure
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$lg_display_target_windows"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$wallpaper_configurator_target_windows" \

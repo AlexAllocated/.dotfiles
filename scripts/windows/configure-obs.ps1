@@ -25,6 +25,39 @@ $wallpaperTarget = Join-Path $assetRoot "pixel-meadow-hive-2560x1440.png"
 $audioArrayExecutable = Join-Path $env:LOCALAPPDATA "AudioArray\bin\audioarray.exe"
 $audioArrayConfig = Join-Path $env:APPDATA "AudioArray\config.toml"
 
+function Test-FileEqual {
+   param(
+      [Parameter(Mandatory = $true)][string]$Source,
+      [Parameter(Mandatory = $true)][string]$Destination
+   )
+   return (
+      (Test-Path -LiteralPath $Destination -PathType Leaf) -and
+      (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash -eq
+         (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash
+   )
+}
+
+function Set-TextFileIfChanged {
+   param(
+      [Parameter(Mandatory = $true)][string]$Path,
+      [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Content
+   )
+   $current = if (Test-Path -LiteralPath $Path -PathType Leaf) {
+      [IO.File]::ReadAllText($Path)
+   } else {
+      $null
+   }
+   if ($current -ceq $Content) {
+      return $false
+   }
+   $parent = Split-Path -Parent $Path
+   if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+      New-Item -ItemType Directory -Path $parent -Force | Out-Null
+   }
+   [IO.File]::WriteAllText($Path, $Content, [Text.UTF8Encoding]::new($false))
+   return $true
+}
+
 function Set-IniValue {
    param(
       [Parameter(Mandatory = $true)]
@@ -41,6 +74,7 @@ function Set-IniValue {
    )
 
    $lines = [Collections.Generic.List[string]]::new()
+   $changed = $false
    if (Test-Path -LiteralPath $Path) {
       foreach ($line in Get-Content -LiteralPath $Path) {
          $lines.Add([string]$line)
@@ -61,6 +95,7 @@ function Set-IniValue {
       }
       $lines.Add("[$Section]")
       $lines.Add("$Name=$Value")
+      $changed = $true
    } else {
       $nextSectionIndex = $lines.Count
       for ($index = $sectionIndex + 1; $index -lt $lines.Count; $index++) {
@@ -78,13 +113,20 @@ function Set-IniValue {
          }
       }
       if ($keyIndex -ge 0) {
-         $lines[$keyIndex] = "$Name=$Value"
+         $desired = "$Name=$Value"
+         if ($lines[$keyIndex] -ne $desired) {
+            $lines[$keyIndex] = $desired
+            $changed = $true
+         }
       } else {
          $lines.Insert($nextSectionIndex, "$Name=$Value")
+         $changed = $true
       }
    }
 
-   Set-Content -LiteralPath $Path -Value $lines -Encoding UTF8
+   if ($changed) {
+      Set-Content -LiteralPath $Path -Value $lines -Encoding UTF8
+   }
 }
 
 if (-not (Test-Path -LiteralPath $WallpaperPath -PathType Leaf)) {
@@ -130,7 +172,9 @@ if (-not $pluginCurrent) {
 }
 
 New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
-Copy-Item -LiteralPath $WallpaperPath -Destination $wallpaperTarget -Force
+if (-not (Test-FileEqual -Source $WallpaperPath -Destination $wallpaperTarget)) {
+   Copy-Item -LiteralPath $WallpaperPath -Destination $wallpaperTarget -Force
+}
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE "Videos\OBS") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE "Videos\OBS Clean") -Force | Out-Null
 
@@ -141,9 +185,10 @@ $dockSettings = [ordered]@{
 }
 $globalPluginRoot = Join-Path $obsRoot "plugin_config\osi-branch-output"
 New-Item -ItemType Directory -Path $globalPluginRoot -Force | Out-Null
-$dockSettings | ConvertTo-Json | Set-Content `
-   -LiteralPath (Join-Path $globalPluginRoot "outputStatusDock.json") `
-   -Encoding UTF8
+$dockJson = $dockSettings | ConvertTo-Json
+$null = Set-TextFileIfChanged `
+   -Path (Join-Path $globalPluginRoot "outputStatusDock.json") `
+   -Content $dockJson
 
 New-Item -ItemType Directory -Path $profileRoot -Force | Out-Null
 if (-not (Test-Path -LiteralPath $profileConfig)) {
@@ -225,15 +270,15 @@ $recordEncoder = [ordered]@{
    rate_control = "CQP"
    tune = "hq"
 }
-$streamEncoder | ConvertTo-Json | Set-Content `
-   -LiteralPath (Join-Path $profileRoot "streamEncoder.json") `
-   -Encoding UTF8
-$recordEncoder | ConvertTo-Json | Set-Content `
-   -LiteralPath (Join-Path $profileRoot "recordEncoder.json") `
-   -Encoding UTF8
-$dockSettings | ConvertTo-Json | Set-Content `
-   -LiteralPath (Join-Path $profileRoot "outputStatusDock.json") `
-   -Encoding UTF8
+$null = Set-TextFileIfChanged `
+   -Path (Join-Path $profileRoot "streamEncoder.json") `
+   -Content ($streamEncoder | ConvertTo-Json)
+$null = Set-TextFileIfChanged `
+   -Path (Join-Path $profileRoot "recordEncoder.json") `
+   -Content ($recordEncoder | ConvertTo-Json)
+$null = Set-TextFileIfChanged `
+   -Path (Join-Path $profileRoot "outputStatusDock.json") `
+   -Content $dockJson
 
 # Scene composition and the tokenized Bumblebee URL remain OBS-owned mutable
 # state. The public repository installs the exact plugin, asset, profile, and
@@ -393,8 +438,14 @@ if (
             }
          }
          Set-CleanRecordingAudioTracks -SceneCollection $scene
-         $scene | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $sceneCollection -Encoding UTF8
-         Write-Host "Configured OBS stream mix and five-track clean recording."
+         $sceneChanged = Set-TextFileIfChanged `
+            -Path $sceneCollection `
+            -Content ($scene | ConvertTo-Json -Depth 100)
+         if ($sceneChanged) {
+            Write-Host "Configured OBS stream mix and five-track clean recording."
+         } else {
+            Write-Host "OBS stream mix and five-track clean recording are current."
+         }
       }
    } else {
       Write-Warning "AudioArray VAC endpoints are not ready; leaving the OBS scene collection unchanged."

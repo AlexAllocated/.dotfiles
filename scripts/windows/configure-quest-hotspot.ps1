@@ -370,12 +370,8 @@ function New-EventTrigger {
    return $trigger
 }
 
-function Install-HotspotTask {
-   Install-VrRadioDriver
-   Set-VrRadioPerformancePolicy
-
-   $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-   $actionArguments = @(
+function Get-HotspotTaskActionArguments {
+   return @(
       "-NoLogo",
       "-NoProfile",
       "-WindowStyle", "Hidden",
@@ -386,27 +382,62 @@ function Install-HotspotTask {
       "-Band", $Band,
       "-Authentication", $Authentication
    ) -join " "
-   $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
-   $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
-   $eventTrigger = New-EventTrigger
-   $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
-   $settings = New-ScheduledTaskSettingsSet `
-      -AllowStartIfOnBatteries `
-      -DontStopIfGoingOnBatteries `
-      -ExecutionTimeLimit ([TimeSpan]::FromMinutes(2)) `
-      -MultipleInstances IgnoreNew `
-      -StartWhenAvailable
+}
 
-   Register-ScheduledTask `
-      -TaskName $TaskName `
-      -Description "Keep Tracer's dedicated 5 GHz Quest VR Mobile Hotspot available without polling." `
-      -Action $action `
-      -Trigger @($logonTrigger, $eventTrigger) `
-      -Principal $principal `
-      -Settings $settings `
-      -Force | Out-Null
+function Test-HotspotTaskCurrent {
+   param([Parameter(Mandatory = $true)][string]$ActionArguments)
+
+   $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+   return [bool](
+      $task -and
+      $task.Actions.Count -eq 1 -and
+      $task.Actions[0].Execute -ieq $PowerShell -and
+      $task.Actions[0].Arguments -eq $ActionArguments -and
+      $task.Triggers.Count -eq 2 -and
+      @($task.Triggers | Where-Object {
+         $_.CimClass.CimClassName -eq "MSFT_TaskLogonTrigger"
+      }).Count -eq 1 -and
+      @($task.Triggers | Where-Object {
+         $_.CimClass.CimClassName -eq "MSFT_TaskEventTrigger"
+      }).Count -eq 1 -and
+      $task.Principal.RunLevel.ToString() -eq "Limited" -and
+      $task.Settings.ExecutionTimeLimit -eq "PT2M" -and
+      $task.Settings.MultipleInstances.ToString() -eq "IgnoreNew" -and
+      $task.Settings.StartWhenAvailable -eq $true
+   )
+}
+
+function Install-HotspotTask {
+   Install-VrRadioDriver
+   Set-VrRadioPerformancePolicy
+
+   $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+   $actionArguments = Get-HotspotTaskActionArguments
+   if (-not (Test-HotspotTaskCurrent -ActionArguments $actionArguments)) {
+      $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
+      $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
+      $eventTrigger = New-EventTrigger
+      $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
+      $settings = New-ScheduledTaskSettingsSet `
+         -AllowStartIfOnBatteries `
+         -DontStopIfGoingOnBatteries `
+         -ExecutionTimeLimit ([TimeSpan]::FromMinutes(2)) `
+         -MultipleInstances IgnoreNew `
+         -StartWhenAvailable
+
+      Register-ScheduledTask `
+         -TaskName $TaskName `
+         -Description "Keep Tracer's dedicated 5 GHz Quest VR Mobile Hotspot available without polling." `
+         -Action $action `
+         -Trigger @($logonTrigger, $eventTrigger) `
+         -Principal $principal `
+         -Settings $settings `
+         -Force | Out-Null
+      Write-Host "Installed the event-driven '$TaskName' task."
+   } else {
+      Write-Host "'$TaskName' is current."
+   }
    Start-Hotspot
-   Write-Host "Installed the event-driven '$TaskName' task."
 }
 
 function Remove-HotspotTask {

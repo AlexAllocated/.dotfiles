@@ -22,13 +22,14 @@ function Invoke-PowerCfg {
 
 function Test-PowerSettingZero {
 	param(
+		[string]$Scheme = "SCHEME_CURRENT",
 		[Parameter(Mandatory = $true)][string]$Subgroup,
 		[Parameter(Mandatory = $true)][string]$Setting,
 		[switch]$IncludeHidden
 	)
 
 	$verb = if ($IncludeHidden) { "/qh" } else { "/query" }
-	$output = @(& powercfg.exe $verb SCHEME_CURRENT $Subgroup $Setting)
+	$output = @(& powercfg.exe $verb $Scheme $Subgroup $Setting)
 	if ($LASTEXITCODE -ne 0) {
 		return $false
 	}
@@ -39,16 +40,30 @@ function Test-PowerSettingZero {
 }
 
 function Test-MachinePolicyCurrent {
+	$settings = @(
+		@{ Subgroup = "SUB_VIDEO"; Setting = "VIDEOIDLE"; IncludeHidden = $false },
+		@{ Subgroup = "SUB_DISK"; Setting = "DISKIDLE"; IncludeHidden = $false },
+		@{ Subgroup = "SUB_SLEEP"; Setting = "STANDBYIDLE"; IncludeHidden = $false },
+		@{ Subgroup = "SUB_SLEEP"; Setting = "HIBERNATEIDLE"; IncludeHidden = $false },
+		@{ Subgroup = "SUB_SLEEP"; Setting = "HYBRIDSLEEP"; IncludeHidden = $false },
+		@{
+			Subgroup = "SUB_SLEEP"
+			Setting = "7bc4a2f9-d8fc-4469-b07b-33eb785aaca0"
+			IncludeHidden = $true
+		}
+	)
+	foreach ($scheme in @("SCHEME_BALANCED", "SCHEME_MIN", "SCHEME_MAX")) {
+		foreach ($setting in $settings) {
+			if (-not (Test-PowerSettingZero `
+				-Scheme $scheme `
+				-Subgroup $setting.Subgroup `
+				-Setting $setting.Setting `
+				-IncludeHidden:$setting.IncludeHidden)) {
+				return $false
+			}
+		}
+	}
 	return (
-		(Test-PowerSettingZero -Subgroup "SUB_VIDEO" -Setting "VIDEOIDLE") -and
-		(Test-PowerSettingZero -Subgroup "SUB_DISK" -Setting "DISKIDLE") -and
-		(Test-PowerSettingZero -Subgroup "SUB_SLEEP" -Setting "STANDBYIDLE") -and
-		(Test-PowerSettingZero -Subgroup "SUB_SLEEP" -Setting "HIBERNATEIDLE") -and
-		(Test-PowerSettingZero -Subgroup "SUB_SLEEP" -Setting "HYBRIDSLEEP") -and
-		(Test-PowerSettingZero `
-			-Subgroup "SUB_SLEEP" `
-			-Setting "7bc4a2f9-d8fc-4469-b07b-33eb785aaca0" `
-			-IncludeHidden) -and
 		(Get-ItemPropertyValue `
 			-Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" `
 			-Name "HibernateEnabled" `
@@ -130,13 +145,29 @@ function Set-UserPolicy {
 	}
 }
 
-function Install-PolicyTask {
-	if (-not $isAdministrator) {
-		throw "Installing the always-on policy task requires elevation."
+function Test-UserPolicyCurrent {
+	$desktopPolicy = "HKCU:\Control Panel\Desktop"
+	$winlogonPolicy = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
+	$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+	$runProperties = Get-ItemProperty -Path $runKey
+	$slack = Join-Path $env:LOCALAPPDATA "slack\slack.exe"
+	$slackCurrent = $true
+	if (Test-Path -LiteralPath $slack) {
+		$slackCurrent = $runProperties."com.squirrel.slack.slack" -eq ('"{0}" --process-start-args --startup' -f $slack)
 	}
 
-	$identityName = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-	$actionArguments = @(
+	return (
+		(Get-ItemPropertyValue -Path $desktopPolicy -Name ScreenSaveActive -ErrorAction SilentlyContinue) -eq "0" -and
+		(Get-ItemPropertyValue -Path $desktopPolicy -Name ScreenSaveTimeOut -ErrorAction SilentlyContinue) -eq "0" -and
+		(Get-ItemPropertyValue -Path $desktopPolicy -Name ScreenSaverIsSecure -ErrorAction SilentlyContinue) -eq "0" -and
+		(Get-ItemPropertyValue -Path $winlogonPolicy -Name EnableGoodbye -ErrorAction SilentlyContinue) -eq 0 -and
+		@($runProperties.PSObject.Properties | Where-Object Name -Like "MicrosoftEdgeAutoLaunch_*").Count -eq 0 -and
+		$slackCurrent
+	)
+}
+
+function Get-PolicyTaskActionArguments {
+	return @(
 		"-NoLogo",
 		"-NoProfile",
 		"-NonInteractive",
@@ -145,6 +176,32 @@ function Install-PolicyTask {
 		"-File", ('"{0}"' -f $PSCommandPath),
 		"-Mode", "Apply"
 	) -join " "
+}
+
+function Test-PolicyTaskCurrent {
+	$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+	$actionArguments = Get-PolicyTaskActionArguments
+	return [bool](
+		$task -and
+		$task.Actions.Count -eq 1 -and
+		$task.Actions[0].Execute -ieq $PowerShell -and
+		$task.Actions[0].Arguments -eq $actionArguments -and
+		$task.Principal.RunLevel.ToString() -eq "Highest" -and
+		$task.Triggers.Count -eq 1 -and
+		$task.Triggers[0].CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and
+		$task.Settings.ExecutionTimeLimit -eq "PT2M" -and
+		$task.Settings.MultipleInstances.ToString() -eq "IgnoreNew" -and
+		$task.Settings.StartWhenAvailable -eq $true
+	)
+}
+
+function Install-PolicyTask {
+	if (-not $isAdministrator) {
+		throw "Installing the always-on policy task requires elevation."
+	}
+
+	$identityName = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+	$actionArguments = Get-PolicyTaskActionArguments
 	$action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
 	$trigger = New-ScheduledTaskTrigger -AtLogOn -User $identityName
 	$principal = New-ScheduledTaskPrincipal `
@@ -219,8 +276,12 @@ function Write-PolicySummary {
 
 switch ($Mode) {
 	"Apply" {
-		Set-MachinePolicy
-		Set-UserPolicy
+		if (-not (Test-MachinePolicyCurrent)) {
+			Set-MachinePolicy
+		}
+		if (-not (Test-UserPolicyCurrent)) {
+			Set-UserPolicy
+		}
 		Write-PolicySummary
 	}
 	"Install" {
@@ -230,13 +291,18 @@ switch ($Mode) {
 		Write-PolicySummary
 	}
 	"Ensure" {
-		Set-UserPolicy
+		if (-not (Test-UserPolicyCurrent)) {
+			Set-UserPolicy
+		}
 		if ($isAdministrator) {
-			Install-PolicyTask
-			Set-MachinePolicy
+			if (-not (Test-PolicyTaskCurrent)) {
+				Install-PolicyTask
+			}
+			if (-not (Test-MachinePolicyCurrent)) {
+				Set-MachinePolicy
+			}
 		} else {
-			$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-			if (-not $task) {
+			if (-not (Test-PolicyTaskCurrent)) {
 				Write-Host "Requesting one-time elevation to install the always-on policy task..."
 				Invoke-ElevatedInstall
 			} elseif (-not (Test-MachinePolicyCurrent)) {

@@ -35,11 +35,47 @@ function Invoke-ElevatedInstall {
    }
 }
 
+function Get-ForwardTaskActionArguments {
+   return @(
+      "-NoLogo",
+      "-NoProfile",
+      "-WindowStyle", "Hidden",
+      "-ExecutionPolicy", "Bypass",
+      "-File", ('"{0}"' -f $PSCommandPath),
+      "-Mode", "Refresh",
+      "-DistroName", $DistroName,
+      "-WindowsPort", [string]$WindowsPort,
+      "-LinuxPort", [string]$LinuxPort
+   ) -join " "
+}
+
+function Test-ForwardTaskCurrent {
+   param([Parameter(Mandatory = $true)][string]$ActionArguments)
+
+   $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+   return [bool](
+      $task -and
+      $task.Actions.Count -eq 1 -and
+      $task.Actions[0].Execute -ieq $PowerShell -and
+      $task.Actions[0].Arguments -eq $ActionArguments -and
+      $task.Principal.RunLevel.ToString() -eq "Highest" -and
+      $task.Triggers.Count -eq 1 -and
+      $task.Triggers[0].CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and
+      $task.Settings.ExecutionTimeLimit -eq "PT5M" -and
+      $task.Settings.MultipleInstances.ToString() -eq "IgnoreNew" -and
+      $task.Settings.StartWhenAvailable -eq $true
+   )
+}
+
 function Get-WslAddress {
    & $Wsl --distribution $DistroName --user root --exec `
-      /run/current-system/sw/bin/systemctl start sshd.service
+      /run/current-system/sw/bin/systemctl is-active --quiet sshd.service
    if ($LASTEXITCODE -ne 0) {
-      throw "Could not start sshd.service inside the $DistroName distro."
+      & $Wsl --distribution $DistroName --user root --exec `
+         /run/current-system/sw/bin/systemctl start sshd.service
+      if ($LASTEXITCODE -ne 0) {
+         throw "Could not start sshd.service inside the $DistroName distro."
+      }
    }
 
    $addressOutput = & $Wsl --distribution $DistroName --user root --exec `
@@ -126,17 +162,7 @@ function Install-Forward {
    }
 
    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-   $actionArguments = @(
-      "-NoLogo",
-      "-NoProfile",
-      "-WindowStyle", "Hidden",
-      "-ExecutionPolicy", "Bypass",
-      "-File", ('"{0}"' -f $PSCommandPath),
-      "-Mode", "Refresh",
-      "-DistroName", $DistroName,
-      "-WindowsPort", [string]$WindowsPort,
-      "-LinuxPort", [string]$LinuxPort
-   ) -join " "
+   $actionArguments = Get-ForwardTaskActionArguments
    $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
    $principal = New-ScheduledTaskPrincipal `
@@ -173,11 +199,17 @@ function Remove-Forward {
 switch ($Mode) {
    "Ensure" {
       $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-      if (-not $task) {
+      $actionArguments = Get-ForwardTaskActionArguments
+      if (-not $task -or -not (Test-ForwardTaskCurrent -ActionArguments $actionArguments)) {
          Invoke-ElevatedInstall
       } else {
-         Start-ScheduledTask -TaskName $TaskName
-         Write-Host "Requested an asynchronous refresh from '$TaskName'."
+         $wslAddress = Get-WslAddress
+         if ((Get-ExistingForwardAddress) -eq $wslAddress) {
+            Write-Host "Windows 0.0.0.0:$WindowsPort already forwards to $DistroName at ${wslAddress}:$LinuxPort."
+         } else {
+            Start-ScheduledTask -TaskName $TaskName
+            Write-Host "Requested an asynchronous SSH-forward repair from '$TaskName'."
+         }
       }
    }
    "Install" { Install-Forward }

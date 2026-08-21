@@ -157,6 +157,24 @@ namespace Dotfiles {
             Marshal.FinalReleaseComObject(desktop);
          }
       }
+
+      public static bool IsCurrent(string ultrawidePath, string ipadPath) {
+         var desktop = CreateDesktopWallpaper();
+         try {
+            if (desktop.GetPosition() != DesktopWallpaperPosition.Fill) {
+               return false;
+            }
+            foreach (var assignment in ReadAssignments(desktop)) {
+               var expected = assignment.Role == "iPad VDD" ? ipadPath : ultrawidePath;
+               if (!String.Equals(assignment.Wallpaper, expected, StringComparison.OrdinalIgnoreCase)) {
+                  return false;
+               }
+            }
+            return true;
+         } finally {
+            Marshal.FinalReleaseComObject(desktop);
+         }
+      }
    }
 }
 '@
@@ -175,14 +193,38 @@ function Show-WallpaperAssignments {
 
 	$Assignments |
 		Select-Object Role, MonitorId, Wallpaper |
-		Format-List
+		Format-List |
+		Out-Host
 }
 
 function Apply-Wallpapers {
 	Assert-WallpaperAssets
+	if ([Dotfiles.WallpaperPolicy]::IsCurrent($UltrawidePath, $IpadPath)) {
+		Write-Host "LG and iPad VDD wallpapers are current."
+		return $false
+	}
 	$assignments = [Dotfiles.WallpaperPolicy]::Apply($UltrawidePath, $IpadPath)
 	Show-WallpaperAssignments -Assignments $assignments
 	Write-Host "Applied the LG and iPad VDD wallpaper policy."
+	return $true
+}
+
+function Test-WallpaperTaskCurrent {
+	param([Parameter(Mandatory = $true)][string]$ActionArguments)
+
+	$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+	return [bool](
+		$task -and
+		$task.Actions.Count -eq 1 -and
+		$task.Actions[0].Execute -ieq $PowerShell -and
+		$task.Actions[0].Arguments -eq $ActionArguments -and
+		$task.Principal.RunLevel.ToString() -eq "Limited" -and
+		$task.Triggers.Count -eq 1 -and
+		$task.Triggers[0].CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and
+		$task.Settings.ExecutionTimeLimit -eq "PT1M" -and
+		$task.Settings.MultipleInstances.ToString() -eq "IgnoreNew" -and
+		$task.Settings.StartWhenAvailable -eq $true
+	)
 }
 
 function Install-WallpaperTask {
@@ -197,6 +239,10 @@ function Install-WallpaperTask {
 		"-UltrawidePath", ('"{0}"' -f $UltrawidePath),
 		"-IpadPath", ('"{0}"' -f $IpadPath)
 	) -join " "
+	if (Test-WallpaperTaskCurrent -ActionArguments $actionArguments) {
+		Write-Host "'$TaskName' is current."
+		return $false
+	}
 	$action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
 	$trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
 	$principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
@@ -215,15 +261,16 @@ function Install-WallpaperTask {
 		-Principal $principal `
 		-Settings $settings `
 		-Force | Out-Null
+	Write-Host "Installed the '$TaskName' logon reconciliation task."
+	return $true
 }
 
 switch ($Mode) {
 	"Ensure" {
-		Apply-Wallpapers
-		Install-WallpaperTask
-		Write-Host "Installed the '$TaskName' logon reconciliation task."
+		$null = Apply-Wallpapers
+		$null = Install-WallpaperTask
 	}
-	"Apply" { Apply-Wallpapers }
+	"Apply" { $null = Apply-Wallpapers }
 	"Status" {
 		Show-WallpaperAssignments -Assignments ([Dotfiles.WallpaperPolicy]::Read())
 		Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue |

@@ -35,14 +35,34 @@ $statusOutput = & $docker desktop status --format json 2>$null
 if ($LASTEXITCODE -eq 0) {
    $desktopStatus = ($statusOutput -join "`n" | ConvertFrom-Json).Status
 }
+$settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+$integratedDistros = @($settings.IntegratedWslDistros)
+$settingsChanged =
+   $settings.AutoStart -ne $true -or
+   $settings.EnableIntegrationWithDefaultWslDistro -ne $true -or
+   $integratedDistros.Count -ne 1 -or
+   $integratedDistros[0] -ne $DistroName
+
+if (-not $settingsChanged) {
+   if ($desktopStatus -ne "running") {
+      & $docker desktop start --timeout 120
+      if ($LASTEXITCODE -ne 0) {
+         throw "Docker Desktop settings are current, but its engine did not start successfully."
+      }
+      Write-Host "Docker Desktop settings were current; started its stopped engine."
+   } else {
+      Write-Host "Docker Desktop is running with the requested WSL integration; no restart was needed."
+   }
+   exit 0
+}
+
 if ($desktopStatus -ne "stopped") {
    & $docker desktop stop --timeout 120
    if ($LASTEXITCODE -ne 0) {
-      throw "Docker Desktop did not stop cleanly before settings reconciliation."
+      throw "Docker Desktop did not stop cleanly before its changed settings were written."
    }
 }
 
-$settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
 $settings | Add-Member -NotePropertyName "AutoStart" -NotePropertyValue $true -Force
 $settings | Add-Member -NotePropertyName "EnableIntegrationWithDefaultWslDistro" -NotePropertyValue $true -Force
 $settings | Add-Member -NotePropertyName "IntegratedWslDistros" -NotePropertyValue ([string[]]@($DistroName)) -Force
@@ -57,4 +77,4 @@ if ($LASTEXITCODE -ne 0) {
    throw "Docker Desktop did not start after settings reconciliation."
 }
 
-Write-Host "Docker Desktop is configured to start automatically and integrate with WSL distro '$DistroName'."
+Write-Host "Updated Docker Desktop settings and restarted it with WSL distro '$DistroName' integrated."

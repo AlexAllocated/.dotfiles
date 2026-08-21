@@ -153,15 +153,66 @@ function Stop-AudioArray {
    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 }
 
+function Test-FileEqual {
+   param(
+      [Parameter(Mandatory = $true)][string]$Source,
+      [Parameter(Mandatory = $true)][string]$Destination
+   )
+
+   return (
+      (Test-Path -LiteralPath $Destination -PathType Leaf) -and
+      (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash -eq
+         (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash
+   )
+}
+
+function Test-AudioArrayRunning {
+   $interface = Get-Process audioarray-ui -ErrorAction SilentlyContinue |
+      Where-Object { $_.Path -eq $uiBinaryPath } |
+      Select-Object -First 1
+   $engine = Get-Process audioarray -ErrorAction SilentlyContinue |
+      Where-Object { $_.Path -eq $binaryPath } |
+      Select-Object -First 1
+   return [bool]($interface -and $engine)
+}
+
+function Test-AudioArrayTaskCurrent {
+   $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+   return [bool](
+      $task -and
+      $task.Actions.Count -eq 1 -and
+      $task.Actions[0].Execute -ieq $uiBinaryPath -and
+      $task.Actions[0].Arguments -eq "--tray" -and
+      $task.Principal.RunLevel.ToString() -eq "Limited" -and
+      $task.Triggers.Count -eq 1 -and
+      $task.Triggers[0].CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and
+      $task.Settings.ExecutionTimeLimit -eq "PT0S" -and
+      $task.Settings.MultipleInstances.ToString() -eq "IgnoreNew" -and
+      $task.Settings.Priority -eq 4 -and
+      $task.Settings.RestartCount -eq 5 -and
+      $task.Settings.RestartInterval -eq "PT1M"
+   )
+}
+
 function Install-AudioArrayShortcut {
    $shell = New-Object -ComObject WScript.Shell
    try {
       $shortcut = $shell.CreateShortcut($uiShortcutPath)
+      if (
+         (Test-Path -LiteralPath $uiShortcutPath -PathType Leaf) -and
+         $shortcut.TargetPath -ieq $uiBinaryPath -and
+         $shortcut.WorkingDirectory -ieq $binaryRoot -and
+         $shortcut.IconLocation -ieq "$uiBinaryPath,0" -and
+         $shortcut.Description -eq "AudioArray Intrepid operations console"
+      ) {
+         return $false
+      }
       $shortcut.TargetPath = $uiBinaryPath
       $shortcut.WorkingDirectory = $binaryRoot
       $shortcut.IconLocation = "$uiBinaryPath,0"
       $shortcut.Description = "AudioArray Intrepid operations console"
       $shortcut.Save()
+      return $true
    } finally {
       [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null
    }
@@ -245,10 +296,12 @@ function Assert-AudioArrayEndpointNames {
    }
    if (-not $incorrect) {
       Write-Host "AudioArray endpoint names are current."
-      return
+      return $false
    }
 
-   Copy-Item -LiteralPath $endpointConfiguratorSource -Destination $endpointConfiguratorPath -Force
+   if (-not (Test-FileEqual -Source $endpointConfiguratorSource -Destination $endpointConfiguratorPath)) {
+      Copy-Item -LiteralPath $endpointConfiguratorSource -Destination $endpointConfiguratorPath -Force
+   }
    & powershell.exe `
       -NoLogo `
       -NoProfile `
@@ -270,6 +323,8 @@ function Assert-AudioArrayEndpointNames {
    if ($remaining) {
       throw "Windows did not retain every AudioArray endpoint name."
    }
+   Write-Host "Reconciled AudioArray endpoint names."
+   return $true
 }
 
 function Set-AudioArraySpatialFormats {
@@ -288,34 +343,50 @@ function Set-AudioArraySpatialFormats {
       }
    )
 
-   foreach ($format in $formats) {
-      $endpoint = $renderEndpoints | Where-Object Cable -eq $format.Cable | Select-Object -First 1
-      if (-not $endpoint) {
-         throw "Could not find VAC render cable $($format.Cable) for $($format.Name)."
-      }
-      $arguments = @(
-         "/SetSpatial",
-         "`"$($endpoint.ItemId)`"",
-         "`"$($format.Name)`""
-      )
-      $process = Start-Process `
-         -FilePath $soundVolumeView `
-         -ArgumentList $arguments `
-         -Wait `
-         -PassThru
-      if ($process.ExitCode -ne 0) {
-         throw "SoundVolumeView failed to set $($format.Name) on $($endpoint.Name)."
-      }
-   }
-
-   Start-Sleep -Seconds 1
    $exportPath = Join-Path $env:TEMP "audioarray-spatial-$([guid]::NewGuid().ToString('N')).csv"
-   try {
+
+   function Get-SpatialItems {
+      Remove-Item -LiteralPath $exportPath -Force -ErrorAction SilentlyContinue
       Start-Process `
          -FilePath $soundVolumeView `
          -ArgumentList @("/scomma", "`"$exportPath`"") `
          -Wait | Out-Null
-      $soundItems = @(Import-Csv -LiteralPath $exportPath)
+      return @(Import-Csv -LiteralPath $exportPath)
+   }
+
+   $changed = $false
+   try {
+      $soundItems = @(Get-SpatialItems)
+      foreach ($format in $formats) {
+         $endpoint = $renderEndpoints | Where-Object Cable -eq $format.Cable | Select-Object -First 1
+         if (-not $endpoint) {
+            throw "Could not find VAC render cable $($format.Cable) for $($format.Name)."
+         }
+         $soundItem = $soundItems | Where-Object { $_."Item ID" -eq $endpoint.ItemId } | Select-Object -First 1
+         $expectedGuid = ([guid]$format.Guid).ToString("B").ToUpperInvariant()
+         if ($soundItem -and $soundItem."Spatial Guid".ToUpperInvariant() -eq $expectedGuid) {
+            continue
+         }
+
+         $process = Start-Process `
+            -FilePath $soundVolumeView `
+            -ArgumentList @(
+               "/SetSpatial",
+               "`"$($endpoint.ItemId)`"",
+               "`"$($format.Name)`""
+            ) `
+            -Wait `
+            -PassThru
+         if ($process.ExitCode -ne 0) {
+            throw "SoundVolumeView failed to set $($format.Name) on $($endpoint.Name)."
+         }
+         $changed = $true
+      }
+
+      if ($changed) {
+         Start-Sleep -Seconds 1
+         $soundItems = @(Get-SpatialItems)
+      }
       foreach ($format in $formats) {
          $endpoint = $renderEndpoints | Where-Object Cable -eq $format.Cable | Select-Object -First 1
          $soundItem = $soundItems | Where-Object { $_."Item ID" -eq $endpoint.ItemId } | Select-Object -First 1
@@ -327,11 +398,16 @@ Open its Microsoft Store companion app once while signed into the account that
 owns the license, then rerun dotctl apply.
 "@
          }
-         Write-Host "$($endpoint.Name) uses $($format.Name)."
+      }
+      if ($changed) {
+         Write-Host "Reconciled AudioArray spatial formats."
+      } else {
+         Write-Host "AudioArray spatial formats are current."
       }
    } finally {
       Remove-Item -LiteralPath $exportPath -Force -ErrorAction SilentlyContinue
    }
+   return $changed
 }
 
 function Set-AudioArrayUnityGain {
@@ -352,12 +428,28 @@ function Set-AudioArrayUnityGain {
       })
    }
 
+   function Test-UnityGain {
+      param([Parameter(Mandatory = $true)]$Item)
+
+      $levels = if ($Item.Type -eq "Device") {
+         @($Item."Volume dB")
+      } else {
+         @($Item."Channels dB" -split ',')
+      }
+      return @($levels | Where-Object { $_.Trim() -ne "0.00 dB" }).Count -eq 0
+   }
+
    try {
       $items = @(Get-AudioArrayLevelItems)
       if ($items.Count -lt 16) {
          throw "Expected at least 16 AudioArray endpoint and pin gain stages; found $($items.Count)."
       }
-      foreach ($item in $items) {
+      $itemsToUpdate = @($items | Where-Object { -not (Test-UnityGain -Item $_) })
+      if ($itemsToUpdate.Count -eq 0) {
+         Write-Host "All AudioArray endpoint and Main pin gain stages are already at 0.00 dB."
+         return $false
+      }
+      foreach ($item in $itemsToUpdate) {
          $arguments = @(
             "/SetVolumeDecibel",
             "`"$($item.'Item ID')`"",
@@ -374,24 +466,18 @@ function Set-AudioArrayUnityGain {
       }
 
       Start-Sleep -Seconds 1
-      $remaining = @(Get-AudioArrayLevelItems | Where-Object {
-         $levels = if ($_.Type -eq "Device") {
-            @($_."Volume dB")
-         } else {
-            @($_."Channels dB" -split ',')
-         }
-         @($levels | Where-Object { $_.Trim() -ne "0.00 dB" }).Count -gt 0
-      })
+      $remaining = @(Get-AudioArrayLevelItems | Where-Object { -not (Test-UnityGain -Item $_) })
       if ($remaining) {
          $descriptions = $remaining | ForEach-Object {
             "$($_.Name) [$($_.Direction)]"
          }
          throw "AudioArray gain verification failed for: $($descriptions -join ', ')."
       }
-      Write-Host "All AudioArray endpoint and Main pin gain stages are at 0.00 dB."
+      Write-Host "Reconciled $($itemsToUpdate.Count) AudioArray gain stage(s) to 0.00 dB."
    } finally {
       Remove-Item -LiteralPath $exportPath -Force -ErrorAction SilentlyContinue
    }
+   return $true
 }
 
 function Assert-VacInstaller {
@@ -503,10 +589,20 @@ if ($rebuilt) {
    Write-Host "AudioArray engine and interface are current."
 }
 
-Install-AudioArrayShortcut
+$shortcutChanged = Install-AudioArrayShortcut
+if ($shortcutChanged) {
+   Write-Host "Updated the AudioArray Start-menu shortcut."
+} else {
+   Write-Host "AudioArray Start-menu shortcut is current."
+}
 
-Copy-Item -LiteralPath $exampleConfigPath -Destination $configPath -Force
-Write-Host "Reconciled AudioArray config at $configPath."
+$configChanged = -not (Test-FileEqual -Source $exampleConfigPath -Destination $configPath)
+if ($configChanged) {
+   Copy-Item -LiteralPath $exampleConfigPath -Destination $configPath -Force
+   Write-Host "Updated AudioArray config at $configPath."
+} else {
+   Write-Host "AudioArray config is current."
+}
 
 if ($VacInstallerPath) {
    Assert-VacInstaller -Path $VacInstallerPath
@@ -534,10 +630,11 @@ AudioArray is built but will not auto-start until audioarray doctor passes.
    exit 0
 }
 
-Stop-AudioArray
-Assert-AudioArrayEndpointNames
-Set-AudioArraySpatialFormats
-Set-AudioArrayUnityGain
+$endpointNamesChanged = Assert-AudioArrayEndpointNames
+$null = Set-AudioArraySpatialFormats
+$null = Set-AudioArrayUnityGain
+$taskChanged = -not (Test-AudioArrayTaskCurrent)
+$restartRequired = $rebuilt -or $configChanged -or $endpointNamesChanged -or $taskChanged
 
 $doctorOutput = & $binaryPath --config $configPath doctor 2>&1
 $doctorExitCode = $LASTEXITCODE
@@ -552,9 +649,19 @@ if ($doctorExitCode -ne 0) {
    exit 0
 }
 
-Register-AudioArrayTask
-Stop-AudioArray
-Start-ScheduledTask -TaskName $taskName
+if ($restartRequired) {
+   Stop-AudioArray
+   if ($taskChanged) {
+      Register-AudioArrayTask
+   }
+   Start-ScheduledTask -TaskName $taskName
+} elseif (-not (Test-AudioArrayRunning)) {
+   Stop-AudioArray
+   Start-ScheduledTask -TaskName $taskName
+   Write-Host "AudioArray configuration was current; restarted its stopped supervisor and engine."
+} else {
+   Write-Host "AudioArray configuration and processes are current; no restart was needed."
+}
 if ($rebuilt) {
    # Smart App Control applies a stricter policy when PowerShell directly
    # creates an unknown locally-built GUI process. Ask the trusted Windows
@@ -564,4 +671,4 @@ if ($rebuilt) {
       -FilePath (Join-Path $env:SystemRoot "explorer.exe") `
       -ArgumentList "`"$uiBinaryPath`""
 }
-Write-Host "AudioArray's tray supervisor and audio engine are running and will restart at every interactive logon. Logs: $logPath"
+Write-Host "AudioArray's tray supervisor and audio engine are running and will start at every interactive logon. Logs: $logPath"
