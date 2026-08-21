@@ -8,6 +8,8 @@ state_root="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-wsl-migration"
 key_path="$state_root/migration_ed25519"
 codex_snapshot="$state_root/codex-sqlite"
 manifest_path="$state_root/source-paths.txt"
+migration_authorized_keys=/etc/ssh/dotfiles-wsl-migration-authorized_keys
+migration_sshd_config=/etc/ssh/sshd_config.d/10-dotfiles-wsl-migration.conf
 
 [[ "${WSL_DISTRO_NAME:-}" == "NixOS" ]] || {
 	printf 'Run this helper from the source NixOS WSL distro.\n' >&2
@@ -82,8 +84,17 @@ printf '.codex/sqlite\n' >>"$manifest_path"
 rm -f "$key_path" "$key_path.pub"
 ssh-keygen -q -t ed25519 -N '' -C dotfiles-wsl-migration -f "$key_path"
 public_key="$(<"$key_path.pub")"
+
+cleanup_migration_access() {
+	wsl.exe --distribution "$target_distro" --user root --exec /bin/bash -lc \
+		"rm -f '$migration_authorized_keys' '$migration_sshd_config'; systemctl reload ssh.service || systemctl restart ssh.service" \
+		>/dev/null 2>&1 || true
+	rm -f "$key_path" "$key_path.pub"
+}
+trap cleanup_migration_access EXIT
+
 wsl.exe --distribution "$target_distro" --user root --exec /bin/bash -lc \
-	"install -d -m 0700 -o '$target_user' -g '$target_user' '/home/$target_user/.ssh'; printf '%s\\n' '$public_key' >>'/home/$target_user/.ssh/authorized_keys'; chown '$target_user:$target_user' '/home/$target_user/.ssh/authorized_keys'; chmod 0600 '/home/$target_user/.ssh/authorized_keys'; systemctl restart ssh.service" \
+	"install -d -m 0755 /etc/ssh/sshd_config.d; printf '%s\\n' '$public_key' >'$migration_authorized_keys'; chmod 0600 '$migration_authorized_keys'; printf '%s\\n' 'AuthorizedKeysFile .ssh/authorized_keys $migration_authorized_keys' >'$migration_sshd_config'; systemctl restart ssh.service" \
 	>/dev/null
 
 target_ip="$(
@@ -128,8 +139,7 @@ if rsync "${rsync_args[@]}" --checksum --dry-run --itemize-changes \
 fi
 
 $ssh_command "$target_user@$target_ip" \
-	"sed -i '/dotfiles-wsl-migration$/d' '/home/$target_user/.ssh/authorized_keys'; chmod 0700 '/home/$target_user/.ssh'; chmod 0600 '/home/$target_user/.ssh/authorized_keys'"
-rm -f "$key_path" "$key_path.pub"
+	"chmod 0700 '/home/$target_user/.ssh'; chmod 0600 '/home/$target_user/.ssh/authorized_keys'"
 
 ((verification_failed == 0)) || exit 1
 printf 'Verified the selected home and authentication state in %s.\n' "$target_distro"
