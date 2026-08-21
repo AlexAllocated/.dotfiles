@@ -41,6 +41,23 @@ if [[ ! "$ssh_port" =~ ^[0-9]+$ ]] || ((ssh_port < 1 || ssh_port > 65535)); then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+# The first bootstrap runs before /etc/wsl.conf has enabled systemd. Prevent
+# package maintainer scripts from trying to start services until the distro's
+# one-time restart; the second pass enables them explicitly below.
+policy_rc=/usr/sbin/policy-rc.d
+created_policy=0
+cleanup_policy() {
+	if ((created_policy)); then
+		rm -f "$policy_rc"
+	fi
+}
+if ! systemctl is-system-running >/dev/null 2>&1 && [[ ! -e "$policy_rc" ]]; then
+	printf '#!/bin/sh\nexit 101\n' >"$policy_rc"
+	chmod 0755 "$policy_rc"
+	created_policy=1
+	trap cleanup_policy EXIT
+fi
+dpkg --configure -a
 required_packages=(
 	acl
 	ca-certificates
@@ -60,8 +77,11 @@ for package in "${required_packages[@]}"; do
 done
 if ((${#missing_packages[@]})); then
 	apt-get update
+	apt-get install -f -y --no-install-recommends
 	apt-get install -y --no-install-recommends "${missing_packages[@]}"
 fi
+cleanup_policy
+trap - EXIT
 
 if ! id "$user_name" >/dev/null 2>&1; then
 	existing_user="$(getent passwd 1000 | cut -d: -f1 || true)"

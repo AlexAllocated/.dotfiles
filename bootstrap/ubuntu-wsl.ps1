@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Wsl = "$env:SystemRoot\System32\wsl.exe"
 $StagingDirectory = Join-Path $env:LOCALAPPDATA "dotfiles\ubuntu-wsl-bootstrap"
+Set-Location -LiteralPath $env:TEMP
 
 function Invoke-WslChecked {
    param([string[]]$Arguments)
