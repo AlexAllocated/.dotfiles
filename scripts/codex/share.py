@@ -647,7 +647,7 @@ def migrate(args: argparse.Namespace) -> int:
         print("Skipped the WSL Home Manager update as requested.")
     else:
         dotctl = Path(__file__).resolve().parents[1] / "dotctl"
-        profile = "ubuntu-wsl" if os.environ.get("WSL_DISTRO_NAME") == "Ubuntu-26.04" else "nixos-wsl"
+        profile = "ubuntu-wsl"
         print(f"Applying the {profile} profile with the shared-store environment ...")
         result = subprocess.run([str(dotctl), "apply", profile], check=False)
         if result.returncode != 0:

@@ -1,6 +1,6 @@
 param(
    [string]$DistroName = "Ubuntu-26.04",
-   [string]$SourceDistroName = "NixOS",
+   [string]$SourceDistroName = "",
    [string]$LinuxUser = "alx",
    [int]$TemporarySshPort = 2222
 )
@@ -38,7 +38,7 @@ if (-not (Test-Path -LiteralPath $Wsl)) {
 $installedDistros = @(& $Wsl --list --quiet | ForEach-Object { ($_ -replace "`0", "").Trim() })
 $newInstall = $DistroName -notin $installedDistros
 if ($newInstall) {
-   Write-Host "Installing $DistroName alongside $SourceDistroName."
+   Write-Host "Installing $DistroName."
    Invoke-WslChecked @("--install", "--distribution", $DistroName, "--web-download", "--no-launch")
 } else {
    Write-Host "WSL distro '$DistroName' already exists; reconciling it in place."
@@ -51,7 +51,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "ubuntu-wsl-root.sh") -Destinati
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "ubuntu-wsl-user.sh") -Destination $userScript -Force
 
 $authorizedKeys = Join-Path $StagingDirectory "authorized_keys"
-$sourceExists = $SourceDistroName -in $installedDistros
+$sourceExists = $SourceDistroName -and $SourceDistroName -ne $DistroName -and $SourceDistroName -in $installedDistros
 if ($sourceExists) {
    $keyOutput = & $Wsl --distribution $SourceDistroName --user $LinuxUser --exec `
       /bin/sh -lc 'test -s "$HOME/.ssh/authorized_keys" && cat "$HOME/.ssh/authorized_keys"'
@@ -90,4 +90,4 @@ Invoke-WslChecked @(
    "--exec", "/bin/bash", $userWslPath
 )
 
-Write-Host "$DistroName is installed beside $SourceDistroName with the Ubuntu-WSL Home Manager profile active."
+Write-Host "$DistroName has the Ubuntu-WSL Home Manager profile active."

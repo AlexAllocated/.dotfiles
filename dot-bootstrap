@@ -8,7 +8,6 @@ usage() {
 Usage: ./dot-bootstrap <target>
 
 Targets:
-  nixos-wsl       Install NixOS-WSL side-by-side from Windows PowerShell.
   ubuntu-wsl      Install Ubuntu 26.04 WSL and activate standalone Home Manager.
   linux           Install Nix with the Determinate installer, then apply Home Manager manually.
   macos           Same as linux, then use nix-darwin manually.
@@ -22,21 +21,14 @@ target="${1:-}"
 }
 
 case "$target" in
-	nixos-wsl)
-		if ! command -v powershell.exe >/dev/null 2>&1; then
-			echo "powershell.exe is required from the current WSL control-plane distro." >&2
-			exit 1
-		fi
-		ps_path="$(wslpath -w "$SCRIPT_DIR/bootstrap/nixos-wsl.ps1")"
-		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_path"
-		;;
 	ubuntu-wsl)
 		if ! command -v powershell.exe >/dev/null 2>&1; then
 			echo "powershell.exe is required from the current WSL distro." >&2
 			exit 1
 		fi
 		ps_path="$(wslpath -w "$SCRIPT_DIR/bootstrap/ubuntu-wsl.ps1")"
-		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_path"
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_path" \
+			-SourceDistroName "${WSL_DISTRO_NAME:-}"
 		;;
 	linux | macos)
 		if command -v nix >/dev/null 2>&1; then

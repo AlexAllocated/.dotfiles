@@ -9,8 +9,6 @@ param(
 $ErrorActionPreference = "Stop"
 $TaskName = "Dotfiles WSL SSH Forward"
 $FirewallRuleName = "Dotfiles-WSL-SSH"
-$LegacyTaskName = "Dotfiles NixOS-WSL SSH Forward"
-$LegacyFirewallRuleName = "Dotfiles-NixOS-WSL-SSH"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $Wsl = "$env:SystemRoot\System32\wsl.exe"
 
@@ -164,8 +162,6 @@ function Install-Forward {
    }
 
    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-   Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false -ErrorAction SilentlyContinue
-   Remove-NetFirewallRule -Name $LegacyFirewallRuleName -ErrorAction SilentlyContinue
    $actionArguments = Get-ForwardTaskActionArguments
    $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
@@ -195,9 +191,7 @@ function Remove-Forward {
       throw "Removing the Windows SSH forward requires elevation."
    }
    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-   Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false -ErrorAction SilentlyContinue
    Remove-NetFirewallRule -Name $FirewallRuleName -ErrorAction SilentlyContinue
-   Remove-NetFirewallRule -Name $LegacyFirewallRuleName -ErrorAction SilentlyContinue
    & netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$WindowsPort | Out-Null
    Write-Host "Removed the $DistroName SSH forward, firewall rule, and scheduled task."
 }

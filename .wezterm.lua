@@ -69,10 +69,10 @@ if wezterm.target_triple:match("windows") then
 	end
 
 	config.wsl_domains = {}
-	local preferred = available["Ubuntu-26.04"] or available.NixOS
+	local preferred = available["Ubuntu-26.04"]
 	if preferred then
 		-- Do not inherit a stale username or working directory from WezTerm's
-		-- WSL discovery cache while the side-by-side migration is in progress.
+		-- WSL discovery cache.
 		preferred.username = "alx"
 		preferred.default_cwd = "/home/alx"
 		table.insert(config.wsl_domains, preferred)

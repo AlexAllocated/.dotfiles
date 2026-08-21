@@ -247,7 +247,7 @@ cleanup_nix_after_updoot() {
 
 	command_exists nix-collect-garbage || return 0
 	case "$profile" in
-		chev-desktop | tracer | nixos-wsl)
+		chev-desktop | tracer)
 			require_command sudo
 			require_command nix-env
 			generations="$(sudo nix-env --profile "$system_profile" --list-generations)"

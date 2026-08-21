@@ -21,13 +21,11 @@ assert_equal() {
 }
 
 assert_equal "path:$repo_root#linux" "$(flake_ref_for_profile linux)"
-assert_equal "path:$repo_root#wsl" "$(flake_ref_for_profile nixos-wsl)"
 assert_equal "path:$repo_root#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
 assert_equal "path:$repo_root#tracer" "$(flake_ref_for_profile tracer)"
 assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
 assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
-assert_equal "path:/tmp/staged-dotfiles#wsl" "$(flake_ref_for_profile nixos-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
@@ -54,19 +52,6 @@ detected_ubuntu_wsl="$({
 })"
 assert_equal "ubuntu-wsl" "$detected_ubuntu_wsl"
 
-profile_apply="$({
-	require_command() { :; }
-	sudo() { :; }
-	apply_windows_packages() {
-		printf 'windows-packages:%s\n' "$1"
-	}
-	apply_profile nixos-wsl /tmp/staged-dotfiles
-})"
-[[ "$profile_apply" == *"windows-packages:/tmp/staged-dotfiles"* ]] || {
-	printf 'nixos-wsl profile did not reconcile Windows packages from its source checkout\n' >&2
-	exit 1
-}
-
 cleanup_output="$({
 	command_exists() { return 0; }
 	require_command() { :; }
@@ -92,7 +77,7 @@ if flake_ref_for_profile macos-managed >/dev/null 2>&1; then
 	printf 'macos-managed unexpectedly resolved to a flake output\n' >&2
 	exit 1
 fi
-for removed_profile in macos-intel darwin-macos-intel; do
+for removed_profile in nixos-wsl macos-intel darwin-macos-intel; do
 	if flake_ref_for_profile "$removed_profile" >/dev/null 2>&1; then
 		printf 'removed profile unexpectedly resolved: %s\n' "$removed_profile" >&2
 		exit 1

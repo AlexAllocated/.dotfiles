@@ -249,8 +249,6 @@ detect_profile() {
 		else
 			printf 'macos\n'
 		fi
-	elif is_nixos && [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-		printf 'nixos-wsl\n'
 	elif [[ "${WSL_DISTRO_NAME:-}" == Ubuntu* ]]; then
 		printf 'ubuntu-wsl\n'
 	elif is_nixos; then
@@ -267,7 +265,6 @@ flake_ref_for_profile() {
 	local profile="$1"
 	local source_root="${2:-$REPO_ROOT}"
 	case "$profile" in
-		nixos-wsl) printf 'path:%s#wsl\n' "$source_root" ;;
 		ubuntu-wsl) printf 'path:%s#ubuntu-wsl\n' "$source_root" ;;
 		tracer) printf 'path:%s#tracer\n' "$source_root" ;;
 		# The native target includes a machine-generated, gitignored ESP PARTUUID.

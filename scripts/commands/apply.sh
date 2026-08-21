@@ -52,15 +52,6 @@ apply_profile() {
 		macos-managed)
 			apply_macos_managed 0
 			;;
-		nixos-wsl)
-			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
-			require_command sudo
-			require_command nixos-rebuild
-			sudo nixos-rebuild boot --flake "$flake_ref"
-			apply_windows_packages "$source_root"
-			apply_windows_integration "$REPO_ROOT"
-			printf 'NixOS-WSL generation installed. Restart with: wsl.exe -t NixOS\n'
-			;;
 		ubuntu-wsl)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command nix

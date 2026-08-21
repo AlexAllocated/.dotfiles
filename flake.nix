@@ -11,11 +11,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-wsl = {
-      url = "github:nix-community/NixOS-WSL/release-26.05";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     nix-darwin = {
       url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -47,7 +42,6 @@
       nixpkgs-unstable,
       migration-nixpkgs,
       home-manager,
-      nixos-wsl,
       nix-darwin,
       lanzaboote,
       ...
@@ -320,42 +314,6 @@
         ];
       };
 
-      nixosConfigurations.wsl = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        specialArgs = (mkSpecialArgs "x86_64-linux" wslUser) // {
-          profile = "nixos-wsl";
-        };
-        modules = [
-          nixos-wsl.nixosModules.default
-          home-manager.nixosModules.home-manager
-          ./modules/nixos/wsl.nix
-          {
-            dotfiles.wsl = {
-              user = wslUser;
-              userDescription = fullName;
-              legacyUser = "alex";
-            };
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = (mkSpecialArgs "x86_64-linux" wslUser) // {
-              profile = "nixos-wsl";
-            };
-            home-manager.users.${wslUser} = {
-              imports = [ ./modules/home/default.nix ];
-              home.username = wslUser;
-              home.homeDirectory = "/home/${wslUser}";
-              home.stateVersion = "26.05";
-              dotfiles = {
-                profile = "nixos-wsl";
-              };
-            };
-          }
-        ];
-      };
-
-      nixosConfigurations.nixos-wsl = self.nixosConfigurations.wsl;
-
       homeConfigurations = {
         linux = linuxHomeConfiguration;
         ubuntu-wsl = ubuntuWslHomeConfiguration;
@@ -375,7 +333,6 @@
         github-actions-runner = ./modules/nixos/github-actions-runner.nix;
         migration-tools = ./modules/nixos/migration-tools.nix;
         tracer-tools = ./modules/nixos/tracer-tools.nix;
-        wsl = ./modules/nixos/wsl.nix;
       };
 
       packages = forLinuxSystems (

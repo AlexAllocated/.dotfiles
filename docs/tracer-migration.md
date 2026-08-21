@@ -1,7 +1,7 @@
 # Tracer Migration Runbook
 
 This runbook installs the Ryzen/RTX workstation as `tracer`, with local user
-`alx`, while keeping `chev-desktop` on `alex`; NixOS-WSL also uses `alx`.
+`alx`, while keeping `chev-desktop` on `alex`; Ubuntu WSL also uses `alx`.
 
 ## Recovered hardware inventory
 

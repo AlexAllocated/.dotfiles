@@ -13,7 +13,6 @@ The final pre-Nix version is preserved by the `pre-nix` tag.
 | --------------- | --------------------------- | --------------------------------------------- |
 | `chev-desktop`  | NixOS + Home Manager        | Native NVIDIA gaming and development desktop  |
 | `ubuntu-wsl`    | Home Manager                | Primary Windows development environment       |
-| `nixos-wsl`     | NixOS + Home Manager        | Legacy WSL migration source                   |
 | `linux`         | Home Manager                | Ubuntu and other Linux distributions with Nix |
 | `macos-managed` | Homebrew + repository links | Macs where `/nix` cannot be installed         |
 | `macos`         | Home Manager                | Apple Silicon Macs without nix-darwin         |

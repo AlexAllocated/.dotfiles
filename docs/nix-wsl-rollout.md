@@ -1,11 +1,10 @@
 # Ubuntu-WSL Rollout
 
-Ubuntu 26.04 with standalone Home Manager is the primary WSL target. NixOS-WSL
-is retained only while an existing home is being verified during migration.
+Ubuntu 26.04 with standalone Home Manager is the primary WSL target.
 
-## Install side-by-side
+## Install
 
-From an existing WSL control-plane distro:
+From any existing WSL distro:
 
 ```sh
 ./dot-bootstrap ubuntu-wsl
@@ -138,18 +137,18 @@ also reapplies the mapping whenever a Moonlight session creates the VDD.
 
 The WSL profile runs a key-only OpenSSH server for the managed `alx` account.
 Windows owns the LAN endpoint: an elevated scheduled task forwards Windows TCP
-22 to the current NixOS-WSL address and limits the firewall opening to the
+22 to the current `Ubuntu-26.04` address and limits the firewall opening to the
 Private-profile local subnet. The task runs at Windows logon, and WSL asks it to
 refresh once at each distro boot. There is no polling watchdog.
 
-The first `dotctl apply nixos-wsl` requests one Windows UAC approval to install
+The first `dotctl apply ubuntu-wsl` requests one Windows UAC approval to install
 the task and firewall rule. SSH public keys remain machine-local in
 `~/.ssh/authorized_keys`; they are intentionally not committed to this public
 repository. Verify the endpoint from Windows with:
 
 ```powershell
 Test-NetConnection -ComputerName 127.0.0.1 -Port 22
-Get-ScheduledTask -TaskName "Dotfiles NixOS-WSL SSH Forward"
+Get-ScheduledTask -TaskName "Dotfiles WSL SSH Forward"
 netsh interface portproxy show v4tov4
 ```
 
@@ -192,30 +191,30 @@ identity and Moonlight client pairings are machine-local secrets. Restore an
 existing identity from an elevated Windows PowerShell with:
 
 ```powershell
-& \\wsl.localhost\NixOS\home\alx\.dotfiles\scripts\windows\restore-sunshine-identity.ps1 `
+& \\wsl.localhost\Ubuntu-26.04\home\alx\.dotfiles\scripts\windows\restore-sunshine-identity.ps1 `
   -SourceDirectory C:\path\to\Sunshine-Handoff\identity
 ```
 
 The restore validates the state/certificate/key, backs up the installer-created
 identity, restarts `SunshineService`, and never copies secret state into Git.
 
-## Cutover
+## Windows integration
 
-After validation, run this from an elevated Windows PowerShell if Developer Mode
-is not enabled:
+`dotctl apply ubuntu-wsl` keeps the Windows links and default WSL distro aligned.
+To reconcile only the links manually, run:
 
 ```powershell
-.\scripts\windows\apply-wsl-links.ps1 -DistroName NixOS
-wsl.exe --set-default NixOS
+.\scripts\windows\apply-wsl-links.ps1 -DistroName Ubuntu-26.04
+wsl.exe --set-default Ubuntu-26.04
 ```
 
-The NixOS-WSL profile deploys the Windows-native Neovide config into Roaming
+The Ubuntu-WSL profile deploys the Windows-native Neovide config into Roaming
 AppData. That config enables Neovide's supported WSL transport, so launching
-Neovide from Windows runs the `nvim` managed by the default NixOS WSL distro.
+Neovide from Windows runs the `nvim` managed by Ubuntu Home Manager.
 
 ## Shared Codex conversations
 
-The NixOS-WSL profile uses one logical Codex home for the Windows ChatGPT/Codex
+The Ubuntu-WSL profile uses one logical Codex home for the Windows Codex
 GUI and the WSL CLI:
 
 - `CODEX_HOME=$WINHOME/.codex` keeps GUI settings, auth, plugins,
@@ -227,36 +226,27 @@ Do not symlink a live SQLite database across the WSL/Windows boundary. Also use
 one active writer at a time: finish or stop the CLI before opening the GUI for
 work, and close the GUI before starting a writing CLI session.
 
-Before the one-time migration, close the ChatGPT/Codex GUI and every Codex CLI.
-From a plain WSL terminal, run:
+When importing a pre-existing WSL Codex home, close the Codex GUI and every
+Codex CLI. From a plain WSL terminal, run:
 
 ```sh
 ~/.dotfiles/scripts/dotctl codex-share preflight
 ~/.dotfiles/scripts/dotctl codex-share migrate
 ```
 
-Use the checkout path for this first run because the currently installed
-`dotctl` predates the migration command. The migration installs the new NixOS
-boot generation after the data cutover.
-
 The migration refuses to start while either client is running. It preserves the
 Windows settings, imports the WSL conversation payloads and supporting history,
 memories, goals, and rules, rewrites the thread index to the shared Windows
-paths, and retains complete timestamped Windows and WSL rollback homes. WSL
-diagnostic logs start fresh. The original stores are not deleted.
-
-After migration, terminate the distro from Windows and validate the shared
-layout in a new WSL session:
+paths, and retains complete timestamped Windows and WSL rollback homes. Validate
+the shared layout afterward with:
 
 ```sh
-wsl.exe -t NixOS
-# Open a new NixOS terminal after the command above.
 dotctl codex-share doctor
 ```
 
 The Windows GUI already launches its backend inside WSL when
 `desktop.runCodexInWindowsSubsystemForLinux` is enabled. The environment above
-also makes ordinary NixOS Codex CLI sessions use the same home and index.
+also makes ordinary Ubuntu Codex CLI sessions use the same home and index.
 
 Rollback archives must remain in place until the shared layout has been used
 successfully from both clients and is explicitly approved for cleanup.
