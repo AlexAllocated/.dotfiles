@@ -26,6 +26,9 @@ public static class PowerWashLauncher
 			localAppData,
 			@"dotfiles\configure-powerwash-simulator-2.ps1"
 		);
+		string logDirectory = Path.Combine(localAppData, @"dotfiles\logs");
+		string logPath = Path.Combine(logDirectory, "powerwash-launcher.log");
+		Directory.CreateDirectory(logDirectory);
 
 		var powershellArguments = new List<string>
 		{
@@ -48,6 +51,8 @@ public static class PowerWashLauncher
 			FileName = powershell,
 			Arguments = JoinArguments(powershellArguments),
 			CreateNoWindow = true,
+			RedirectStandardError = true,
+			RedirectStandardOutput = true,
 			UseShellExecute = false,
 			WindowStyle = ProcessWindowStyle.Hidden
 		};
@@ -59,7 +64,24 @@ public static class PowerWashLauncher
 				return 1;
 			}
 
+			string standardOutput = process.StandardOutput.ReadToEnd();
+			string standardError = process.StandardError.ReadToEnd();
 			process.WaitForExit();
+			if (process.ExitCode != 0 || standardError.Length > 0)
+			{
+				File.AppendAllText(
+					logPath,
+					string.Format(
+						"[{0:O}] exit={1}{2}{3}{2}{4}{2}",
+						DateTimeOffset.Now,
+						process.ExitCode,
+						Environment.NewLine,
+						standardOutput,
+						standardError
+					),
+					Encoding.UTF8
+				);
+			}
 			return process.ExitCode;
 		}
 	}

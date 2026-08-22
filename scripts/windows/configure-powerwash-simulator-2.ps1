@@ -312,6 +312,7 @@ function Set-UnityDisplayPreferences {
 	)
 
 	New-Item -Path $playerPrefsPath -Force | Out-Null
+	$registryKey = Get-Item -Path $playerPrefsPath
 	$playerPrefs = [ordered]@{
 		"Screenmanager Resolution Width_h182942802" = $TargetWidth
 		"Screenmanager Resolution Height_h2627697771" = $TargetHeight
@@ -321,7 +322,10 @@ function Set-UnityDisplayPreferences {
 		"Screenmanager Window Position Y_h4088080502" = $WindowY
 	}
 	foreach ($entry in $playerPrefs.GetEnumerator()) {
-		$current = Get-ItemPropertyValue -Path $playerPrefsPath -Name $entry.Key -ErrorAction SilentlyContinue
+		# Get-ItemPropertyValue throws a PSArgumentException when the key exists but
+		# an individual Unity value has not been created yet, even with
+		# -ErrorAction SilentlyContinue. RegistryKey.GetValue cleanly returns null.
+		$current = $registryKey.GetValue($entry.Key, $null)
 		if ($current -ne $entry.Value) {
 			Set-ItemProperty -Path $playerPrefsPath -Name $entry.Key -Type DWord -Value $entry.Value
 		}
