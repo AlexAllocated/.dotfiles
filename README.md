@@ -32,9 +32,10 @@ dotctl doctor
 `updoot` is an alias for `dotctl apply --update`. Updates happen in a staging
 checkout with isolated Neovim state. Before staging, local changes are saved,
 the branch is rebased onto its latest upstream, and the local changes are
-restored. New lockfiles are accepted only after Neovim automation and all-system
-Nix evaluation succeed. Neovim, Lazy, Mason, and Treesitter progress is streamed
-directly to the terminal. The isolated phase updates only Lazy plugin pins;
+restored. The official OpenAI `latest` channel is resolved to a versioned Codex
+artifact and checksum, and new pins are accepted only after Neovim automation
+and all-system Nix evaluation succeed. Neovim, Lazy, Mason, and Treesitter
+progress is streamed directly to the terminal. The isolated phase updates only Lazy plugin pins;
 installed Mason tools and Treesitter parsers are updated once in the persistent
 runtime after validation. After applying, `updoot` commits every outstanding
 change and fetches again. Any late upstream changes are rebased, validated, and

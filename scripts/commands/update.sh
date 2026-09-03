@@ -72,6 +72,63 @@ update_neovim_candidate() {
 	printf 'Neovim plugin pins refreshed.\n'
 }
 
+update_codex_candidate() {
+	local candidate="$1"
+	local metadata="$2/codex-release.json"
+	local output="$candidate/pins/codex.json"
+	local staged="$output.next"
+	local tag version
+
+	require_command curl
+	require_command jq
+	mkdir -p "$(dirname "$output")"
+	printf 'Refreshing Codex from the official OpenAI release channel...\n'
+	curl -fsSL \
+		--connect-timeout 10 \
+		--max-time 30 \
+		https://releases.openai.com/codex/channels/latest \
+		-o "$metadata"
+	tag="$(jq -er '.tag_name | strings' "$metadata")"
+	case "$tag" in
+		rust-v*) version="${tag#rust-v}" ;;
+		*)
+			printf 'Unexpected Codex release tag: %s\n' "$tag" >&2
+			return 1
+			;;
+	esac
+	[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+		printf 'Unexpected Codex release version: %s\n' "$version" >&2
+		return 1
+	}
+
+	jq -e --arg version "$version" '
+		def package($system; $target):
+			("codex-package-" + $target + ".tar.gz") as $name
+			| ([.assets[] | select(.name == $name)]
+				| if length == 1 then .[0] else error("expected exactly one " + $name) end) as $asset
+			| ($asset.digest | capture("^sha256:(?<hash>[0-9a-f]{64})$").hash) as $sha256
+			| ("https://releases.openai.com/codex/releases/" + $version + "/" + $name) as $url
+			| if $asset.browser_download_url != $url then
+				error("unexpected download URL for " + $name)
+			  else
+				{ key: $system, value: { target: $target, url: $url, sha256: $sha256 } }
+			  end;
+
+		[
+			package("aarch64-darwin"; "aarch64-apple-darwin"),
+			package("aarch64-linux"; "aarch64-unknown-linux-musl"),
+			package("x86_64-linux"; "x86_64-unknown-linux-musl")
+		] as $assets
+		| {
+			channel: "latest",
+			version: $version,
+			assets: ($assets | from_entries)
+		}
+	' "$metadata" >"$staged"
+	mv "$staged" "$output"
+	printf 'Codex %s is pinned from OpenAI.\n' "$version"
+}
+
 validate_update_candidate() {
 	local candidate="$1"
 	if command_exists nix; then
@@ -83,7 +140,7 @@ validate_update_candidate() {
 accept_candidate_locks() {
 	local candidate="$1"
 	local path
-	for path in flake.lock nvim/lazy-lock.json; do
+	for path in flake.lock nvim/lazy-lock.json pins/codex.json; do
 		if [[ -f "$candidate/$path" ]]; then
 			cp "$candidate/$path" "$REPO_ROOT/$path"
 		fi
@@ -121,6 +178,7 @@ prepare_update_candidate() {
 	local candidate="$1"
 	local work="$2"
 	stage_repo "$candidate"
+	update_codex_candidate "$candidate" "$work"
 	if command_exists nix; then
 		printf 'Refreshing flake inputs in a staging checkout...\n'
 		nix flake update --flake "path:$candidate"

@@ -8,7 +8,7 @@
 let
   cfg = config.dotfiles;
   toolsets = import ../../lib/toolsets.nix { inherit lib pkgs toolPkgs; };
-  codexPackage = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
+  codexPackage = import ../../packages/codex.nix { inherit lib pkgs; };
   wslCodexHome = "/mnt/c/Users/${config.home.username}/.codex";
   desktopCodex = pkgs.writeShellApplication {
     name = "codex";

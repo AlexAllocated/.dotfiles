@@ -6,7 +6,7 @@
   ...
 }:
 let
-  rescueCodex = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
+  rescueCodex = import ../../packages/codex.nix { inherit lib pkgs; };
 in
 {
   nixpkgs.config.allowUnfree = true;

@@ -8,7 +8,7 @@ let
     packageSet: name:
     lib.optional (builtins.hasAttr name packageSet) (builtins.getAttr name packageSet);
   optionalPkgs = packageSet: names: lib.concatMap (optional packageSet) names;
-  codex = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
+  codex = import ../packages/codex.nix { inherit lib pkgs; };
 in
 rec {
   foundation =

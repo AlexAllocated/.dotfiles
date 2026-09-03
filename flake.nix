@@ -124,6 +124,7 @@
             python3 scripts/windows/configure-codex.py --self-test
             python3 scripts/codex/canonicalize-home.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
+            python3 -m json.tool pins/codex.json >/dev/null
             python3 -c 'import pathlib, tomllib; tomllib.loads(pathlib.Path("platforms/windows/codex-desktop.toml").read_text())'
             find neovide -name '*.toml' -print0 | xargs -0 -n1 python3 -c 'import pathlib, sys, tomllib; tomllib.loads(pathlib.Path(sys.argv[1]).read_text())'
             prettier --check README.md AGENTS.md docs .github
@@ -344,6 +345,10 @@
         })
         // {
           bigblue-font = pkgs.nerd-fonts.bigblue-terminal;
+          codex = import ./packages/codex.nix {
+            inherit (nixpkgs) lib;
+            inherit pkgs;
+          };
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
           chev-installer-iso = self.nixosConfigurations.chev-installer.config.system.build.isoImage;

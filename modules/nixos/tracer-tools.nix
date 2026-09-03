@@ -9,7 +9,7 @@
 let
   cfg = config.dotfiles.tracerTools;
   source = toString cfg.source;
-  codexPackage = if builtins.hasAttr "codex" toolPkgs then toolPkgs.codex else pkgs.codex;
+  codexPackage = import ../../packages/codex.nix { inherit lib pkgs; };
   mkTool =
     {
       name,

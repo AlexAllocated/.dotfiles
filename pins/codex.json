@@ -1,0 +1,21 @@
+{
+  "channel": "latest",
+  "version": "0.153.1",
+  "assets": {
+    "aarch64-darwin": {
+      "target": "aarch64-apple-darwin",
+      "url": "https://releases.openai.com/codex/releases/0.153.1/codex-package-aarch64-apple-darwin.tar.gz",
+      "sha256": "0e1c64a0dc48440df30d158f3e4952e95ccf98a98969e7ea0c3dfd63902c5f2d"
+    },
+    "aarch64-linux": {
+      "target": "aarch64-unknown-linux-musl",
+      "url": "https://releases.openai.com/codex/releases/0.153.1/codex-package-aarch64-unknown-linux-musl.tar.gz",
+      "sha256": "08ea8232c5556a8096f8bea1dc38b3166d32a9999465e32cc0183c960c4fae28"
+    },
+    "x86_64-linux": {
+      "target": "x86_64-unknown-linux-musl",
+      "url": "https://releases.openai.com/codex/releases/0.153.1/codex-package-x86_64-unknown-linux-musl.tar.gz",
+      "sha256": "0b7afd1de4ecf06a8633f1e4958ec5f8d57d4b7842773416d9cb9d8c816f2c84"
+    }
+  }
+}
