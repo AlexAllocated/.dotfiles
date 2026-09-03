@@ -1,13 +1,15 @@
 use std::{
 	collections::VecDeque,
 	fs,
-	path::PathBuf,
+	mem::size_of,
+	net::UdpSocket,
+	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicBool, AtomicU32, Ordering},
 		Arc,
 	},
 	thread,
-	time::{Duration, Instant},
+	time::{Duration, Instant, SystemTime},
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -23,17 +25,153 @@ use tracing::{error, info, warn};
 use wasapi::{DeviceEnumerator, Direction as WasapiDirection, Role as WasapiRole};
 
 use crate::{
-	app_routing::{process_is_running, AppRouter, GlobalAudioDefaults},
-	BusSummary, Config, EndpointSummary, GraphSnapshot, MeterReading,
+	app_routing::{
+		ensure_capture_endpoint_ready, ensure_capture_endpoint_selector_ready, process_is_running,
+		AppRouter, GlobalAudioDefaults,
+	},
+	master_volume::MasterVolumeBridge,
+	nvidia_afx::NvidiaAfx,
+	patch_destinations, patch_sources, BusSummary, Config, EndpointSummary, GraphSnapshot,
+	MeterReading, PatchConnection, SuppressionBackend, SuppressionTransition,
 };
 
 const SAMPLE_RATE: u32 = 48_000;
 const WAVEFORM_BINS: usize = 96;
 const WAVEFORM_SAMPLES: usize = WAVEFORM_BINS * 2;
 const WAVEFORM_WINDOW_MS: usize = 240;
+const PROCESSED_MIC_TELEMETRY_ADDRESS: &str = "127.0.0.1:47847";
+const PROCESSED_MIC_TELEMETRY_MAGIC: &[u8; 4] = b"AAMP";
+const PROCESSED_MIC_TELEMETRY_VERSION: u32 = 1;
+const PROCESSED_MIC_TELEMETRY_HEADER_BYTES: usize = 16;
+const PROCESSED_MIC_TELEMETRY_PACKET_BYTES: usize =
+	PROCESSED_MIC_TELEMETRY_HEADER_BYTES + WAVEFORM_SAMPLES * size_of::<f32>();
+const PROCESSED_MIC_TELEMETRY_INTERVAL_SAMPLES: usize = SAMPLE_RATE as usize / 30;
+const PROCESSED_MIC_TELEMETRY_STALE_AFTER: Duration = Duration::from_millis(250);
 
 const ENDPOINT_HISTORY_LIMIT: usize = 8;
 const PREFERRED_ENDPOINT_RECHECK_INTERVAL: Duration = Duration::from_secs(2);
+const NVIDIA_AFX_LABEL: &str = "NVIDIA AFX (RTX)";
+const DEEPFILTER_LABEL: &str = "DeepFilterNet3";
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ActiveSuppressionStatus {
+	engine: String,
+}
+
+enum SuppressionProcessor {
+	Nvidia(NvidiaAfx),
+	DeepFilter {
+		model: Box<DfTract>,
+		input: Array2<f32>,
+		output: Array2<f32>,
+	},
+}
+
+impl SuppressionProcessor {
+	fn new(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
+		match config.engine.as_str() {
+			"nvidia_afx" => Self::nvidia(config),
+			"deepfilternet3" => Self::deep_filter(config),
+			other => bail!("unsupported suppression engine {other:?}"),
+		}
+	}
+
+	fn nvidia(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
+		let processor = NvidiaAfx::new(crate::suppression_intensity(config))?;
+		Ok(Self::Nvidia(processor))
+	}
+
+	fn deep_filter(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
+		let runtime = RuntimeParams::default_with_ch(1)
+			.with_atten_lim(config.attenuation_limit_db)
+			.with_post_filter(config.post_filter_beta);
+		let mut model = Box::new(
+			DfTract::new(DfParams::default(), &runtime)
+				.context("could not initialize the embedded DeepFilterNet3 model")?,
+		);
+		if model.sr != SAMPLE_RATE as usize {
+			bail!(
+				"DeepFilterNet requires {} Hz but AudioArray is fixed at {SAMPLE_RATE} Hz",
+				model.sr
+			);
+		}
+		let input = Array2::zeros((1, model.hop_size));
+		let mut output = Array2::zeros((1, model.hop_size));
+		model
+			.process(input.view(), output.view_mut())
+			.context("could not warm up DeepFilterNet3")?;
+		Ok(Self::DeepFilter {
+			model,
+			input,
+			output,
+		})
+	}
+
+	fn label(&self) -> &'static str {
+		match self {
+			Self::Nvidia(_) => NVIDIA_AFX_LABEL,
+			Self::DeepFilter { .. } => DEEPFILTER_LABEL,
+		}
+	}
+
+	fn frame_samples(&self) -> usize {
+		match self {
+			Self::Nvidia(processor) => processor.frame_samples(),
+			Self::DeepFilter { model, .. } => model.hop_size,
+		}
+	}
+
+	fn backend(&self) -> SuppressionBackend {
+		match self {
+			Self::Nvidia(_) => SuppressionBackend::Nvidia,
+			Self::DeepFilter { .. } => SuppressionBackend::DeepFilter,
+		}
+	}
+
+	fn update_parameters(&mut self, config: &crate::NoiseSuppressionConfig) -> Result<()> {
+		match self {
+			Self::Nvidia(_) => {
+				bail!("NVIDIA AFX parameter changes require a Clean Mic processor rebuild")
+			}
+			Self::DeepFilter { model, .. } => {
+				model.set_atten_lim(config.attenuation_limit_db);
+				model.set_pf_beta(config.post_filter_beta);
+				Ok(())
+			}
+		}
+	}
+
+	fn startup_silence(&self) -> usize {
+		match self {
+			Self::Nvidia(_) => 0,
+			Self::DeepFilter { model, .. } => {
+				model.fft_size - model.hop_size + model.lookahead * model.hop_size
+			}
+		}
+	}
+
+	fn process(&mut self, input_frame: &[f32], output_frame: &mut [f32]) -> Result<()> {
+		match self {
+			Self::Nvidia(processor) => processor.process(input_frame, output_frame),
+			Self::DeepFilter {
+				model,
+				input,
+				output,
+			} => {
+				for (destination, source) in input.iter_mut().zip(input_frame) {
+					*destination = *source;
+				}
+				model
+					.process(input.view(), output.view_mut())
+					.context("DeepFilterNet3 inference failed")?;
+				for (destination, source) in output_frame.iter_mut().zip(output.iter()) {
+					*destination = *source;
+				}
+				Ok(())
+			}
+		}
+	}
+}
 
 #[derive(Clone, Copy)]
 enum Direction {
@@ -41,13 +179,13 @@ enum Direction {
 	Output,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct SavedEndpoint {
 	id: String,
 	name: String,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 struct PhysicalEndpointState {
 	// These two fields migrate the original one-endpoint state format. New
 	// state files contain only the ordered input/output histories below.
@@ -108,6 +246,7 @@ struct EndpointCoordinator {
 	state: PhysicalEndpointState,
 	defaults: GlobalAudioDefaults,
 	temporary_output: Option<String>,
+	master_volume: Option<MasterVolumeBridge>,
 }
 
 impl EndpointCoordinator {
@@ -130,6 +269,8 @@ impl EndpointCoordinator {
 				"AudioArray has no remembered physical input/output. Stop AudioArray, select physical Windows defaults, then start it again"
 			);
 		}
+		let active_input = first_active_endpoint(Direction::Input, state.history(Direction::Input))?;
+		ensure_capture_endpoint_ready(&active_input.id)?;
 		if changed || !state_path.exists() {
 			save_physical_state(&state_path, &state)?;
 		}
@@ -144,6 +285,7 @@ impl EndpointCoordinator {
 			state,
 			defaults,
 			temporary_output,
+			master_volume: None,
 		})
 	}
 
@@ -167,7 +309,16 @@ impl EndpointCoordinator {
 	}
 
 	fn reconcile(&mut self, config: &Config) -> Result<bool> {
-		let mut changed = false;
+		let mut persisted_state = load_physical_state(&self.state_path)?;
+		let migrated = persisted_state.migrate_legacy();
+		let mut changed = persisted_state != self.state;
+		if changed {
+			info!("adopted an explicit AudioArray physical endpoint selection");
+			self.state = persisted_state;
+		}
+		if migrated {
+			save_physical_state(&self.state_path, &self.state)?;
+		}
 		let temporary_output = temporary_output_for_session(config)?;
 		let temporary_changed = temporary_output != self.temporary_output;
 		if temporary_changed {
@@ -187,6 +338,14 @@ impl EndpointCoordinator {
 			if !is_non_physical_endpoint_name(&endpoint.name)
 				&& self.state.remember(direction, endpoint.clone())
 			{
+				if matches!(direction, Direction::Input) {
+					ensure_capture_endpoint_ready(&endpoint.id).with_context(|| {
+						format!(
+							"could not make selected physical {label} {:?} usable",
+							endpoint.name
+						)
+					})?;
+				}
 				info!(physical_endpoint = %endpoint.name, "adopted Windows-selected physical {label}");
 				changed = true;
 			}
@@ -203,6 +362,30 @@ impl EndpointCoordinator {
 			self.defaults.enforce_outputs()?;
 		}
 		Ok(changed || temporary_changed)
+	}
+
+	fn begin_graph_rebuild(&mut self, config: &Config, effective: &Config) -> Result<()> {
+		if let Some(bridge) = &mut self.master_volume {
+			bridge.retarget(&effective.monitor.output)?;
+		} else {
+			self.master_volume = Some(MasterVolumeBridge::new(
+				&config.cables.game,
+				&effective.monitor.output,
+			)?);
+		}
+		self
+			.master_volume
+			.as_ref()
+			.expect("master-volume bridge was initialized")
+			.begin_graph_rebuild()
+	}
+
+	fn finish_graph_rebuild(&self) -> Result<()> {
+		self
+			.master_volume
+			.as_ref()
+			.ok_or_else(|| anyhow!("master-volume bridge is unavailable"))?
+			.finish_graph_rebuild()
 	}
 
 	fn returned_preferred_endpoint(
@@ -237,6 +420,8 @@ struct RunningGraph {
 	failed: Arc<AtomicBool>,
 	worker_stop: Arc<AtomicBool>,
 	worker: Option<thread::JoinHandle<()>>,
+	patch_stop: Arc<AtomicBool>,
+	patch_worker: Option<thread::JoinHandle<()>>,
 	input_name: String,
 	output_name: String,
 }
@@ -247,6 +432,71 @@ impl Drop for RunningGraph {
 		if let Some(worker) = self.worker.take() {
 			let _ = worker.join();
 		}
+		self.patch_stop.store(true, Ordering::Release);
+		if let Some(worker) = self.patch_worker.take() {
+			let _ = worker.join();
+		}
+	}
+}
+
+struct ActiveSuppressionGuard;
+
+impl Drop for ActiveSuppressionGuard {
+	fn drop(&mut self) {
+		clear_active_suppression();
+	}
+}
+
+fn active_suppression_path() -> Option<PathBuf> {
+	std::env::var_os("LOCALAPPDATA")
+		.map(PathBuf::from)
+		.map(|root| root.join("AudioArray").join("active-suppression.toml"))
+}
+
+fn publish_active_suppression(engine: &str) {
+	let Some(path) = active_suppression_path() else {
+		warn!("LOCALAPPDATA is unavailable; suppression status cannot be published");
+		return;
+	};
+	let result = (|| -> Result<()> {
+		if let Some(parent) = path.parent() {
+			fs::create_dir_all(parent)?;
+		}
+		let status = ActiveSuppressionStatus {
+			engine: engine.to_string(),
+		};
+		fs::write(&path, toml::to_string_pretty(&status)?)?;
+		Ok(())
+	})();
+	if let Err(error) = result {
+		warn!(%error, path = %path.display(), "could not publish active suppression backend");
+	}
+}
+
+fn clear_active_suppression() {
+	let Some(path) = active_suppression_path() else {
+		return;
+	};
+	if let Err(error) = fs::remove_file(&path) {
+		if error.kind() != std::io::ErrorKind::NotFound {
+			warn!(%error, path = %path.display(), "could not clear active suppression backend");
+		}
+	}
+}
+
+fn read_active_suppression() -> Option<String> {
+	let path = active_suppression_path()?;
+	let text = fs::read_to_string(path).ok()?;
+	toml::from_str::<ActiveSuppressionStatus>(&text)
+		.ok()
+		.map(|status| status.engine)
+}
+
+fn configured_suppression_label(engine: &str) -> &'static str {
+	match engine {
+		"nvidia_afx" => NVIDIA_AFX_LABEL,
+		"deepfilternet3" => DEEPFILTER_LABEL,
+		_ => "Unknown",
 	}
 }
 
@@ -308,6 +558,40 @@ fn save_physical_state(path: &PathBuf, state: &PhysicalEndpointState) -> Result<
 	fs::create_dir_all(parent)?;
 	fs::write(path, toml::to_string_pretty(state)?)
 		.with_context(|| format!("could not save physical endpoint state {}", path.display()))
+}
+
+pub(crate) fn remember_selected_physical_output(selector: &str) -> Result<()> {
+	remember_selected_physical_endpoint(Direction::Output, selector)
+}
+
+pub(crate) fn remember_selected_physical_input(selector: &str) -> Result<()> {
+	remember_selected_physical_endpoint(Direction::Input, selector)
+}
+
+fn remember_selected_physical_endpoint(direction: Direction, selector: &str) -> Result<()> {
+	let wasapi_direction = match direction {
+		Direction::Input => WasapiDirection::Capture,
+		Direction::Output => WasapiDirection::Render,
+	};
+	let endpoint = resolve_endpoint(wasapi_direction, selector)?;
+	if is_non_physical_endpoint_name(&endpoint.name) {
+		return Ok(());
+	}
+	if matches!(direction, Direction::Input) {
+		ensure_capture_endpoint_ready(&endpoint.id)?;
+	}
+	let path = physical_state_path()?;
+	let mut state = load_physical_state(&path)?;
+	let changed = state.migrate_legacy() | state.remember(direction, endpoint.clone());
+	if changed {
+		save_physical_state(&path, &state)?;
+		info!(
+			physical_endpoint = %endpoint.name,
+			direction = direction_name(direction),
+			"persisted an explicit AudioArray physical endpoint selection"
+		);
+	}
+	Ok(())
 }
 
 fn default_endpoint(direction: WasapiDirection) -> Result<Option<SavedEndpoint>> {
@@ -490,11 +774,21 @@ pub(crate) fn doctor(config: &Config) -> Result<()> {
 	println!(
 		"  Suppression:     {}",
 		if config.noise_suppression.enabled {
-			"DeepFilterNet3"
+			configured_suppression_label(&config.noise_suppression.engine)
 		} else {
 			"disabled"
 		}
 	);
+	if config.noise_suppression.enabled {
+		println!(
+			"  NVIDIA runtime: {}",
+			if crate::nvidia_afx::runtime_available() {
+				"available"
+			} else {
+				"unavailable"
+			}
+		);
+	}
 	Ok(())
 }
 
@@ -502,33 +796,31 @@ pub(crate) fn benchmark(config: &Config, seconds: u32) -> Result<()> {
 	if seconds == 0 || seconds > 300 {
 		bail!("benchmark duration must be between 1 and 300 seconds");
 	}
-	let runtime = RuntimeParams::default_with_ch(1)
-		.with_atten_lim(config.noise_suppression.attenuation_limit_db)
-		.with_post_filter(config.noise_suppression.post_filter_beta);
-	let mut model = DfTract::new(DfParams::default(), &runtime)
-		.context("could not initialize the embedded DeepFilterNet3 model")?;
-	let mut input = Array2::zeros((1, model.hop_size));
-	let mut output = Array2::zeros((1, model.hop_size));
-	model.process(input.view(), output.view_mut())?;
-	let frame_count = seconds as usize * model.sr / model.hop_size;
+	let mut processor = SuppressionProcessor::new(&config.noise_suppression)?;
+	let frame_samples = processor.frame_samples();
+	let mut input = vec![0.0_f32; frame_samples];
+	let mut output = vec![0.0_f32; frame_samples];
+	processor.process(&input, &mut output)?;
+	let frame_count = seconds as usize * SAMPLE_RATE as usize / frame_samples;
 	let mut phase = 0.0_f32;
 	let mut random = 0x9e37_79b9_u32;
 	let started = Instant::now();
 	for _ in 0..frame_count {
-		for sample in input.iter_mut() {
+		for sample in &mut input {
 			random ^= random << 13;
 			random ^= random >> 17;
 			random ^= random << 5;
 			let noise = (random as f32 / u32::MAX as f32 - 0.5) * 0.04;
 			*sample = phase.sin() * 0.12 + noise;
-			phase += std::f32::consts::TAU * 180.0 / model.sr as f32;
+			phase += std::f32::consts::TAU * 180.0 / SAMPLE_RATE as f32;
 		}
-		model.process(input.view(), output.view_mut())?;
+		processor.process(&input, &mut output)?;
 	}
 	let elapsed = started.elapsed();
 	let realtime = Duration::from_secs(seconds as u64);
 	println!(
-		"Processed {seconds}s of noisy audio in {:.3}s.",
+		"{} processed {seconds}s of noisy audio in {:.3}s.",
+		processor.label(),
 		elapsed.as_secs_f64()
 	);
 	println!(
@@ -631,18 +923,26 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 	let routing_ready = input_defaults_match(config)?
 		&& (temporary_output_yields_defaults(config, session_override.as_deref())
 			|| output_defaults_match(config)?);
+	let engine_online = process_is_running("audioarray.exe")?;
 	let suppression = if config.noise_suppression.enabled {
-		"DeepFilterNet3".to_string()
+		if engine_online {
+			read_active_suppression().unwrap_or_else(|| {
+				configured_suppression_label(&config.noise_suppression.engine).to_string()
+			})
+		} else {
+			configured_suppression_label(&config.noise_suppression.engine).to_string()
+		}
 	} else {
 		"Bypassed".to_string()
 	};
 
 	Ok(GraphSnapshot {
 		platform: "windows",
-		engine_online: process_is_running("audioarray.exe")?,
+		engine_online,
 		routing_ready,
 		sample_rate: SAMPLE_RATE,
 		suppression,
+		suppression_engine: config.noise_suppression.engine.clone(),
 		suppression_enabled: config.noise_suppression.enabled,
 		suppression_intensity: crate::suppression_intensity(&config.noise_suppression),
 		suppression_attenuation_limit_db: config.noise_suppression.attenuation_limit_db,
@@ -678,6 +978,9 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 				spatial: None,
 			},
 		],
+		patch_sources: patch_sources(),
+		patch_destinations: patch_destinations(),
+		patches: config.patchbay.connections.clone(),
 		routes: config.routes.clone(),
 		monitor_latency_ms: config.monitor.latency_ms,
 		microphone_latency_ms: config.microphone.latency_ms,
@@ -698,10 +1001,206 @@ struct SignalProbe {
 	history_limit: usize,
 }
 
+struct ProcessedMicPublisher {
+	socket: UdpSocket,
+	history: VecDeque<f32>,
+	history_limit: usize,
+	samples_since_publish: usize,
+	peak_since_publish: f32,
+	warned: bool,
+}
+
+impl ProcessedMicPublisher {
+	fn new() -> Option<Self> {
+		match UdpSocket::bind("127.0.0.1:0") {
+			Ok(socket) => Some(Self {
+				socket,
+				history: VecDeque::with_capacity(SAMPLE_RATE as usize * WAVEFORM_WINDOW_MS / 1_000),
+				history_limit: SAMPLE_RATE as usize * WAVEFORM_WINDOW_MS / 1_000,
+				samples_since_publish: 0,
+				peak_since_publish: 0.0,
+				warned: false,
+			}),
+			Err(error) => {
+				warn!(%error, "could not create the processed-microphone telemetry publisher");
+				None
+			}
+		}
+	}
+
+	fn push(&mut self, samples: &[f32]) {
+		for &sample in samples {
+			let sample = if sample.is_finite() {
+				sample.clamp(-1.0, 1.0)
+			} else {
+				0.0
+			};
+			self.history.push_back(sample);
+			self.peak_since_publish = self.peak_since_publish.max(sample.abs());
+		}
+		while self.history.len() > self.history_limit {
+			self.history.pop_front();
+		}
+		self.samples_since_publish += samples.len();
+		if self.samples_since_publish < PROCESSED_MIC_TELEMETRY_INTERVAL_SAMPLES {
+			return;
+		}
+		self.samples_since_publish %= PROCESSED_MIC_TELEMETRY_INTERVAL_SAMPLES;
+		let waveform = waveform_from_history(&self.history);
+		let mut packet = Vec::with_capacity(PROCESSED_MIC_TELEMETRY_PACKET_BYTES);
+		packet.extend_from_slice(PROCESSED_MIC_TELEMETRY_MAGIC);
+		packet.extend_from_slice(&PROCESSED_MIC_TELEMETRY_VERSION.to_le_bytes());
+		packet.extend_from_slice(&self.peak_since_publish.to_le_bytes());
+		packet.extend_from_slice(&(WAVEFORM_SAMPLES as u32).to_le_bytes());
+		for sample in waveform {
+			packet.extend_from_slice(&sample.to_le_bytes());
+		}
+		self.peak_since_publish = 0.0;
+		if let Err(error) = self
+			.socket
+			.send_to(&packet, PROCESSED_MIC_TELEMETRY_ADDRESS)
+		{
+			if !self.warned {
+				warn!(%error, "could not publish processed-microphone telemetry");
+				self.warned = true;
+			}
+		} else {
+			self.warned = false;
+		}
+	}
+}
+
+struct ProcessedMicReceiver {
+	socket: UdpSocket,
+	latest: MeterReading,
+	last_received: Option<Instant>,
+	warned: bool,
+}
+
+impl ProcessedMicReceiver {
+	fn bind() -> Option<Self> {
+		let socket = match UdpSocket::bind(PROCESSED_MIC_TELEMETRY_ADDRESS) {
+			Ok(socket) => socket,
+			Err(error) => {
+				warn!(%error, "could not bind the processed-microphone telemetry receiver");
+				return None;
+			}
+		};
+		if let Err(error) = socket.set_nonblocking(true) {
+			warn!(%error, "could not make processed-microphone telemetry nonblocking");
+			return None;
+		}
+		Some(Self {
+			socket,
+			latest: silent_meter_reading("processed-mic"),
+			last_received: None,
+			warned: false,
+		})
+	}
+
+	fn read(&mut self) -> MeterReading {
+		let mut packet = [0_u8; PROCESSED_MIC_TELEMETRY_PACKET_BYTES];
+		loop {
+			match self.socket.recv(&mut packet) {
+				Ok(size) => {
+					if let Some(reading) = decode_processed_mic_packet(&packet[..size]) {
+						self.latest = reading;
+						self.last_received = Some(Instant::now());
+						self.warned = false;
+					}
+				}
+				Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+				Err(error) => {
+					if !self.warned {
+						warn!(%error, "could not receive processed-microphone telemetry");
+						self.warned = true;
+					}
+					break;
+				}
+			}
+		}
+		if self
+			.last_received
+			.is_none_or(|received| received.elapsed() > PROCESSED_MIC_TELEMETRY_STALE_AFTER)
+		{
+			return silent_meter_reading("processed-mic");
+		}
+		self.latest.clone()
+	}
+}
+
+fn decode_processed_mic_packet(packet: &[u8]) -> Option<MeterReading> {
+	if packet.len() != PROCESSED_MIC_TELEMETRY_PACKET_BYTES
+		|| packet.get(..4)? != PROCESSED_MIC_TELEMETRY_MAGIC
+		|| u32::from_le_bytes(packet.get(4..8)?.try_into().ok()?) != PROCESSED_MIC_TELEMETRY_VERSION
+		|| u32::from_le_bytes(packet.get(12..16)?.try_into().ok()?) as usize != WAVEFORM_SAMPLES
+	{
+		return None;
+	}
+	let peak = f32::from_le_bytes(packet.get(8..12)?.try_into().ok()?);
+	let mut waveform = Vec::with_capacity(WAVEFORM_SAMPLES);
+	for bytes in packet[PROCESSED_MIC_TELEMETRY_HEADER_BYTES..].chunks_exact(size_of::<f32>()) {
+		let sample = f32::from_le_bytes(bytes.try_into().ok()?);
+		waveform.push(if sample.is_finite() {
+			sample.clamp(-1.0, 1.0)
+		} else {
+			0.0
+		});
+	}
+	Some(meter_reading(
+		"processed-mic",
+		if peak.is_finite() { peak } else { 0.0 },
+		waveform,
+	))
+}
+
+fn silent_meter_reading(id: &'static str) -> MeterReading {
+	meter_reading(id, 0.0, vec![0.0; WAVEFORM_SAMPLES])
+}
+
 pub(crate) struct MeterProbe {
 	input_name: String,
+	patches: Vec<PatchConnection>,
 	signals: Vec<SignalProbe>,
+	processed_mic: Option<ProcessedMicReceiver>,
 	_streams: Vec<Stream>,
+}
+
+pub(crate) struct CleanMicMonitor {
+	output_name: String,
+	_streams: Vec<Stream>,
+}
+
+impl CleanMicMonitor {
+	pub(crate) fn new(config: &Config) -> Result<Self> {
+		let effective = effective_session_config(config)?;
+		let host = cpal::default_host();
+		let clean_mic = resolve_named_device(&host, Direction::Input, &config.cables.clean_mic)?;
+		let output = resolve_monitor_device(&host, &effective)?;
+		let output_name = output.name()?;
+		let failed = Arc::new(AtomicBool::new(false));
+		let streams = build_stereo_route(
+			"Clean Mic Monitor",
+			&clean_mic,
+			&[output],
+			config.monitor.latency_ms,
+			1.0,
+			failed,
+		)?;
+		for stream in &streams {
+			stream
+				.play()
+				.context("could not start the temporary Clean Mic monitor")?;
+		}
+		Ok(Self {
+			output_name,
+			_streams: streams,
+		})
+	}
+
+	pub(crate) fn output_name(&self) -> &str {
+		&self.output_name
+	}
 }
 
 impl MeterProbe {
@@ -757,13 +1256,15 @@ impl MeterProbe {
 		}
 		Ok(Self {
 			input_name,
+			patches: config.patchbay.connections.clone(),
 			signals,
+			processed_mic: ProcessedMicReceiver::bind(),
 			_streams: streams,
 		})
 	}
 
 	pub(crate) fn read(&mut self) -> Vec<MeterReading> {
-		let mut readings = Vec::with_capacity(self.signals.len() + 2);
+		let mut readings = Vec::with_capacity(self.signals.len() + 3);
 		for signal in &mut self.signals {
 			while let Some(sample) = signal.samples.pop() {
 				signal.history.push_back(sample);
@@ -777,16 +1278,20 @@ impl MeterProbe {
 				waveform_from_history(&signal.history),
 			));
 		}
+		readings.push(self.processed_mic.as_mut().map_or_else(
+			|| silent_meter_reading("processed-mic"),
+			ProcessedMicReceiver::read,
+		));
 		let monitor_peak = readings
 			.iter()
-			.filter(|reading| matches!(reading.id, "game" | "comms" | "music"))
+			.filter(|reading| self.is_patched_to_monitor(reading.id))
 			.map(|reading| reading.peak)
 			.fold(0.0_f32, f32::max);
 		let monitor_waveform = (0..WAVEFORM_SAMPLES)
 			.map(|index| {
 				readings
 					.iter()
-					.filter(|reading| matches!(reading.id, "game" | "comms" | "music"))
+					.filter(|reading| self.is_patched_to_monitor(reading.id))
 					.map(|reading| reading.waveform.get(index).copied().unwrap_or(0.0))
 					.sum::<f32>()
 					.clamp(-1.0, 1.0)
@@ -796,6 +1301,11 @@ impl MeterProbe {
 			.iter()
 			.find(|reading| reading.id == "clean-mic")
 			.map_or(0.0, |reading| reading.peak);
+		let complete_peak = readings
+			.iter()
+			.filter(|reading| matches!(reading.id, "game" | "comms" | "music" | "clean-mic"))
+			.map(|reading| reading.peak)
+			.fold(0.0_f32, f32::max);
 		let complete_waveform = (0..WAVEFORM_SAMPLES)
 			.map(|index| {
 				readings
@@ -809,7 +1319,7 @@ impl MeterProbe {
 		readings.push(meter_reading("monitor", monitor_peak, monitor_waveform));
 		readings.push(meter_reading(
 			"complete-mix",
-			monitor_peak.max(clean_mic_peak),
+			complete_peak.max(clean_mic_peak),
 			complete_waveform,
 		));
 		readings
@@ -818,7 +1328,15 @@ impl MeterProbe {
 	pub(crate) fn is_current(&self, config: &Config) -> Result<bool> {
 		Ok(self
 			.input_name
-			.eq_ignore_ascii_case(&effective_session_config(config)?.microphone.input))
+			.eq_ignore_ascii_case(&effective_session_config(config)?.microphone.input)
+			&& self.patches == config.patchbay.connections)
+	}
+
+	fn is_patched_to_monitor(&self, source: &str) -> bool {
+		self
+			.patches
+			.iter()
+			.any(|patch| patch.source == source && patch.destination == "monitor")
 	}
 }
 
@@ -1002,9 +1520,11 @@ fn build_level_input(
 	})
 }
 
-pub(crate) fn run(config: Config, stop: Arc<AtomicBool>) -> Result<()> {
+pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -> Result<()> {
+	clear_active_suppression();
+	let _active_suppression_guard = ActiveSuppressionGuard;
 	let mut endpoints = EndpointCoordinator::new(&config)?;
-	let (mut graph, _) = wait_for_graph(&config, &mut endpoints, &stop)?;
+	let (mut graph, _) = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?;
 	let mut app_router = AppRouter::new(&config)?;
 	app_router.reconcile()?;
 	let mut next_route_reconcile = Instant::now() + Duration::from_secs(3);
@@ -1016,7 +1536,7 @@ pub(crate) fn run(config: Config, stop: Arc<AtomicBool>) -> Result<()> {
 		match endpoints.reconcile(&config) {
 			Ok(true) => {
 				drop(graph);
-				graph = wait_for_graph(&config, &mut endpoints, &stop)?.0;
+				graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?.0;
 				continue;
 			}
 			Ok(false) => {}
@@ -1028,7 +1548,7 @@ pub(crate) fn run(config: Config, stop: Arc<AtomicBool>) -> Result<()> {
 			{
 				info!(%direction, %endpoint, "a higher-priority physical endpoint returned; rebuilding graph");
 				drop(graph);
-				graph = wait_for_graph(&config, &mut endpoints, &stop)?.0;
+				graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?.0;
 				continue;
 			}
 		}
@@ -1041,7 +1561,7 @@ pub(crate) fn run(config: Config, stop: Arc<AtomicBool>) -> Result<()> {
 		if graph.failed.swap(false, Ordering::AcqRel) {
 			warn!("an audio stream failed; rebuilding the complete graph");
 			drop(graph);
-			graph = wait_for_graph(&config, &mut endpoints, &stop)?.0;
+			graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?.0;
 		}
 	}
 
@@ -1051,6 +1571,7 @@ pub(crate) fn run(config: Config, stop: Arc<AtomicBool>) -> Result<()> {
 
 fn wait_for_graph(
 	config: &Config,
+	config_path: &Path,
 	endpoints: &mut EndpointCoordinator,
 	stop: &AtomicBool,
 ) -> Result<(RunningGraph, Config)> {
@@ -1078,9 +1599,22 @@ fn wait_for_graph(
 				continue;
 			}
 		};
-		match build_graph(&effective) {
-			Ok(graph) => return Ok((graph, effective)),
+		endpoints.begin_graph_rebuild(config, &effective)?;
+		match build_graph(&effective, config_path) {
+			Ok(graph) => {
+				// Opening a Bluetooth Classic microphone makes Windows transition the
+				// paired render endpoint from A2DP to HFP. Some drivers complete that
+				// transition muted at zero even though the graph opened successfully.
+				// Restore the mirrored master state to playback instead of adopting the
+				// transient mute, while keeping the microphone itself usable.
+				ensure_capture_endpoint_selector_ready(&effective.microphone.input)?;
+				endpoints.finish_graph_rebuild()?;
+				return Ok((graph, effective));
+			}
 			Err(err) => {
+				if let Err(bridge_error) = endpoints.finish_graph_rebuild() {
+					warn!(%bridge_error, "could not resume master-volume mirroring after a failed graph build");
+				}
 				attempts += 1;
 				if attempts == 1 || attempts % 5 == 0 {
 					warn!(%err, "physical audio endpoint unavailable; waiting for reconnection or a new Windows device selection");
@@ -1139,7 +1673,7 @@ fn validate_cables(host: &cpal::Host, config: &Config) -> Result<()> {
 	Ok(())
 }
 
-fn build_graph(config: &Config) -> Result<RunningGraph> {
+fn build_graph(config: &Config, config_path: &Path) -> Result<RunningGraph> {
 	let host = cpal::default_host();
 	validate_cables(&host, config)?;
 	let physical_input = resolve_microphone_device(&host, config)?;
@@ -1148,39 +1682,14 @@ fn build_graph(config: &Config) -> Result<RunningGraph> {
 	let output_name = monitor_output.name()?;
 	let failed = Arc::new(AtomicBool::new(false));
 	let mut streams = Vec::new();
-	let monitor_outputs = vec![monitor_output];
-
-	for (label, selector, gain) in [
-		(
-			"Game",
-			config.cables.game.as_str(),
-			config.monitor.game_gain,
-		),
-		(
-			"Comms",
-			config.cables.comms.as_str(),
-			config.monitor.comms_gain,
-		),
-		(
-			"Music",
-			config.cables.music.as_str(),
-			config.monitor.music_gain,
-		),
-	] {
-		let cable = resolve_named_device(&host, Direction::Input, selector)?;
-		streams.extend(build_stereo_route(
-			label,
-			&cable,
-			&monitor_outputs,
-			config.monitor.latency_ms,
-			gain,
-			failed.clone(),
-		)?);
-	}
-
 	let clean_mic_output = resolve_named_device(&host, Direction::Output, &config.cables.clean_mic)?;
-	let (mic_input, mic_output, worker_stop, worker) =
-		build_clean_mic_route(&physical_input, &clean_mic_output, config, failed.clone())?;
+	let (mic_input, mic_output, worker_stop, worker) = build_clean_mic_route(
+		&physical_input,
+		&clean_mic_output,
+		config,
+		config_path,
+		failed.clone(),
+	)?;
 	streams.push(mic_input);
 	streams.push(mic_output);
 
@@ -1189,15 +1698,156 @@ fn build_graph(config: &Config) -> Result<RunningGraph> {
 			.play()
 			.context("could not start an AudioArray stream")?;
 	}
+	let (patch_stop, patch_worker) =
+		spawn_patchbay(config.clone(), config_path.to_path_buf(), failed.clone())?;
 
 	Ok(RunningGraph {
 		_streams: streams,
 		failed,
 		worker_stop,
 		worker: Some(worker),
+		patch_stop,
+		patch_worker: Some(patch_worker),
 		input_name,
 		output_name,
 	})
+}
+
+fn spawn_patchbay(
+	config: Config,
+	config_path: PathBuf,
+	failed: Arc<AtomicBool>,
+) -> Result<(Arc<AtomicBool>, thread::JoinHandle<()>)> {
+	let stop = Arc::new(AtomicBool::new(false));
+	let thread_stop = stop.clone();
+	let worker = thread::Builder::new()
+		.name("audioarray-patchbay".into())
+		.spawn(move || run_patchbay(config, config_path, failed, thread_stop))
+		.context("could not start the AudioArray patchbay worker")?;
+	Ok((stop, worker))
+}
+
+fn run_patchbay(
+	mut desired: Config,
+	config_path: PathBuf,
+	failed: Arc<AtomicBool>,
+	stop: Arc<AtomicBool>,
+) {
+	let physical_input = desired.microphone.input.clone();
+	let physical_output = desired.monitor.output.clone();
+	let mut revision = suppression_revision(&config_path);
+	let mut applied: Option<Vec<PatchConnection>> = None;
+	let mut streams = Vec::new();
+	let mut next_retry = Instant::now();
+
+	while !stop.load(Ordering::Acquire) {
+		let observed_revision = suppression_revision(&config_path);
+		if observed_revision != revision {
+			match Config::load(&config_path) {
+				Ok(mut updated) => {
+					updated.microphone.input = physical_input.clone();
+					updated.monitor.output = physical_output.clone();
+					desired = updated;
+					revision = observed_revision;
+					next_retry = Instant::now();
+				}
+				Err(error) => warn!(
+					error = %format!("{error:#}"),
+					"could not hot-reload patchbay controls; retaining the active crossed wires"
+				),
+			}
+		}
+
+		if applied.as_ref() != Some(&desired.patchbay.connections) && Instant::now() >= next_retry {
+			match build_patch_streams(&desired, failed.clone()) {
+				Ok(updated_streams) => {
+					for stream in &updated_streams {
+						if let Err(error) = stream.play() {
+							warn!(%error, "could not start an AudioArray patch connection");
+							failed.store(true, Ordering::Release);
+							return;
+						}
+					}
+					streams = updated_streams;
+					applied = Some(desired.patchbay.connections.clone());
+					info!(
+						connections = desired.patchbay.connections.len(),
+						"AudioArray patchbay applied"
+					);
+				}
+				Err(error) => {
+					warn!(
+						error = %format!("{error:#}"),
+						"could not apply crossed wires; retaining the active patchbay and retrying"
+					);
+					next_retry = Instant::now() + Duration::from_secs(1);
+				}
+			}
+		}
+		thread::sleep(Duration::from_millis(100));
+	}
+	drop(streams);
+}
+
+fn build_patch_streams(config: &Config, failed: Arc<AtomicBool>) -> Result<Vec<Stream>> {
+	config.validate()?;
+	let host = cpal::default_host();
+	let mut streams = Vec::new();
+	for patch in &config.patchbay.connections {
+		let input = resolve_named_device(
+			&host,
+			Direction::Input,
+			patch_source_selector(config, &patch.source)?,
+		)?;
+		let output = if patch.destination == "monitor" {
+			resolve_monitor_device(&host, config)?
+		} else {
+			resolve_named_device(
+				&host,
+				Direction::Output,
+				patch_source_selector(config, &patch.destination)?,
+			)?
+		};
+		let gain = if patch.destination == "monitor" {
+			match patch.source.as_str() {
+				"game" => config.monitor.game_gain,
+				"comms" => config.monitor.comms_gain,
+				"music" => config.monitor.music_gain,
+				_ => 1.0,
+			}
+		} else {
+			1.0
+		};
+		streams.extend(build_stereo_route(
+			patch_label(&patch.source),
+			&input,
+			&[output],
+			config.monitor.latency_ms,
+			gain,
+			failed.clone(),
+		)?);
+	}
+	Ok(streams)
+}
+
+fn patch_source_selector<'a>(config: &'a Config, source: &str) -> Result<&'a str> {
+	match source {
+		"game" => Ok(&config.cables.game),
+		"comms" => Ok(&config.cables.comms),
+		"music" => Ok(&config.cables.music),
+		"clean_mic" => Ok(&config.cables.clean_mic),
+		other => bail!("unknown patch port {other:?}"),
+	}
+}
+
+fn patch_label(source: &str) -> &'static str {
+	match source {
+		"game" => "Patch Game",
+		"comms" => "Patch Comms",
+		"music" => "Patch Music",
+		"clean_mic" => "Patch Clean Mic",
+		_ => "Patch Unknown",
+	}
 }
 
 fn build_stereo_route(
@@ -1254,6 +1904,7 @@ fn build_clean_mic_route(
 	input: &Device,
 	output: &Device,
 	config: &Config,
+	config_path: &Path,
 	failed: Arc<AtomicBool>,
 ) -> Result<(Stream, Stream, Arc<AtomicBool>, thread::JoinHandle<()>)> {
 	let input_supported = preferred_config(input, Direction::Input, true)?;
@@ -1287,10 +1938,17 @@ fn build_clean_mic_route(
 	let thread_stop = worker_stop.clone();
 	let thread_failed = failed;
 	let suppression = config.noise_suppression.clone();
+	let suppression_config_path = config_path.to_path_buf();
 	let worker = thread::Builder::new()
-		.name("audioarray-deepfilternet".into())
+		.name("audioarray-suppression".into())
 		.spawn(move || {
-			if let Err(err) = run_suppression(raw, clean, &suppression, &thread_stop) {
+			if let Err(err) = run_suppression(
+				raw,
+				clean,
+				&suppression,
+				&suppression_config_path,
+				&thread_stop,
+			) {
 				error!(%err, "Clean Mic processing stopped");
 				thread_failed.store(true, Ordering::Release);
 				thread_stop.store(true, Ordering::Release);
@@ -1305,60 +1963,197 @@ fn run_suppression(
 	raw: Arc<ArrayQueue<f32>>,
 	clean: Arc<ArrayQueue<f32>>,
 	config: &crate::NoiseSuppressionConfig,
+	config_path: &Path,
 	stop: &AtomicBool,
 ) -> Result<()> {
-	if !config.enabled {
-		while !stop.load(Ordering::Acquire) {
+	let mut active_config = Config::load(config_path)
+		.map(|loaded| loaded.noise_suppression)
+		.unwrap_or_else(|error| {
+			warn!(
+				error = %format!("{error:#}"),
+				"could not reload the initial suppression controls; using the graph configuration"
+			);
+			config.clone()
+		});
+	let mut processor = create_suppression_processor(&active_config, &clean);
+	let mut telemetry = ProcessedMicPublisher::new();
+	let mut input_frame = Vec::new();
+	let mut output_frame = Vec::new();
+	let mut revision = suppression_revision(config_path);
+	let mut next_control_check = Instant::now() + Duration::from_millis(50);
+
+	while !stop.load(Ordering::Acquire) {
+		if Instant::now() >= next_control_check {
+			next_control_check = Instant::now() + Duration::from_millis(50);
+			let observed_revision = suppression_revision(config_path);
+			if observed_revision != revision {
+				match Config::load(config_path) {
+					Ok(updated) => {
+						revision = observed_revision;
+						let updated = updated.noise_suppression;
+						if updated != active_config {
+							reconfigure_suppression(&mut processor, &active_config, &updated, &clean);
+							active_config = updated;
+						}
+					}
+					Err(error) => warn!(
+						error = %format!("{error:#}"),
+						"could not hot-reload suppression controls; retaining the current Clean Mic processor"
+					),
+				}
+			}
+		}
+
+		let Some(active_processor) = processor.as_mut() else {
 			if let Some(sample) = raw.pop() {
 				push_latest(&clean, sample);
+				if let Some(telemetry) = &mut telemetry {
+					telemetry.push(std::slice::from_ref(&sample));
+				}
 			} else {
 				thread::sleep(Duration::from_millis(1));
 			}
-		}
-		return Ok(());
-	}
-
-	let runtime = RuntimeParams::default_with_ch(1)
-		.with_atten_lim(config.attenuation_limit_db)
-		.with_post_filter(config.post_filter_beta);
-	let mut model = DfTract::new(DfParams::default(), &runtime)
-		.context("could not initialize the embedded DeepFilterNet3 model")?;
-	if model.sr != SAMPLE_RATE as usize {
-		bail!(
-			"DeepFilterNet requires {} Hz but AudioArray is fixed at {SAMPLE_RATE} Hz",
-			model.sr
-		);
-	}
-	let mut input_frame = Array2::zeros((1, model.hop_size));
-	let mut output_frame = Array2::zeros((1, model.hop_size));
-	model
-		.process(input_frame.view(), output_frame.view_mut())
-		.context("could not warm up DeepFilterNet3")?;
-	for _ in 0..(model.fft_size - model.hop_size + model.lookahead * model.hop_size) {
-		push_latest(&clean, 0.0);
-	}
-	info!(
-		hop = model.hop_size,
-		lookahead = model.lookahead,
-		"DeepFilterNet3 Clean Mic worker ready"
-	);
-
-	while !stop.load(Ordering::Acquire) {
-		if raw.len() < model.hop_size {
+			continue;
+		};
+		let frame_samples = active_processor.frame_samples();
+		if raw.len() < frame_samples {
 			thread::sleep(Duration::from_millis(1));
 			continue;
 		}
-		for sample in input_frame.iter_mut() {
+		input_frame.resize(frame_samples, 0.0);
+		output_frame.resize(frame_samples, 0.0);
+		for sample in &mut input_frame {
 			*sample = raw.pop().unwrap_or(0.0);
 		}
-		model
-			.process(input_frame.view(), output_frame.view_mut())
-			.context("DeepFilterNet3 inference failed")?;
-		for &sample in output_frame.iter() {
+		if let Err(error) = active_processor.process(&input_frame, &mut output_frame) {
+			error!(
+				error = %format!("{error:#}"),
+				"Clean Mic suppression failed; preserving the mic as an unfiltered passthrough without rebuilding playback buses"
+			);
+			processor = None;
+			publish_active_suppression("Suppression error · mic bypassed");
+			continue;
+		}
+		for &sample in &output_frame {
 			push_latest(&clean, sample);
+		}
+		if let Some(telemetry) = &mut telemetry {
+			telemetry.push(&output_frame);
 		}
 	}
 	Ok(())
+}
+
+fn create_suppression_processor(
+	config: &crate::NoiseSuppressionConfig,
+	clean: &ArrayQueue<f32>,
+) -> Option<SuppressionProcessor> {
+	if !config.enabled {
+		publish_active_suppression("Bypassed");
+		info!("Clean Mic suppression bypassed");
+		return None;
+	}
+	let mut processor = match SuppressionProcessor::new(config) {
+		Ok(processor) => processor,
+		Err(error) => {
+			let label = if config.engine == "nvidia_afx" {
+				"NVIDIA AFX error · mic bypassed"
+			} else {
+				"Suppression error · mic bypassed"
+			};
+			publish_active_suppression(label);
+			error!(
+				error = %format!("{error:#}"),
+				"Clean Mic suppression could not initialize; preserving an unfiltered passthrough without rebuilding playback buses"
+			);
+			return None;
+		}
+	};
+	let frame_samples = processor.frame_samples();
+	let input = vec![0.0_f32; frame_samples];
+	let mut output = vec![0.0_f32; frame_samples];
+	if let Err(error) = processor.process(&input, &mut output) {
+		publish_active_suppression("Suppression error · mic bypassed");
+		error!(
+			error = %format!("{error:#}"),
+			"Clean Mic suppression warmup failed; preserving an unfiltered passthrough without rebuilding playback buses"
+		);
+		return None;
+	}
+	for _ in 0..processor.startup_silence() {
+		push_latest(clean, 0.0);
+	}
+	publish_active_suppression(processor.label());
+	info!(
+		backend = processor.label(),
+		frame_samples, "GPU-capable Clean Mic worker ready"
+	);
+	Some(processor)
+}
+
+fn reconfigure_suppression(
+	processor: &mut Option<SuppressionProcessor>,
+	current: &crate::NoiseSuppressionConfig,
+	updated: &crate::NoiseSuppressionConfig,
+	clean: &ArrayQueue<f32>,
+) {
+	let transition = crate::suppression_transition(
+		current,
+		updated,
+		processor.as_ref().map(SuppressionProcessor::backend),
+	);
+	match transition {
+		SuppressionTransition::Bypass => {
+			*processor = None;
+			publish_active_suppression("Bypassed");
+			info!("hot-reloaded Clean Mic suppression bypass");
+		}
+		SuppressionTransition::UpdateInPlace => {
+			let Some(active_processor) = processor.as_mut() else {
+				*processor = create_suppression_processor(updated, clean);
+				return;
+			};
+			match active_processor.update_parameters(updated) {
+				Ok(()) => {
+					publish_active_suppression(active_processor.label());
+					info!(
+						backend = active_processor.label(),
+						intensity = crate::suppression_intensity(updated),
+						"hot-reloaded Clean Mic suppression parameters"
+					);
+				}
+				Err(error) => {
+					error!(
+						error = %format!("{error:#}"),
+						"could not hot-reload Clean Mic suppression parameters; rebuilding only its processor"
+					);
+					*processor = create_suppression_processor(updated, clean);
+				}
+			}
+		}
+		SuppressionTransition::Rebuild => {
+			info!(
+				engine = updated.engine,
+				intensity = crate::suppression_intensity(updated),
+				"rebuilding only the Clean Mic suppression processor"
+			);
+			*processor = create_suppression_processor(updated, clean);
+		}
+	}
+}
+
+fn suppression_revision(
+	config_path: &Path,
+) -> (Option<(u64, SystemTime)>, Option<(u64, SystemTime)>) {
+	(
+		file_revision(config_path),
+		file_revision(&config_path.with_file_name("controls.toml")),
+	)
+}
+
+fn file_revision(path: &Path) -> Option<(u64, SystemTime)> {
+	let metadata = fs::metadata(path).ok()?;
+	Some((metadata.len(), metadata.modified().ok()?))
 }
 
 fn preferred_config(
@@ -1815,7 +2610,7 @@ fn build_stereo_output(
 					for frame in data.chunks_mut(channels) {
 						let (left, right) = reader.next();
 						for (channel, sample) in frame.iter_mut().enumerate() {
-							let value = if channel % 2 == 0 { left } else { right };
+							let value = stereo_output_value(left, right, channels, channel);
 							*sample = <$sample>::from_sample(value);
 						}
 					}
@@ -1831,6 +2626,16 @@ fn build_stereo_output(
 		SampleFormat::U16 => build!(u16),
 		other => bail!("unsupported output sample format {other}"),
 	})
+}
+
+fn stereo_output_value(left: f32, right: f32, channels: usize, channel: usize) -> f32 {
+	if channels == 1 {
+		(left + right) * 0.5
+	} else if channel % 2 == 0 {
+		left
+	} else {
+		right
+	}
 }
 
 fn build_mono_output(
@@ -1871,4 +2676,16 @@ fn build_mono_output(
 		SampleFormat::U16 => build!(u16),
 		other => bail!("unsupported Clean Mic output sample format {other}"),
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::stereo_output_value;
+
+	#[test]
+	fn hands_free_mono_output_preserves_both_stereo_channels() {
+		assert_eq!(stereo_output_value(0.25, 0.75, 1, 0), 0.5);
+		assert_eq!(stereo_output_value(0.25, 0.75, 2, 0), 0.25);
+		assert_eq!(stereo_output_value(0.25, 0.75, 2, 1), 0.75);
+	}
 }

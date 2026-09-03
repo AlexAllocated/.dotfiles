@@ -7,13 +7,13 @@ use std::{
 	process::{Child, Command, Stdio},
 	sync::{
 		atomic::{AtomicBool, Ordering},
-		Arc, RwLock,
+		Arc, Mutex, RwLock,
 	},
 	thread,
 	time::{Duration, Instant},
 };
 
-use audioarray::{GraphSnapshot, MeterReading};
+use audioarray::{GraphSnapshot, MeterReading, PatchConnection};
 use tauri::{
 	menu::{Menu, MenuItem},
 	tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -137,6 +137,8 @@ struct UiState {
 	config_path: PathBuf,
 	meters: Arc<RwLock<Vec<MeterReading>>>,
 	engine: Arc<EngineControl>,
+	controls: Mutex<()>,
+	clean_mic_monitor: Mutex<Option<audioarray::CleanMicMonitor>>,
 }
 
 fn load_config(state: &UiState) -> Result<audioarray::Config, String> {
@@ -172,19 +174,73 @@ fn select_main_input(endpoint_id: String) -> Result<(), String> {
 fn set_noise_suppression(
 	enabled: bool,
 	intensity: u8,
+	engine: String,
 	state: tauri::State<'_, UiState>,
 ) -> Result<GraphSnapshot, String> {
-	let current = load_config(&state)?;
-	audioarray::save_suppression_controls(&state.config_path, enabled, intensity)
+	let _guard = state
+		.controls
+		.lock()
+		.map_err(|_| "AudioArray control state is unavailable".to_string())?;
+	audioarray::save_suppression_controls(&state.config_path, enabled, intensity, &engine)
 		.map_err(|error| error.to_string())?;
 	let updated = load_config(&state)?;
-	if current.noise_suppression.enabled != updated.noise_suppression.enabled
-		|| audioarray::suppression_intensity(&current.noise_suppression)
-			!= audioarray::suppression_intensity(&updated.noise_suppression)
-	{
-		state.engine.restart.store(true, Ordering::Release);
-	}
 	audioarray::graph_snapshot(&updated).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn set_patch_connection(
+	source: String,
+	destination: String,
+	enabled: bool,
+	state: tauri::State<'_, UiState>,
+) -> Result<GraphSnapshot, String> {
+	let _guard = state
+		.controls
+		.lock()
+		.map_err(|_| "AudioArray control state is unavailable".to_string())?;
+	let current = load_config(&state)?;
+	let mut connections = current.patchbay.connections;
+	let matches = |patch: &PatchConnection| {
+		patch.source == source && patch.destination == destination
+	};
+	if enabled && !connections.iter().any(matches) {
+		connections.push(PatchConnection {
+			source,
+			destination,
+		});
+	} else if !enabled {
+		connections.retain(|patch| !matches(patch));
+	}
+	audioarray::save_patch_connections(&state.config_path, connections)
+		.map_err(|error| error.to_string())?;
+	let updated = load_config(&state)?;
+	audioarray::graph_snapshot(&updated).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn set_clean_mic_monitor(
+	enabled: bool,
+	state: tauri::State<'_, UiState>,
+) -> Result<Option<String>, String> {
+	let mut monitor = state
+		.clean_mic_monitor
+		.lock()
+		.map_err(|_| "Clean Mic monitor state is unavailable".to_string())?;
+	if enabled && monitor.is_none() {
+		let config = load_config(&state)?;
+		*monitor = Some(audioarray::CleanMicMonitor::new(&config).map_err(|error| error.to_string())?);
+	} else if !enabled {
+		*monitor = None;
+	}
+	Ok(monitor
+		.as_ref()
+		.map(|active| active.output_name().to_string()))
+}
+
+fn stop_clean_mic_monitor(state: &UiState) {
+	if let Ok(mut monitor) = state.clean_mic_monitor.lock() {
+		*monitor = None;
+	}
 }
 
 fn show_main(app: &tauri::AppHandle) {
@@ -343,6 +399,9 @@ fn main() {
 								!current.is_current(&config).unwrap_or(false)
 							});
 						if rebuild {
+							// Release the loopback telemetry socket before constructing its
+							// replacement. Windows permits only one receiver on this local port.
+							drop(probe.take());
 							probe = audioarray::MeterProbe::new(&config).ok();
 						}
 					}
@@ -366,6 +425,8 @@ fn main() {
 			config_path,
 			meters,
 			engine,
+			controls: Mutex::new(()),
+			clean_mic_monitor: Mutex::new(None),
 		})
 		.setup(move |app| {
 			supervise_engine(setup_config_path.clone(), setup_engine.clone());
@@ -402,16 +463,15 @@ fn main() {
 		})
 		.on_menu_event(|app, event| match event.id().as_ref() {
 			"show" => show_main(app),
-			"restart" => app
-				.state::<UiState>()
-				.engine
-				.restart
-				.store(true, Ordering::Release),
+			"restart" => {
+				let state = app.state::<UiState>();
+				stop_clean_mic_monitor(&state);
+				state.engine.restart.store(true, Ordering::Release);
+			}
 			"exit" => {
-				app.state::<UiState>()
-					.engine
-					.stop
-					.store(true, Ordering::Release);
+				let state = app.state::<UiState>();
+				stop_clean_mic_monitor(&state);
+				state.engine.stop.store(true, Ordering::Release);
 				app.exit(0);
 			}
 			_ => {}
@@ -419,6 +479,7 @@ fn main() {
 		.on_window_event(|window, event| {
 			if let WindowEvent::CloseRequested { api, .. } = event {
 				api.prevent_close();
+				stop_clean_mic_monitor(&window.state::<UiState>());
 				let _ = window.hide();
 			}
 		})
@@ -428,6 +489,8 @@ fn main() {
 			select_main_output,
 			select_main_input,
 			set_noise_suppression,
+			set_patch_connection,
+			set_clean_mic_monitor,
 		])
 		.build(tauri::generate_context!())
 		.expect("error while building AudioArray interface");

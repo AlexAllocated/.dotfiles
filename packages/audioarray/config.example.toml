@@ -30,12 +30,13 @@ music_gain = 1.0
 # On first launch, "default" remembers the current physical Windows recording
 # device. AudioArray then makes Clean Mic the Windows default and treats any
 # later physical choice in the Windows picker as the raw microphone feeding
-# DeepFilterNet and Clean Mic. Physical inputs and outputs are remembered in
-# recency order; an unplugged selection falls back to the next usable device.
+# the selected noise processor and Clean Mic. Physical inputs and outputs are
+# remembered in recency order; an unplugged selection falls back to the next
+# usable device.
 input = "default"
 # Quest Link is a session override, not a remembered physical preference. When
 # Meta makes the Oculus headphones active, its microphone temporarily becomes
-# the raw source feeding DeepFilterNet and Clean Mic. Disconnecting Quest
+# the raw source feeding the selected noise processor and Clean Mic. Disconnecting Quest
 # automatically restores the most recent available local microphone.
 vr_input = "Headset Microphone (Oculus Virtual Audio Device)"
 latency_ms = 45
@@ -43,15 +44,28 @@ gain = 1.0
 
 [noise_suppression]
 enabled = true
-engine = "deepfilternet3"
-# Keep ten percent of the original signal under the enhanced signal. This still
-# provides strong suppression without letting the model erase quiet syllables.
-# The interface presents this 20 dB default as 50% intensity on a 0-40 dB
-# scale. UI choices live in machine-local controls.toml and override this base.
+engine = "nvidia_afx"
+# Select "nvidia_afx" for NVIDIA RTX Audio Effects or "deepfilternet3" for
+# the embedded CPU model. Backend failures remain visible instead of silently
+# changing algorithms.
+# The interface presents this 20 dB DeepFilterNet3 default as 50% intensity on
+# a 0-40 dB scale and passes the same 50% ratio to NVIDIA AFX. UI choices live
+# in machine-local controls.toml and override this base.
 attenuation_limit_db = 20.0
 # The post-filter adds extra suppression after inference and is unnecessary for
 # a communications mic where speech continuity matters more than total silence.
 post_filter_beta = 0.0
+
+[patchbay]
+# These unity-gain links behave like plugging cables into a small hardware
+# patch panel. The three default links send Game, Comms, and Music to the
+# selected Main Output. The UI can fan any bus out to other buses or Clean Mic;
+# AudioArray rejects self-patches, duplicates, and direct or indirect loops.
+connections = [
+   { source = "game", destination = "monitor" },
+   { source = "comms", destination = "monitor" },
+   { source = "music", destination = "monitor" },
+]
 
 # These are persisted Windows per-app endpoint preferences. AudioArray applies
 # them whenever it sees the process, so reinstalls and process replacement do

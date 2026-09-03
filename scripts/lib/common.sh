@@ -68,11 +68,11 @@ apply_windows_packages() {
 
 apply_windows_integration() {
 	local source_root="${1:-$REPO_ROOT}"
-	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot obs_configurator obs_wallpaper audioarray_configurator audioarray_endpoint_configurator audioarray_source audioarray_workspace docker_configurator always_on slack_presence vdd_settings sunshine_session wallpaper_configurator lg_display wallpaper_ultrawide wallpaper_ipad script_windows
-	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows audioarray_configurator_windows audioarray_source_windows docker_configurator_windows
+	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot obs_configurator obs_wallpaper obs_production_mode obs_production_launcher audioarray_configurator audioarray_endpoint_configurator audioarray_source audioarray_workspace docker_configurator always_on slack_presence slack_presence_launcher vdd_settings sunshine_session sunshine_configurator nvidia_frame_limiter wallpaper_configurator lg_display wallpaper_ultrawide wallpaper_ipad script_windows nvidia_video_effects nvidia_audio_effects
+	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows obs_production_mode_windows obs_production_launcher_windows nvidia_frame_limiter_windows audioarray_configurator_windows audioarray_source_windows docker_configurator_windows nvidia_video_effects_windows nvidia_audio_effects_windows
 	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
-	local ssh_forwarder_target ssh_forwarder_target_windows quest_hotspot_target quest_hotspot_target_windows always_on_target always_on_target_windows slack_presence_target slack_presence_target_windows
-	local vdd_settings_target wallpaper_configurator_target wallpaper_configurator_target_windows lg_display_target lg_display_target_windows wallpaper_directory wallpaper_directory_windows minecraft_vr minecraft_desktop minecraft_graphics powerwash_configurator powerwash_launcher powerwash_configurator_target powerwash_configurator_target_windows
+	local ssh_forwarder_target ssh_forwarder_target_windows quest_hotspot_target quest_hotspot_target_windows always_on_target always_on_target_windows slack_presence_target slack_presence_target_windows slack_presence_launcher_target
+	local vdd_settings_target sunshine_configurator_target sunshine_configurator_target_windows nvidia_frame_limiter_target wallpaper_configurator_target wallpaper_configurator_target_windows lg_display_target lg_display_target_windows wallpaper_directory wallpaper_directory_windows minecraft_vr minecraft_desktop minecraft_graphics powerwash_configurator powerwash_launcher powerwash_configurator_target powerwash_configurator_target_windows flat2vr_configurator flat2vr_configurator_target flat2vr_configurator_target_windows
 	[[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
 	require_command nix
 	require_command powershell.exe
@@ -86,6 +86,10 @@ apply_windows_integration() {
 	ssh_forwarder="$source_root/scripts/windows/apply-wsl-ssh-forward.ps1"
 	quest_hotspot="$source_root/scripts/windows/configure-quest-hotspot.ps1"
 	obs_configurator="$source_root/scripts/windows/configure-obs.ps1"
+	obs_production_mode="$source_root/scripts/windows/obs-production-mode.lua"
+	obs_production_launcher="$source_root/scripts/windows/obs-production-frame-limit.vbs"
+	nvidia_video_effects="$source_root/scripts/windows/configure-nvidia-video-effects.ps1"
+	nvidia_audio_effects="$source_root/scripts/windows/configure-nvidia-audio-effects.ps1"
 	obs_wallpaper="$source_root/assets/wallpapers/pixel-meadow-hive-2560x1440.png"
 	audioarray_configurator="$source_root/scripts/windows/configure-audio-array.ps1"
 	audioarray_endpoint_configurator="$source_root/scripts/windows/configure-audioarray-endpoints.ps1"
@@ -98,14 +102,18 @@ apply_windows_integration() {
 	docker_configurator="$source_root/scripts/windows/configure-docker-desktop.ps1"
 	always_on="$source_root/scripts/windows/configure-always-on.ps1"
 	slack_presence="$source_root/scripts/windows/keep-slack-active.ps1"
+	slack_presence_launcher="$source_root/scripts/windows/keep-slack-active-hidden.vbs"
 	vdd_settings="$source_root/platforms/windows/vdd_settings.xml"
 	sunshine_session="$source_root/scripts/windows/set-sunshine-display-session.ps1"
+	sunshine_configurator="$source_root/scripts/windows/configure-sunshine-virtual-display.ps1"
+	nvidia_frame_limiter="$source_root/scripts/windows/set-nvidia-frame-limit.ps1"
 	minecraft_vr="$source_root/scripts/windows/configure-minecraft-vr.ps1"
 	minecraft_desktop="$source_root/scripts/windows/configure-minecraft-desktop.ps1"
 	minecraft_graphics="$source_root/scripts/windows/minecraft-graphics-assets.ps1"
 	powerwash_configurator="$source_root/scripts/windows/configure-powerwash-simulator-2.ps1"
 	powerwash_launcher="$source_root/scripts/windows/PowerWashLauncher.cs"
-	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$obs_configurator" "$obs_wallpaper" "$audioarray_configurator" "$audioarray_endpoint_configurator" "$audioarray_source/Cargo.toml" "$wallpaper_configurator" "$lg_display" "$wallpaper_ultrawide" "$wallpaper_ipad" "$docker_configurator" "$always_on" "$slack_presence" "$vdd_settings" "$sunshine_session" "$minecraft_vr" "$minecraft_desktop" "$minecraft_graphics" "$powerwash_configurator" "$powerwash_launcher"; do
+	flat2vr_configurator="$source_root/scripts/windows/configure-flat2vr-mods.ps1"
+	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$obs_configurator" "$obs_production_mode" "$obs_production_launcher" "$nvidia_video_effects" "$nvidia_audio_effects" "$obs_wallpaper" "$audioarray_configurator" "$audioarray_endpoint_configurator" "$audioarray_source/Cargo.toml" "$wallpaper_configurator" "$lg_display" "$wallpaper_ultrawide" "$wallpaper_ipad" "$docker_configurator" "$always_on" "$slack_presence" "$slack_presence_launcher" "$vdd_settings" "$sunshine_session" "$sunshine_configurator" "$nvidia_frame_limiter" "$minecraft_vr" "$minecraft_desktop" "$minecraft_graphics" "$powerwash_configurator" "$powerwash_launcher" "$flat2vr_configurator"; do
 		[[ -f "$required" ]] || {
 			printf 'Windows integration file not found: %s\n' "$required" >&2
 			return 1
@@ -131,14 +139,24 @@ apply_windows_integration() {
 	else
 		ln -s "$audioarray_source" "$audioarray_workspace"
 	fi
+	nvidia_audio_effects_windows="$(wslpath -w "$nvidia_audio_effects")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$nvidia_audio_effects_windows"
 	audioarray_configurator_windows="$(wslpath -w "$audioarray_configurator")"
 	audioarray_source_windows="$(wslpath -w "$audioarray_source")"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$audioarray_configurator_windows" \
 		-SourceDirectory "$audioarray_source_windows"
 	obs_configurator_windows="$(wslpath -w "$obs_configurator")"
 	obs_wallpaper_windows="$(wslpath -w "$obs_wallpaper")"
+	obs_production_mode_windows="$(wslpath -w "$obs_production_mode")"
+	obs_production_launcher_windows="$(wslpath -w "$obs_production_launcher")"
+	nvidia_frame_limiter_windows="$(wslpath -w "$nvidia_frame_limiter")"
+	nvidia_video_effects_windows="$(wslpath -w "$nvidia_video_effects")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$nvidia_video_effects_windows"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$obs_configurator_windows" \
-		-WallpaperPath "$obs_wallpaper_windows"
+		-WallpaperPath "$obs_wallpaper_windows" \
+		-ProductionModeScriptPath "$obs_production_mode_windows" \
+		-ProductionFrameLauncherPath "$obs_production_launcher_windows" \
+		-FrameLimiterPath "$nvidia_frame_limiter_windows"
 	docker_configurator_windows="$(wslpath -w "$docker_configurator")"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$docker_configurator_windows" \
 		-DistroName "$WSL_DISTRO_NAME"
@@ -156,6 +174,11 @@ apply_windows_integration() {
 	vdd_settings_target="$local_appdata_linux/dotfiles/virtual-display/vdd_settings.xml"
 	copy_if_changed "$vdd_settings" "$vdd_settings_target"
 	copy_if_changed "$sunshine_session" "$local_appdata_linux/dotfiles/set-sunshine-display-session.ps1"
+	sunshine_configurator_target="$local_appdata_linux/dotfiles/configure-sunshine-virtual-display.ps1"
+	sunshine_configurator_target_windows="$local_appdata\dotfiles\configure-sunshine-virtual-display.ps1"
+	nvidia_frame_limiter_target="$local_appdata_linux/dotfiles/set-nvidia-frame-limit.ps1"
+	copy_if_changed "$sunshine_configurator" "$sunshine_configurator_target"
+	copy_if_changed "$nvidia_frame_limiter" "$nvidia_frame_limiter_target"
 	neovide_windows="$program_files\\Neovide\\neovide.exe"
 	[[ -f "$(wslpath -u "$neovide_windows")" ]] || {
 		printf 'Neovide executable not found after Windows package reconciliation: %s\n' "$neovide_windows" >&2
@@ -177,6 +200,7 @@ apply_windows_integration() {
 		always_on_target_windows="$local_appdata\\dotfiles\\configure-always-on.ps1"
 		slack_presence_target="$local_appdata_linux/dotfiles/keep-slack-active.ps1"
 		slack_presence_target_windows="$local_appdata\\dotfiles\\keep-slack-active.ps1"
+		slack_presence_launcher_target="$local_appdata_linux/dotfiles/keep-slack-active-hidden.vbs"
 		wallpaper_configurator_target="$local_appdata_linux/dotfiles/configure-wallpapers.ps1"
 		wallpaper_configurator_target_windows="$local_appdata\\dotfiles\\configure-wallpapers.ps1"
 		lg_display_target="$local_appdata_linux/dotfiles/configure-lg-display.ps1"
@@ -186,6 +210,7 @@ apply_windows_integration() {
 		copy_if_changed "$quest_hotspot" "$quest_hotspot_target"
 		copy_if_changed "$always_on" "$always_on_target"
 		copy_if_changed "$slack_presence" "$slack_presence_target"
+		copy_if_changed "$slack_presence_launcher" "$slack_presence_launcher_target"
 		copy_if_changed "$wallpaper_configurator" "$wallpaper_configurator_target"
 		copy_if_changed "$lg_display" "$lg_display_target"
 		copy_if_changed "$minecraft_vr" "$local_appdata_linux/dotfiles/configure-minecraft-vr.ps1"
@@ -193,8 +218,11 @@ apply_windows_integration() {
 		copy_if_changed "$minecraft_graphics" "$local_appdata_linux/dotfiles/minecraft-graphics-assets.ps1"
 		powerwash_configurator_target="$local_appdata_linux/dotfiles/configure-powerwash-simulator-2.ps1"
 		powerwash_configurator_target_windows="$local_appdata\\dotfiles\\configure-powerwash-simulator-2.ps1"
+		flat2vr_configurator_target="$local_appdata_linux/dotfiles/configure-flat2vr-mods.ps1"
+		flat2vr_configurator_target_windows="$local_appdata\\dotfiles\\configure-flat2vr-mods.ps1"
 		copy_if_changed "$powerwash_configurator" "$powerwash_configurator_target"
 		copy_if_changed "$powerwash_launcher" "$local_appdata_linux/dotfiles/PowerWashLauncher.cs"
+		copy_if_changed "$flat2vr_configurator" "$flat2vr_configurator_target"
 		copy_if_changed "$wallpaper_ultrawide" "$wallpaper_directory/pixel-meadow-hive-3440x1440.png"
 		copy_if_changed "$wallpaper_ipad" "$wallpaper_directory/pixel-meadow-hive-2732x2048.png"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$quest_hotspot_target_windows" -Mode Ensure
@@ -203,6 +231,8 @@ apply_windows_integration() {
 			-Mode Ensure \
 			-UltrawidePath "$wallpaper_directory_windows\\pixel-meadow-hive-3440x1440.png" \
 			-IpadPath "$wallpaper_directory_windows\\pixel-meadow-hive-2732x2048.png"
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \
+			"$sunshine_configurator_target_windows" -Mode Ensure
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$always_on_target_windows"
 		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$slack_presence_target_windows" -Mode Ensure
 		if powershell.exe -NoLogo -NoProfile -Command \
@@ -212,6 +242,8 @@ apply_windows_integration() {
 			powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \
 				"$powerwash_configurator_target_windows" -Mode Ensure
 		fi
+		powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \
+			"$flat2vr_configurator_target_windows" -Mode Ensure
 	fi
 
 	mkdir -p "$HOME/.codex/sqlite"

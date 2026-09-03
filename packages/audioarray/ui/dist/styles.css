@@ -514,6 +514,7 @@ a {
 .endpoint-control > span,
 .endpoint-telemetry > span,
 .suppression-heading > span,
+.suppression-engine > span,
 .suppression-intensity > span {
 	color: var(--luna);
 	font-size: 0.68rem;
@@ -645,8 +646,32 @@ a {
 }
 
 .suppression-switch input:disabled + i,
+.suppression-engine select:disabled,
 .suppression-intensity input:disabled {
 	opacity: 0.45;
+}
+
+.suppression-engine {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 0.65rem;
+}
+
+.suppression-engine select {
+	min-width: 0;
+	padding: 0.3rem 0.45rem;
+	border: 0;
+	border-radius: 0;
+	outline: 1px solid var(--pewter);
+	color: #000;
+	background: var(--frost);
+	font-size: 0.68rem;
+	font-weight: 700;
+}
+
+.suppression-engine select:focus-visible {
+	outline: var(--panel-border) solid var(--command-gold);
 }
 
 .suppression-intensity {
@@ -756,6 +781,11 @@ a {
 .signal.mic { stroke: var(--green-apple); }
 .signal.monitor { stroke: var(--frost); }
 .signal.obs { stroke: var(--silver); stroke-dasharray: 8 7; }
+.signal.patch { opacity: 0.28; }
+.signal.disconnected {
+	opacity: 0 !important;
+	pointer-events: none;
+}
 
 .signal.waveform {
 	stroke-width: 2.5;
@@ -801,6 +831,95 @@ a {
 	display: grid;
 	grid-template-columns: minmax(20rem, 1fr) minmax(18rem, 0.9fr);
 	gap: 1.1rem;
+}
+
+.patchbay-deck {
+	grid-column: 1 / -1;
+}
+
+.patchbay-help {
+	margin: 0.55rem 0;
+	color: var(--pewter);
+	font-family: system-ui, sans-serif;
+	font-size: 0.76rem;
+}
+
+.patch-matrix {
+	display: grid;
+	gap: var(--panel-border);
+	overflow-x: auto;
+	padding-bottom: 0.2rem;
+}
+
+.patch-corner,
+.patch-header,
+.patch-source,
+.patch-cell {
+	min-height: 2.65rem;
+	padding: 0.45rem 0.55rem;
+	border: 0;
+	border-radius: 0;
+	font-size: 0.67rem;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.patch-corner,
+.patch-header {
+	display: grid;
+	place-items: center;
+	color: #000;
+	background: var(--silver);
+	text-align: center;
+}
+
+.patch-corner {
+	justify-items: start;
+	background: var(--luna);
+}
+
+.patch-source {
+	display: flex;
+	align-items: center;
+	border-left: 0.45rem solid var(--silver);
+	color: var(--frozen-pond);
+	background: #05070b;
+}
+
+.patch-source.game { border-left-color: var(--science-blue); }
+.patch-source.comms { border-left-color: var(--salmon); }
+.patch-source.music { border-left-color: var(--command-gold); }
+.patch-source.clean-mic { border-left-color: var(--green-apple); }
+
+.patch-cell {
+	cursor: pointer;
+	outline: 1px solid #272a34;
+	color: var(--pewter);
+	background: #101218;
+}
+
+.patch-cell:hover:not(:disabled),
+.patch-cell:focus-visible {
+	outline: var(--panel-border) solid var(--frost);
+	color: var(--frozen-pond);
+}
+
+.patch-cell.connected {
+	outline-color: var(--green-apple);
+	color: #000;
+	background: var(--green-apple);
+	box-shadow: inset 0 0 0 0.2rem rgba(255, 255, 255, 0.16);
+}
+
+.patch-cell.blocked {
+	cursor: not-allowed;
+	color: #595b63;
+	background: #07080b;
+}
+
+.patch-cell:disabled:not(.blocked) {
+	cursor: wait;
+	opacity: 0.58;
 }
 
 .capture-deck {

@@ -44,7 +44,7 @@ enum Command {
 	},
 	/// Print the four resolved VAC endpoint IDs as tab-separated records.
 	Endpoints,
-	/// Measure DeepFilterNet3 throughput with speech-like noisy audio.
+	/// Measure the configured suppression backend with speech-like noisy audio.
 	Benchmark {
 		#[arg(long, default_value_t = 10)]
 		seconds: u32,
@@ -91,7 +91,7 @@ fn main() -> Result<()> {
 				let stop_handler = stop.clone();
 				ctrlc::set_handler(move || stop_handler.store(true, Ordering::Release))
 					.context("could not install the shutdown handler")?;
-				audioarray::run(config, stop)
+				audioarray::run(config, config_path, stop)
 			}
 			Command::Doctor => audioarray::doctor(&config),
 			Command::SelectOutput { endpoint } => audioarray::select_main_output(&endpoint),

@@ -20,6 +20,12 @@ in
       sourceRoot + "/scripts/windows/configure-quest-hotspot.ps1";
     ".local/share/dotfiles/windows/configure-obs.ps1".source =
       sourceRoot + "/scripts/windows/configure-obs.ps1";
+    ".local/share/dotfiles/windows/obs-production-mode.lua".source =
+      sourceRoot + "/scripts/windows/obs-production-mode.lua";
+    ".local/share/dotfiles/windows/obs-production-frame-limit.vbs".source =
+      sourceRoot + "/scripts/windows/obs-production-frame-limit.vbs";
+    ".local/share/dotfiles/windows/configure-nvidia-video-effects.ps1".source =
+      sourceRoot + "/scripts/windows/configure-nvidia-video-effects.ps1";
     ".local/share/dotfiles/windows/configure-audio-array.ps1".source =
       sourceRoot + "/scripts/windows/configure-audio-array.ps1";
     ".local/share/dotfiles/windows/configure-wallpapers.ps1".source =
@@ -34,6 +40,8 @@ in
       sourceRoot + "/scripts/windows/configure-minecraft-desktop.ps1";
     ".local/share/dotfiles/windows/configure-powerwash-simulator-2.ps1".source =
       sourceRoot + "/scripts/windows/configure-powerwash-simulator-2.ps1";
+    ".local/share/dotfiles/windows/configure-flat2vr-mods.ps1".source =
+      sourceRoot + "/scripts/windows/configure-flat2vr-mods.ps1";
     ".local/share/dotfiles/windows/PowerWashLauncher.cs".source =
       sourceRoot + "/scripts/windows/PowerWashLauncher.cs";
     ".local/share/dotfiles/windows/minecraft-graphics-assets.ps1".source =
@@ -44,6 +52,8 @@ in
       sourceRoot + "/scripts/windows/install-virtual-display.ps1";
     ".local/share/dotfiles/windows/keep-slack-active.ps1".source =
       sourceRoot + "/scripts/windows/keep-slack-active.ps1";
+    ".local/share/dotfiles/windows/keep-slack-active-hidden.vbs".source =
+      sourceRoot + "/scripts/windows/keep-slack-active-hidden.vbs";
     ".local/share/dotfiles/windows/codex-desktop.toml".source =
       sourceRoot + "/platforms/windows/codex-desktop.toml";
     ".local/share/dotfiles/windows/open-in-neovide.ps1".source =
@@ -56,6 +66,8 @@ in
       sourceRoot + "/scripts/windows/restore-sunshine-identity.ps1";
     ".local/share/dotfiles/windows/set-sunshine-display-session.ps1".source =
       sourceRoot + "/scripts/windows/set-sunshine-display-session.ps1";
+    ".local/share/dotfiles/windows/set-nvidia-frame-limit.ps1".source =
+      sourceRoot + "/scripts/windows/set-nvidia-frame-limit.ps1";
     ".local/share/dotfiles/windows/apply-wsl-ssh-forward.ps1".source =
       sourceRoot + "/scripts/windows/apply-wsl-ssh-forward.ps1";
     ".local/share/dotfiles/windows/winget.json".source = sourceRoot + "/platforms/windows/winget.json";

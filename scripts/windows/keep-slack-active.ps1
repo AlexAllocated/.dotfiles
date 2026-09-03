@@ -7,6 +7,14 @@ param(
 $ErrorActionPreference = "Stop"
 $TaskName = "Dotfiles Slack Presence Pulse"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$WindowsScriptHost = "$env:SystemRoot\System32\wscript.exe"
+$HiddenLauncher = Join-Path (Split-Path -Parent $PSCommandPath) "keep-slack-active-hidden.vbs"
+
+function Test-IsAdministrator {
+	$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+	return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
 
 function Initialize-InputApi {
 	if (([System.Management.Automation.PSTypeName]"Dotfiles.UserActivity").Type) {
@@ -75,21 +83,16 @@ function Start-PresenceLoop {
 }
 
 function Install-PresenceTask {
+	if (-not (Test-Path -LiteralPath $HiddenLauncher -PathType Leaf)) {
+		throw "Hidden Slack presence launcher is missing: $HiddenLauncher"
+	}
 	$identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-	$actionArguments = @(
-		"-NoLogo"
-		"-NoProfile"
-		"-WindowStyle", "Hidden"
-		"-ExecutionPolicy", "Bypass"
-		"-File", ('"{0}"' -f $PSCommandPath)
-		"-Mode", "Run"
-		"-IntervalSeconds", $IntervalSeconds
-	) -join " "
+	$actionArguments = ('"{0}" {1}' -f $HiddenLauncher, $IntervalSeconds)
 	$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 	if (
 		$existingTask -and
 		$existingTask.Actions.Count -eq 1 -and
-		$existingTask.Actions[0].Execute -ieq $PowerShell -and
+		$existingTask.Actions[0].Execute -ieq $WindowsScriptHost -and
 		$existingTask.Actions[0].Arguments -eq $actionArguments -and
 		$existingTask.Principal.RunLevel.ToString() -eq "Limited" -and
 		$existingTask.Triggers.Count -eq 1 -and
@@ -106,7 +109,31 @@ function Install-PresenceTask {
 		Write-Host "'$TaskName' is current with a $IntervalSeconds-second interval."
 		return
 	}
-	$action = New-ScheduledTaskAction -Execute $PowerShell -Argument $actionArguments
+	if (-not (Test-IsAdministrator)) {
+		$arguments = @(
+			"-NoLogo"
+			"-NoProfile"
+			"-ExecutionPolicy", "Bypass"
+			"-File", ('"{0}"' -f $PSCommandPath)
+			"-Mode", "Ensure"
+			"-IntervalSeconds", $IntervalSeconds
+		) -join " "
+		$process = Start-Process `
+			-FilePath $PowerShell `
+			-Verb RunAs `
+			-Wait `
+			-PassThru `
+			-ArgumentList $arguments
+		if ($process.ExitCode -ne 0) {
+			throw "Elevated Slack presence reconciliation exited with status $($process.ExitCode)."
+		}
+		Write-Host "Installed the windowless '$TaskName' task."
+		return
+	}
+	if ($existingTask -and $existingTask.State.ToString() -eq "Running") {
+		Stop-ScheduledTask -TaskName $TaskName
+	}
+	$action = New-ScheduledTaskAction -Execute $WindowsScriptHost -Argument $actionArguments
 	$trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
 	$principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
 	$settings = New-ScheduledTaskSettingsSet `

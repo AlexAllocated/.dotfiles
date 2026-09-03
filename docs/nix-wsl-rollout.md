@@ -47,9 +47,11 @@ not downgraded when the community catalog lags behind the publisher.
 The Windows integration reconciles a `HiveTech 1440p` OBS profile at
 2560x1440 and 60 FPS. It pins Branch Output 1.0.9 by checksum, installs the
 matching 2560x1440 meadow backdrop into Windows-local application data, uses
-NVENC H.264 at 8 Mbps for the primary stream, and uses NVENC HEVC CQP 18 for
-the clean recording branch. The clean branch is interlocked with streaming, so
-starting the main `Stream + Bumblebee` output also records `Clean Ultrawide`
+x264 `fast` at 8 Mbps with a 12-thread ceiling for the primary stream, and uses
+NVENC HEVC CQP 18 for the clean recording branch. This keeps the edit-critical
+recording on the GPU while preserving NVENC capacity for an occasional
+concurrent Sunshine session. The clean branch is interlocked with streaming,
+so starting the main `Stream + Bumblebee` output also records `Clean Ultrawide`
 without the browser overlay into `Videos\\OBS Clean`.
 
 OBS owns the mutable scene collection. The Bumblebee dashboard's tokenized
@@ -70,6 +72,20 @@ on Line 4, which is the normal and communications input. Selecting a physical
 input or output updates the machine-local hardware endpoint and AudioArray then
 restores the virtual Windows defaults. Unassigned applications therefore land
 on Game instead of bypassing the graph.
+
+VAC volume processing stays disabled. AudioArray treats the normal Windows
+volume/mute state on Game as an event-driven master control for the selected
+physical output and mirrors Windows-visible changes in either direction. This
+final-sink volume never changes the VAC buses captured by OBS.
+
+Windows 11 exposes one playback endpoint while switching Bluetooth headsets
+between high-quality A2DP and hands-free HFP internally. AudioArray keeps its
+monitor attached to that unified endpoint while the selected headset microphone
+is open. It keeps the chosen master state authoritative during graph rebuilds
+and restores it after the transport transition, while separately repairing a
+muted or zero-level physical microphone. Choosing another microphone lets
+Windows return the headphones to A2DP without changing AudioArray's remembered
+output preference.
 
 The installed Sunshine release temporarily makes its capture endpoint the
 Windows default. AudioArray observes that actual endpoint transition, yields

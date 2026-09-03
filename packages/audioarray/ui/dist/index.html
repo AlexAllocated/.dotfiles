@@ -58,7 +58,7 @@
 						<div class="status-cell"><b>PLATFORM</b><strong id="platformValue">WINDOWS</strong></div>
 						<div class="status-cell"><b>FORMAT</b><strong id="formatValue">48 KHZ</strong></div>
 						<div class="status-cell"><b>SESSION</b><strong id="sessionValue">LOCAL</strong></div>
-						<div class="status-cell"><b>FILTER</b><strong id="filterValue">DEEPFILTERNET3</strong></div>
+						<div class="status-cell"><b>FILTER</b><strong id="filterValue">NVIDIA RTX</strong></div>
 					</section>
 
 					<section id="routing" class="command-deck" aria-labelledby="routing-title">
@@ -78,7 +78,7 @@
 								<span>MAIN INPUT</span>
 								<strong id="mainInputName">Scanning capture array</strong>
 								<select id="mainInput" disabled><option>Loading devices…</option></select>
-								<small id="mainInputPolicy">This source feeds DeepFilterNet3, then becomes AudioArray Clean Mic.</small>
+								<small id="mainInputPolicy">This source feeds the active noise processor, then becomes AudioArray Clean Mic.</small>
 							</label>
 							<article class="endpoint-telemetry">
 								<span>MONITOR LATENCY</span><strong id="monitorLatency">-- MS</strong>
@@ -93,14 +93,27 @@
 								<label class="suppression-switch" for="suppressionEnabled">
 									<input id="suppressionEnabled" type="checkbox" disabled />
 									<i aria-hidden="true"></i>
-									<span>DEEPFILTERNET3</span>
+									<span>FILTER ENABLED</span>
+								</label>
+								<label class="suppression-engine" for="suppressionEngine">
+									<span>PROCESSOR</span>
+									<select id="suppressionEngine" disabled>
+										<option value="nvidia_afx">NVIDIA RTX</option>
+										<option value="deepfilternet3">DEEPFILTERNET3 CPU</option>
+									</select>
 								</label>
 								<label class="suppression-intensity" for="suppressionIntensity">
 									<span>INTENSITY</span>
 									<output id="suppressionIntensityValue" for="suppressionIntensity">50% · 20 DB</output>
 									<input id="suppressionIntensity" type="range" min="0" max="100" step="5" value="50" disabled />
 								</label>
-								<small>Changes persist locally and restart only the audio engine.</small>
+								<label class="suppression-switch" for="cleanMicMonitor">
+									<input id="cleanMicMonitor" type="checkbox" disabled />
+									<i aria-hidden="true"></i>
+									<span>MONITOR CLEAN MIC</span>
+								</label>
+								<small id="cleanMicMonitorState">Local sidetone only · headphones recommended to prevent feedback.</small>
+								<small>Changes persist locally and hot-reload only the Clean Mic processor.</small>
 							</article>
 						</div>
 					</section>
@@ -111,27 +124,28 @@
 							<span><i class="game"></i>Game</span><span><i class="comms"></i>Comms</span><span><i class="music"></i>Music</span><span><i class="mic"></i>Clean Mic</span>
 						</div>
 						<div class="graph-frame">
-							<svg id="signalGraph" viewBox="0 0 1240 560" role="img" aria-labelledby="graph-title graph-description">
+							<svg id="signalGraph" viewBox="0 0 1240 660" role="img" aria-labelledby="graph-title graph-description">
 								<desc id="graph-description">Games, chat, music, and the physical microphone flow through four AudioArray buses to monitoring, applications, and isolated OBS tracks.</desc>
 								<defs>
 									<filter id="signalGlow" filterUnits="userSpaceOnUse" x="-100" y="-100" width="1440" height="760"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 								</defs>
 								<g class="signal-lines">
 									<path class="signal game" data-meter="game" d="M178 91 H310 Q330 91 330 111 V139 Q330 159 350 159 H520"/>
-									<path class="signal game" data-meter="game" d="M684 159 H814"/>
+									<path class="signal game" data-meter="game" data-patch="game:monitor" d="M684 159 H814"/>
 									<path class="signal game" data-meter="game" d="M974 159 H1048 Q1060 159 1060 171 V392"/>
-									<path class="signal comms" data-meter="comms" d="M178 209 H520"/>
-									<path class="signal comms" data-meter="comms" d="M684 209 H814"/>
-									<path class="signal comms" data-meter="comms" d="M974 209 H1073 Q1085 209 1085 221 V392"/>
-									<path class="signal music" data-meter="music" d="M178 327 H310 Q330 327 330 307 V279 Q330 259 350 259 H520"/>
-									<path class="signal music" data-meter="music" d="M684 259 H814"/>
-									<path class="signal music" data-meter="music" d="M974 259 H1098 Q1110 259 1110 271 V392"/>
+									<path class="signal comms" data-meter="comms" d="M178 223 H520"/>
+									<path class="signal comms" data-meter="comms" data-patch="comms:monitor" d="M684 223 H814"/>
+									<path class="signal comms" data-meter="comms" d="M974 223 H1073 Q1085 223 1085 235 V392"/>
+									<path class="signal music" data-meter="music" d="M178 327 H310 Q330 327 330 307 Q330 287 350 287 H520"/>
+									<path class="signal music" data-meter="music" data-patch="music:monitor" d="M684 287 H814"/>
+									<path class="signal music" data-meter="music" d="M974 287 H1098 Q1110 287 1110 299 V392"/>
 									<path class="signal mic" data-meter="physical-mic" d="M178 445 H310"/>
-									<path class="signal mic" data-meter="clean-mic" d="M474 445 H520"/>
+									<path class="signal mic" data-meter="processed-mic" d="M474 445 H520"/>
 									<path class="signal mic" data-meter="clean-mic" d="M684 445 H814"/>
 									<path class="signal mic" data-meter="clean-mic" d="M974 445 H1003 Q1015 445 1015 433 V404 Q1015 392 1027 392 H1060"/>
 									<path class="signal monitor" data-meter="monitor" d="M974 184 H1020 Q1040 184 1040 164 V103 Q1040 91 1052 91 H1060"/>
 									<path class="signal obs" data-meter="complete-mix" d="M1035 392 H1192"/>
+									<g id="patchLines" class="patch-lines" aria-label="Active crossed wires"></g>
 								</g>
 								<g class="graph-nodes">
 									<g class="node source" transform="translate(28 60)"><rect width="150" height="62"/><text x="14" y="24">GAMES + DEFAULT</text><text class="node-data" x="14" y="45">WINDOWS OUTPUT</text></g>
@@ -139,13 +153,13 @@
 									<g class="node source" transform="translate(28 296)"><rect width="150" height="62"/><text x="14" y="24">SPOTIFY + MUSIC</text><text class="node-data" x="14" y="45">APP POLICY</text></g>
 									<g class="node source" transform="translate(28 414)"><rect width="150" height="62"/><text x="14" y="24">ACTIVE MIC</text><text id="graphMicName" class="node-data" x="14" y="45">SELECTED INPUT</text></g>
 									<g class="node processor" transform="translate(310 128)"><rect width="164" height="62"/><text x="14" y="24">DTS HEADPHONE:X</text><text class="node-data" x="14" y="45">SPATIAL PROCESSOR</text></g>
-									<g class="node processor" transform="translate(310 228)"><rect width="164" height="62"/><text x="14" y="24">DOLBY ATMOS</text><text class="node-data" x="14" y="45">SPATIAL PROCESSOR</text></g>
-									<g id="suppressionNode" class="node processor" transform="translate(310 414)"><rect width="164" height="62"/><text id="graphSuppressionName" x="14" y="24">DEEPFILTERNET3</text><text id="graphSuppressionMode" class="node-data" x="14" y="45">50% INTENSITY</text></g>
-									<g class="node bus game-node" transform="translate(520 128)"><rect width="164" height="62"/><text x="14" y="24">GAME BUS</text><text class="node-data" x="14" y="45">VAC 01 / DEFAULT</text></g>
-									<g class="node bus comms-node" transform="translate(520 178)"><rect width="164" height="62"/><text x="14" y="24">COMMS BUS</text><text class="node-data" x="14" y="45">VAC 02 / VOICE</text></g>
-									<g class="node bus music-node" transform="translate(520 228)"><rect width="164" height="62"/><text x="14" y="24">MUSIC BUS</text><text class="node-data" x="14" y="45">VAC 03 / MEDIA</text></g>
+									<g class="node processor" transform="translate(310 256)"><rect width="164" height="62"/><text x="14" y="24">DOLBY ATMOS</text><text class="node-data" x="14" y="45">SPATIAL PROCESSOR</text></g>
+									<g id="suppressionNode" class="node processor" transform="translate(310 414)"><rect width="164" height="62"/><text id="graphSuppressionName" x="14" y="24">NVIDIA AFX</text><text id="graphSuppressionMode" class="node-data" x="14" y="45">50% INTENSITY</text></g>
+									<g class="node bus game-node" transform="translate(520 131)"><rect width="164" height="56"/><text x="14" y="21">GAME BUS</text><text class="node-data" x="14" y="42">VAC 01 / DEFAULT</text></g>
+									<g class="node bus comms-node" transform="translate(520 195)"><rect width="164" height="56"/><text x="14" y="21">COMMS BUS</text><text class="node-data" x="14" y="42">VAC 02 / VOICE</text></g>
+									<g class="node bus music-node" transform="translate(520 259)"><rect width="164" height="56"/><text x="14" y="21">MUSIC BUS</text><text class="node-data" x="14" y="42">VAC 03 / MEDIA</text></g>
 									<g class="node bus mic-node" transform="translate(520 414)"><rect width="164" height="62"/><text x="14" y="24">CLEAN MIC</text><text class="node-data" x="14" y="45">VAC 04 / INPUT</text></g>
-									<g class="node junction" transform="translate(814 128)"><rect width="160" height="162"/><text x="14" y="25">MONITOR MATRIX</text><text class="node-data" x="14" y="49">GAME</text><text class="node-data" x="14" y="72">COMMS</text><text class="node-data" x="14" y="95">MUSIC</text><text class="node-data" x="14" y="130">COMPLETE MIX</text></g>
+									<g class="node junction" transform="translate(814 128)"><rect width="160" height="166"/><text x="14" y="25">MONITOR MATRIX</text><text class="node-data" x="14" y="49">GAME</text><text class="node-data" x="14" y="86">COMMS</text><text class="node-data" x="14" y="123">MUSIC</text><text class="node-data" x="14" y="151">COMPLETE MIX</text></g>
 									<g class="node junction" transform="translate(814 414)"><rect width="160" height="62"/><text x="14" y="24">APPLICATION INPUT</text><text class="node-data" x="14" y="45">DISCORD + OBS</text></g>
 									<g class="node destination" transform="translate(1060 60)"><rect width="152" height="62"/><text x="14" y="24">MAIN OUTPUT</text><text id="graphOutputName" class="node-data" x="14" y="45">SELECTED DEVICE</text></g>
 									<g class="node destination" transform="translate(1035 360)"><rect width="177" height="62"/><text x="14" y="24">OBS STUDIO</text><text class="node-data" x="14" y="45">STREAM + 6 TRACKS</text></g>
@@ -155,18 +169,24 @@
 					</section>
 
 					<div class="operations-grid">
+						<section id="patchbay" class="patchbay-deck" aria-labelledby="patchbay-title">
+							<div class="section-heading compact"><span>02</span><div><small>Flexible signal routing</small><h2 id="patchbay-title">Patch Bay</h2></div></div>
+							<p class="patchbay-help">Plug any bus into another bus, Clean Mic, or Main Output. Connections are unity gain and fan-out is allowed; feedback loops are blocked.</p>
+							<div id="patchMatrix" class="patch-matrix" aria-live="polite"></div>
+						</section>
+
 						<section id="levels" class="levels-deck" aria-labelledby="levels-title">
-							<div class="section-heading compact"><span>02</span><div><small>Real-time telemetry</small><h2 id="levels-title">Signal Levels</h2></div></div>
+							<div class="section-heading compact"><span>03</span><div><small>Real-time telemetry</small><h2 id="levels-title">Signal Levels</h2></div></div>
 							<div id="meterBank" class="meter-bank" aria-live="off"></div>
 						</section>
 
 						<section class="routes-deck" aria-labelledby="routes-title">
-							<div class="section-heading compact"><span>03</span><div><small>Windows policy</small><h2 id="routes-title">Application Routes</h2></div></div>
+							<div class="section-heading compact"><span>04</span><div><small>Windows policy</small><h2 id="routes-title">Application Routes</h2></div></div>
 							<div id="routeTable" class="route-table"></div>
 						</section>
 
 						<section id="capture" class="capture-deck" aria-labelledby="capture-title">
-							<div class="section-heading compact"><span>04</span><div><small>OBS recording matrix</small><h2 id="capture-title">Capture Tracks</h2></div></div>
+							<div class="section-heading compact"><span>05</span><div><small>OBS recording matrix</small><h2 id="capture-title">Capture Tracks</h2></div></div>
 							<div class="track-grid">
 								<div><b>01</b><span>STREAM MIX</span><small>Mic + Comms + Game + Music</small></div>
 								<div><b>02</b><span>PUBLISH MIX</span><small>Mic + Comms + Game</small></div>

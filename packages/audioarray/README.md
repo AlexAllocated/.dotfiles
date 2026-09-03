@@ -3,12 +3,13 @@
 AudioArray is Alex's private cross-platform streaming-audio graph. Its Windows
 engine is paired with a Tauri operations console; a future Linux engine will
 implement the same Rust status/control contract beneath the identical UI. The
-four buses stay intentionally boring:
+four buses stay intentionally boring and can be plugged together like a small
+hardware patch panel:
 
 - **Game**: the Windows default for games and otherwise-unassigned applications.
 - **Comms**: Discord/Vesktop playback.
 - **Music**: Spotify and other music players.
-- **Clean Mic**: the selected Windows input after DeepFilterNet3 suppression.
+- **Clean Mic**: the selected Windows input after GPU-preferred noise suppression.
 
 Windows exposes both ends of the signed VAC cables with semantic names instead
 of the driver's generic `Line N` labels:
@@ -27,6 +28,24 @@ virtual defaults so applications cannot bypass the graph. If the preferred
 device disappears or cannot provide a usable shared-mode format, AudioArray
 walks that history until it finds one that works.
 
+VAC volume processing remains disabled so its buses stay bit-perfect. The
+normal Windows volume/mute control on AudioArray Game is instead an event-driven
+master control: AudioArray mirrors it to the selected physical output and
+mirrors Windows-visible physical-device changes back. That volume sits only on
+the final monitor sink, downstream of the four buses, so OBS's isolated tracks
+and stream mix are never attenuated. A newly selected physical output supplies
+the initial safe volume. Analog controls that do not report state to Windows
+cannot be mirrored back.
+
+Bluetooth headsets use separate high-quality A2DP and hands-free HFP transports
+behind Windows 11's unified playback endpoint. AudioArray keeps monitoring the
+same selected headphones while Windows automatically changes transport when
+their microphone opens, and Windows returns to A2DP when that microphone
+closes. During a graph rebuild, the volume bridge temporarily ignores physical
+playback notifications and then restores the chosen master state. This covers
+Bluetooth drivers that complete the A2DP-to-HFP transition with the playback
+side silently muted, without confusing an intentional user mute for a fault.
+
 ## Driver boundary
 
 AudioArray does not install an unsigned kernel driver. It uses four endpoints
@@ -41,25 +60,34 @@ Dolby Access, and SoundVolumeView are declared Windows dependencies; the latter
 provides a deterministic command-line setter and verifier for the per-endpoint
 Windows Spatial Sound selection.
 
-The same reconciliation resets every visible endpoint and VAC Main/pin stage to
-`0.00 dB` after applying the spatial formats. VAC maps unity gain to misleading
+The installation reconciler resets every visible endpoint and VAC Main/pin
+stage to `0.00 dB` before AudioArray starts. VAC maps unity gain to misleading
 percentage values such as 63% or 24.9%; its 100% position is actually a `+12 dB`
-boost and is intentionally not used.
+boost. Because VAC volume processing is disabled, AudioArray can subsequently
+reuse Game's normalized slider position as the physical-output master without
+altering the samples passing through that cable.
 
 VAC playback applications write into each cable's render endpoint. AudioArray
-captures the matching recording endpoint and monitors Game, Comms, and Music to
-the first usable remembered physical output. During a Sunshine/Moonlight
+captures the matching recording endpoint. Its persistent patch bay sends Game,
+Comms, and Music to Main Output by default, reproducing the original monitor
+mix without hard-coding it into the engine. Any bus can fan out to another bus,
+Clean Mic, or Main Output at unity gain. During a Sunshine/Moonlight
 session, Sunshine temporarily makes Steam Streaming Speakers the Windows
 default. AudioArray observes that real transition, sends the complete mix there,
 and yields the render defaults until Sunshine restores them at disconnect. Meta
 Quest Link receives the same treatment when Oculus Virtual Audio becomes the
 Windows default, so the headset gets the complete mix without becoming a
-remembered physical output. OBS's separate tracks remain untouched. It
-captures the remembered physical input, processes it with the embedded
-DeepFilterNet3 model, and writes Clean Mic into its VAC render endpoint for
-Discord and OBS to consume. The tracked speech-first tuning limits attenuation
-to 20 dB and disables the optional post-filter so quiet syllables are not
-mistaken for noise and erased.
+remembered physical output. OBS's separate tracks remain untouched. AudioArray
+captures the remembered physical input, runs it through the explicitly selected
+noise processor, and writes Clean Mic into its VAC render endpoint for Discord
+and OBS to consume.
+The console offers NVIDIA Audio Effects on the RTX GPU and the embedded CPU
+DeepFilterNet3 model without silently switching between them. NVIDIA AFX is
+downloaded from NVIDIA and verified by version, SHA-256, and
+Authenticode signer; its proprietary runtime is not committed here. The tracked
+50% default is passed directly as the NVIDIA intensity ratio. On the
+DeepFilterNet3 processor it maps to a 20 dB attenuation limit with the optional
+post-filter disabled so quiet syllables are less likely to be erased.
 
 ## Signal graph
 
@@ -78,14 +106,17 @@ flowchart LR
    musicRender --> atmos[Dolby Atmos for Headphones]
    atmos --> musicCapture[AudioArray Music<br/>VAC capture]
 
-   mic[Selected physical microphone] --> denoise[AudioArray<br/>DeepFilterNet3]
+   mic[Selected physical microphone] --> denoise[AudioArray<br/>NVIDIA AFX or DeepFilterNet3]
    denoise --> micRender[AudioArray Clean Mic<br/>VAC render]
    micRender --> micCapture[AudioArray Clean Mic<br/>VAC capture]
    micCapture --> chatInput[Discord / Vesktop input]
 
-   gameCapture --> monitor[AudioArray monitor mix]
-   commsCapture --> monitor
-   musicCapture --> monitor
+   gameCapture --> patchbay[AudioArray patch bay]
+   commsCapture --> patchbay
+   musicCapture --> patchbay
+   micCapture --> patchbay
+   patchbay --> monitor[AudioArray monitor mix]
+   patchbay -. optional crossed wires .-> micRender
    monitor --> localOutput[Selected physical output]
    monitor -. session override .-> moonlight[Steam Streaming Speakers]
    monitor -. session override .-> quest[Quest Link headphones]
@@ -115,13 +146,25 @@ The first interface release is operationally conservative. It provides:
 - background-engine, routing-policy, session-override, format, filter, and
   latency telemetry;
 - the declarative application routes and six-track OBS recording matrix; and
-- editable Main Input and Main Output selectors.
+- editable Main Input and Main Output selectors; and
+- a live patch matrix for persistent unity-gain bus fan-out;
+- explicit NVIDIA RTX or DeepFilterNet3 selection, intensity, and bypass controls; and
+- a temporary Clean Mic sidetone for directly auditioning the filtered signal.
 
 Those selectors do not create a second device-selection system. They briefly
 apply the chosen physical endpoint through Windows' normal default-device
 policy. The background engine observes and remembers that choice, then restores
 the AudioArray virtual defaults exactly as it does when a device is selected in
 Windows Settings. Either interface therefore produces the same durable result.
+
+The patch matrix is the flexible-plugging layer. Selecting a cell connects its
+row bus to its column destination without replacing any other connection. Game
+and Music can therefore both feed Clean Mic while retaining their original OBS
+stems, allowing Discord or any other Clean Mic consumer to hear those sources.
+Disconnecting Game, Comms, or Music from Main Output silences only that local
+monitor path. AudioArray rejects self-patches, duplicates, and direct or
+indirect feedback loops. In particular, feeding Comms into Clean Mic returns
+the other callers' audio to them, so that connection should be deliberate.
 
 The tray icon represents the complete AudioArray lifecycle. Its process owns
 and supervises the separate hidden low-latency engine: closing the console hides
@@ -153,26 +196,45 @@ audioarray example-config
 
 Quest Link is modeled as a temporary adapter around the same graph rather than
 as another bus. Its headphones receive the complete Game/Comms/Music monitor
-mix and its microphone temporarily replaces the raw local mic before
-DeepFilterNet3. Applications continue to see the stable AudioArray buses and
-Clean Mic endpoints. When the Quest session ends, AudioArray restores the most
-recent available physical input and output from its machine-local history.
+mix and its microphone temporarily replaces the raw local mic before the
+selected noise processor. Applications continue to see the stable AudioArray
+buses and Clean Mic endpoints. When the Quest session ends, AudioArray restores
+the most recent available physical input and output from its machine-local
+history.
 
-The operations console can bypass DeepFilterNet3 entirely or adjust its
-suppression intensity from 0–100%. Intensity maps to a 0–40 dB maximum
-attenuation range; the tracked 20 dB default therefore appears as 50%. A change
-restarts only the supervised audio engine, leaving the tray console alive. The
-choice is stored in `%APPDATA%\AudioArray\controls.toml`, separate from the
-declarative base graph, so a later dotfiles reconciliation does not erase it.
+The operations console can select NVIDIA AFX, DeepFilterNet3, or bypass
+suppression entirely. Intensity is a 0–100% NVIDIA ratio; on
+DeepFilterNet3 it maps to a 0–40 dB maximum attenuation range, so the tracked
+20 dB default appears as 50%. Changes are hot-reloaded by the supervised Clean
+Mic processor while the Game, Comms, and Music streams remain live.
+Intensity changes update DeepFilterNet3 in place. NVIDIA AFX is recreated so
+the newly requested ratio is guaranteed to reach its loaded model; this rebuild
+is isolated to the Clean Mic worker and does not interrupt playback buses.
+Backend and bypass changes are likewise isolated to that worker. The choice is stored in
+`%APPDATA%\AudioArray\controls.toml`, separate from the declarative base graph,
+so a later dotfiles reconciliation does not erase it.
+
+Patch-bay choices are stored in that same machine-local controls file. A
+dedicated patch worker notices changes and replaces only the crossed-wire
+streams; the physical-microphone capture, suppression worker, application
+defaults, and unaffected bus routes stay alive.
+
+**Monitor Clean Mic** opens a temporary local route from the filtered Clean Mic
+VAC endpoint to the active physical output. It never enters a content bus or an
+OBS track. Hiding, restarting, or exiting AudioArray stops the monitor; headphones
+are recommended because speakers can feed the monitored microphone back into itself.
 
 The topology wires render live PCM-derived waveforms rather than decorative
 motion. The existing capture probes retain a 240 ms rolling signal window for
 the physical microphone and each bus, reduce it to standard min/max waveform
 bins, and publish snapshots to the interface at roughly 30 Hz. New samples
 enter at each source and age toward its destination, so visible transients
-actually travel through the graph. The raw and DeepFilterNet Clean Mic paths
-remain independent, while Main Output and OBS use derived monitor and complete
-mix waveforms. Waveform samples use a fixed spatial pitch across every route,
+actually travel through the graph. The raw and processed Clean Mic paths
+remain independent: the hidden suppression worker publishes its actual
+post-filter waveform over a loopback-only telemetry channel, while the final
+Clean Mic meter measures the VAC endpoint after crossed wires are mixed in.
+Main Output and OBS use derived monitor and complete-mix waveforms. Waveform
+samples use a fixed spatial pitch across every route,
 so short and long wires show the same oscillation density instead of squeezing
 or stretching the captured signal to fit their individual lengths.
 

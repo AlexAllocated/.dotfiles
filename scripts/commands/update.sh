@@ -157,6 +157,19 @@ ensure_updoot_checkout() {
 	fi
 }
 
+normalize_intent_to_add_entries() {
+	local entry path normalized=0
+	while IFS= read -r -d '' entry; do
+		[[ "${entry:0:2}" == " A" ]] || continue
+		path="${entry:3}"
+		git -C "$REPO_ROOT" reset -q -- "$path"
+		normalized=1
+	done < <(git -C "$REPO_ROOT" status --porcelain=v1 -z --untracked-files=all)
+	if [[ "$normalized" == "1" ]]; then
+		printf 'Normalized intent-to-add files before saving local changes.\n'
+	fi
+}
+
 fetch_and_rebase_upstream() {
 	local result_var="$1"
 	local remote remote_branch upstream
@@ -189,6 +202,11 @@ restore_updoot_stash() {
 sync_before_update() {
 	local rebased=0 stash_ref=""
 	ensure_updoot_checkout
+	# An intent-to-add index entry is neither an ordinary tracked change nor an
+	# untracked file, and `git stash --include-untracked` refuses to merge it
+	# into the temporary stash tree. Return those entries to their lossless
+	# untracked representation before preserving the complete working tree.
+	normalize_intent_to_add_entries
 	if [[ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal)" ]]; then
 		git -C "$REPO_ROOT" stash push --include-untracked --message "dotfiles updoot pre-sync $(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
 		stash_ref='stash@{0}'

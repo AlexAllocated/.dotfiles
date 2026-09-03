@@ -1,6 +1,12 @@
 param(
    [Parameter(Mandatory = $true)]
-   [string]$WallpaperPath
+   [string]$WallpaperPath,
+   [Parameter(Mandatory = $true)]
+   [string]$ProductionModeScriptPath,
+   [Parameter(Mandatory = $true)]
+   [string]$ProductionFrameLauncherPath,
+   [Parameter(Mandatory = $true)]
+   [string]$FrameLimiterPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,14 +22,21 @@ $branchOutputDllSha256 = "6950FF0E583BDB376CCA1DF06B607212A204C062AFCA376DD39078
 $branchOutputUrl = "https://github.com/OPENSPHERE-Inc/branch-output/releases/download/$branchOutputVersion/osi-branch-output-$branchOutputVersion-windows-x64.zip"
 $pluginRoot = Join-Path $env:ProgramData "obs-studio\plugins\osi-branch-output"
 $pluginDll = Join-Path $pluginRoot "bin\64bit\osi-branch-output.dll"
+$backgroundRemovalRoot = Join-Path $env:ProgramData "obs-studio\plugins\obs-backgroundremoval"
 $obsRoot = Join-Path $env:APPDATA "obs-studio"
+$globalConfig = Join-Path $obsRoot "global.ini"
 $profileRoot = Join-Path $obsRoot "basic\profiles\HiveTech_1440p"
 $profileConfig = Join-Path $profileRoot "basic.ini"
 $sceneCollection = Join-Path $obsRoot "basic\scenes\HiveTech_1440p.json"
 $assetRoot = Join-Path $env:LOCALAPPDATA "dotfiles\obs-assets"
 $wallpaperTarget = Join-Path $assetRoot "pixel-meadow-hive-2560x1440.png"
+$integrationRoot = Join-Path $env:LOCALAPPDATA "dotfiles"
+$productionModeScriptTarget = Join-Path $integrationRoot "obs-production-mode.lua"
+$productionFrameLauncherTarget = Join-Path $integrationRoot "obs-production-frame-limit.vbs"
+$frameLimiterTarget = Join-Path $integrationRoot "set-nvidia-frame-limit.ps1"
 $audioArrayExecutable = Join-Path $env:LOCALAPPDATA "AudioArray\bin\audioarray.exe"
 $audioArrayConfig = Join-Path $env:APPDATA "AudioArray\config.toml"
+$obsExecutable = Join-Path $env:ProgramFiles "obs-studio\bin\64bit\obs64.exe"
 
 function Test-FileEqual {
    param(
@@ -129,8 +142,15 @@ function Set-IniValue {
    }
 }
 
-if (-not (Test-Path -LiteralPath $WallpaperPath -PathType Leaf)) {
-   throw "OBS wallpaper asset not found: $WallpaperPath"
+foreach ($requiredFile in @(
+   $WallpaperPath,
+   $ProductionModeScriptPath,
+   $ProductionFrameLauncherPath,
+   $FrameLimiterPath
+)) {
+   if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+      throw "OBS integration file not found: $requiredFile"
+   }
 }
 
 $pluginCurrent =
@@ -171,9 +191,27 @@ if (-not $pluginCurrent) {
    Write-Host "OBS Branch Output $branchOutputVersion is current."
 }
 
+if (Test-Path -LiteralPath $backgroundRemovalRoot) {
+   if (Get-Process obs64 -ErrorAction SilentlyContinue) {
+      throw "Close OBS before removing the superseded CPU Background Removal plugin."
+   }
+   Remove-Item -LiteralPath $backgroundRemovalRoot -Recurse -Force
+   Write-Host "Removed the superseded CPU Background Removal plugin."
+}
+
 New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
 if (-not (Test-FileEqual -Source $WallpaperPath -Destination $wallpaperTarget)) {
    Copy-Item -LiteralPath $WallpaperPath -Destination $wallpaperTarget -Force
+}
+New-Item -ItemType Directory -Path $integrationRoot -Force | Out-Null
+foreach ($integrationFile in @(
+   @($ProductionModeScriptPath, $productionModeScriptTarget),
+   @($ProductionFrameLauncherPath, $productionFrameLauncherTarget),
+   @($FrameLimiterPath, $frameLimiterTarget)
+)) {
+   if (-not (Test-FileEqual -Source $integrationFile[0] -Destination $integrationFile[1])) {
+      Copy-Item -LiteralPath $integrationFile[0] -Destination $integrationFile[1] -Force
+   }
 }
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE "Videos\OBS") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE "Videos\OBS Clean") -Force | Out-Null
@@ -198,9 +236,17 @@ if (-not (Test-Path -LiteralPath $profileConfig)) {
 $profileValues = @(
    @("Output", "Mode", "Advanced"),
    @("Output", "FilenameFormatting", "%CCYY-%MM-%DD %hh-%mm-%ss"),
-   @("AdvOut", "Encoder", "obs_nvenc_h264_tex"),
+   # Keep the edit-critical clean recording on NVENC, but move the disposable
+   # Twitch branch to the otherwise underused CPU. This preserves an NVENC unit
+   # and GPU scheduling headroom for the recording and for an occasional
+   # concurrent Sunshine session.
+   @("AdvOut", "Encoder", "obs_x264"),
    @("AdvOut", "TrackIndex", "1"),
-   @("AdvOut", "Rescale", "false"),
+   # Preserve the 2560x1440 canvas and clean recording, but scale only the
+   # Twitch stream. At 8 Mbps, 1080p60 is both cheaper to encode and cleaner
+   # than trying to describe 1440p60 with the same constrained bitrate.
+   @("AdvOut", "Rescale", "true"),
+   @("AdvOut", "RescaleRes", "1920x1080"),
    @("AdvOut", "RecType", "Standard"),
    @("AdvOut", "RecEncoder", "obs_nvenc_hevc_tex"),
    # Track 1 is the live stream mix. Record tracks 2-6: publish-ready mix
@@ -244,18 +290,20 @@ foreach ($profileValue in $profileValues) {
 }
 
 $streamEncoder = [ordered]@{
-   adaptive_quantization = $true
+   # A 12-thread ceiling leaves 20 logical processors for the game, OBS
+   # composition support, AudioArray, and Windows on Tracer's 16C/32T CPU.
    bf = 2
    bitrate = 8000
-   device = -1
+   buffer_size = 8000
    keyint_sec = 2
-   lookahead = $false
-   max_bitrate = 8000
-   multipass = "disabled"
-   preset = "p5"
+   preset = "fast"
    profile = "high"
    rate_control = "CBR"
-   tune = "hq"
+   repeat_headers = $false
+   tune = ""
+   use_bufsize = $false
+   vfr = $false
+   x264opts = "threads=12"
 }
 $recordEncoder = [ordered]@{
    adaptive_quantization = $true
@@ -383,6 +431,92 @@ function Set-CleanRecordingAudioTracks {
    }
 }
 
+function Set-ObsPerformancePolicy {
+   param([Parameter(Mandatory = $true)][object]$SceneCollection)
+
+   foreach ($source in @($SceneCollection.sources)) {
+      if ($source.id -eq "game_capture") {
+         # OBS composites at 60 FPS. Do not make the capture hook copy frames
+         # from a 120/160 FPS game that the output can never consume.
+         Set-ObsJsonProperty -Object $source.settings -Name "limit_framerate" -Value $true
+      }
+   }
+}
+
+function Set-ObsProductionModeScript {
+   param([Parameter(Mandatory = $true)][object]$SceneCollection)
+
+   if ($null -eq $SceneCollection.modules) {
+      Set-ObsJsonProperty -Object $SceneCollection -Name "modules" -Value ([pscustomobject]@{})
+   }
+
+   $scriptsProperty = $SceneCollection.modules.PSObject.Properties["scripts-tool"]
+   $existingScripts = if ($null -ne $scriptsProperty) { @($scriptsProperty.Value) } else { @() }
+   $preservedScripts = @(
+      $existingScripts | Where-Object {
+         -not $_.path -or
+         -not [string]::Equals(
+            [IO.Path]::GetFullPath([string]$_.path),
+            [IO.Path]::GetFullPath($productionModeScriptTarget),
+            [StringComparison]::OrdinalIgnoreCase
+         )
+      }
+   )
+   $managedScript = [ordered]@{
+      path = $productionModeScriptTarget
+      settings = [ordered]@{
+         launcher_path = $productionFrameLauncherTarget
+      }
+   }
+   Set-ObsJsonProperty `
+      -Object $SceneCollection.modules `
+      -Name "scripts-tool" `
+      -Value @($preservedScripts + $managedScript)
+}
+
+if (Test-Path -LiteralPath $obsExecutable -PathType Leaf) {
+   # OBS's D3D11 GPU-reservation workaround is available only to an elevated
+   # process. The per-user compatibility flag applies regardless of which
+   # normal OBS shortcut or launcher starts the executable.
+   $compatibilityRoot = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
+   New-Item -Path $compatibilityRoot -Force | Out-Null
+   $runAsAdministrator = "~ RUNASADMIN"
+   $compatibilityProperties = Get-ItemProperty -Path $compatibilityRoot
+   $compatibilityProperty = $compatibilityProperties.PSObject.Properties[$obsExecutable]
+   $currentCompatibility = if ($null -ne $compatibilityProperty) {
+      $compatibilityProperty.Value
+   } else {
+      $null
+   }
+   if ($currentCompatibility -ne $runAsAdministrator) {
+      New-ItemProperty `
+         -Path $compatibilityRoot `
+         -Name $obsExecutable `
+         -Value $runAsAdministrator `
+         -PropertyType String `
+         -Force | Out-Null
+   }
+}
+
+# OBS's elevated GPU-priority workaround cooperates with modern Windows Game
+# Mode. These are per-user policy values and do not require a machine reboot.
+$gameBarRoot = "HKCU:\Software\Microsoft\GameBar"
+New-Item -Path $gameBarRoot -Force | Out-Null
+New-ItemProperty -Path $gameBarRoot -Name "AllowAutoGameMode" -Value 1 -PropertyType DWord -Force |
+   Out-Null
+New-ItemProperty -Path $gameBarRoot -Name "AutoGameModeEnabled" -Value 1 -PropertyType DWord -Force |
+   Out-Null
+
+if (-not (Get-Process obs64 -ErrorAction SilentlyContinue)) {
+   if (-not (Test-Path -LiteralPath $globalConfig -PathType Leaf)) {
+      New-Item -ItemType Directory -Path $obsRoot -Force | Out-Null
+      Set-Content -LiteralPath $globalConfig -Value @("[General]") -Encoding UTF8
+   }
+   Set-IniValue -Path $globalConfig -Section "General" -Name "ProcessPriority" -Value "High"
+} else {
+   Write-Warning "OBS is running; deferring its High process-priority setting until the next apply after OBS closes."
+}
+
 if (
    (Test-Path -LiteralPath $audioArrayExecutable -PathType Leaf) -and
    (Test-Path -LiteralPath $audioArrayConfig -PathType Leaf) -and
@@ -438,6 +572,8 @@ if (
             }
          }
          Set-CleanRecordingAudioTracks -SceneCollection $scene
+         Set-ObsPerformancePolicy -SceneCollection $scene
+         Set-ObsProductionModeScript -SceneCollection $scene
          $sceneChanged = Set-TextFileIfChanged `
             -Path $sceneCollection `
             -Content ($scene | ConvertTo-Json -Depth 100)
@@ -452,4 +588,18 @@ if (
    }
 }
 
-Write-Host "OBS 2560x1440 profile, six-track AudioArray contract, and meadow asset are current."
+# The production limiter is independent of AudioArray endpoint discovery. Keep
+# it loaded even during a future first boot or temporary audio-driver outage.
+if (
+   (Test-Path -LiteralPath $sceneCollection -PathType Leaf) -and
+   -not (Get-Process obs64 -ErrorAction SilentlyContinue)
+) {
+   $scene = Get-Content -LiteralPath $sceneCollection -Raw | ConvertFrom-Json
+   Set-ObsPerformancePolicy -SceneCollection $scene
+   Set-ObsProductionModeScript -SceneCollection $scene
+   $null = Set-TextFileIfChanged `
+      -Path $sceneCollection `
+      -Content ($scene | ConvertTo-Json -Depth 100)
+}
+
+Write-Host "OBS 1080p x264 stream, 1440p NVENC clean recording, lifetime GPU headroom, six-track AudioArray contract, and meadow asset are current."

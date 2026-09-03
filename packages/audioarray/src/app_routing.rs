@@ -10,7 +10,10 @@ use windows::{
 	},
 	Win32::{
 		Foundation::{CloseHandle, HANDLE},
-		Media::Audio::{eCapture, eCommunications, eConsole, eMultimedia, eRender, EDataFlow, ERole},
+		Media::Audio::{
+			eCapture, eCommunications, eConsole, eMultimedia, eRender, EDataFlow, ERole,
+			Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator, MMDeviceEnumerator,
+		},
 		System::{
 			Com::{CoCreateInstance, CLSCTX_ALL},
 			Diagnostics::ToolHelp::{
@@ -115,7 +118,12 @@ impl GlobalAudioDefaults {
 }
 
 pub(crate) fn select_output(selector: &str) -> Result<()> {
-	select_endpoint(selector, WasapiDirection::Render, &[eConsole, eMultimedia])?;
+	let endpoint_id = resolved_endpoint_id(selector, WasapiDirection::Render)?;
+	select_endpoint(
+		&endpoint_id,
+		WasapiDirection::Render,
+		&[eConsole, eMultimedia],
+	)?;
 	info!(
 		endpoint = selector,
 		"selected temporary Windows playback endpoint"
@@ -124,8 +132,10 @@ pub(crate) fn select_output(selector: &str) -> Result<()> {
 }
 
 pub(crate) fn select_input(selector: &str) -> Result<()> {
+	let endpoint_id = resolved_endpoint_id(selector, WasapiDirection::Capture)?;
+	ensure_capture_endpoint_ready(&endpoint_id)?;
 	select_endpoint(
-		selector,
+		&endpoint_id,
 		WasapiDirection::Capture,
 		&[eConsole, eMultimedia, eCommunications],
 	)?;
@@ -136,10 +146,58 @@ pub(crate) fn select_input(selector: &str) -> Result<()> {
 	Ok(())
 }
 
-fn select_endpoint(selector: &str, direction: WasapiDirection, roles: &[ERole]) -> Result<()> {
+pub(crate) fn ensure_capture_endpoint_ready(endpoint_id: &str) -> Result<()> {
+	ensure_endpoint_ready(endpoint_id, "capture")
+}
+
+pub(crate) fn ensure_capture_endpoint_selector_ready(selector: &str) -> Result<()> {
+	let endpoint_id = resolved_endpoint_id(selector, WasapiDirection::Capture)?;
+	ensure_capture_endpoint_ready(&endpoint_id)
+}
+
+fn ensure_endpoint_ready(endpoint_id: &str, kind: &str) -> Result<()> {
+	let _ = wasapi::initialize_mta();
+	let enumerator: IMMDeviceEnumerator =
+		unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
+			.with_context(|| format!("could not enumerate Windows {kind} endpoint volume"))?;
+	let id = HSTRING::from(endpoint_id);
+	let device = unsafe { enumerator.GetDevice(PCWSTR(id.as_ptr())) }
+		.with_context(|| format!("could not open {kind} endpoint {endpoint_id}"))?;
+	let volume: IAudioEndpointVolume = unsafe { device.Activate(CLSCTX_ALL, None) }
+		.with_context(|| format!("could not open {kind} volume for {endpoint_id}"))?;
+	let muted = unsafe { volume.GetMute() }
+		.with_context(|| format!("could not inspect {kind} mute for {endpoint_id}"))?
+		.as_bool();
+	let level = unsafe { volume.GetMasterVolumeLevelScalar() }
+		.with_context(|| format!("could not inspect {kind} level for {endpoint_id}"))?;
+	if muted {
+		unsafe { volume.SetMute(false, std::ptr::null()) }
+			.with_context(|| format!("could not unmute {kind} endpoint {endpoint_id}"))?;
+	}
+	if level <= f32::EPSILON {
+		unsafe { volume.SetMasterVolumeLevelScalar(1.0, std::ptr::null()) }
+			.with_context(|| format!("could not restore {kind} level for {endpoint_id}"))?;
+	}
+	if muted || level <= f32::EPSILON {
+		info!(
+			endpoint = endpoint_id,
+			endpoint_kind = kind,
+			previous_level = level,
+			was_muted = muted,
+			"restored selected physical endpoint"
+		);
+	}
+	Ok(())
+}
+
+fn resolved_endpoint_id(selector: &str, direction: WasapiDirection) -> Result<String> {
 	let _ = wasapi::initialize_mta();
 	let enumerator = DeviceEnumerator::new().context("could not enumerate Windows endpoint IDs")?;
-	let endpoint_id = resolve_endpoint_id(&enumerator, direction, selector)?;
+	resolve_endpoint_id(&enumerator, direction, selector)
+}
+
+fn select_endpoint(selector: &str, direction: WasapiDirection, roles: &[ERole]) -> Result<()> {
+	let endpoint_id = resolved_endpoint_id(selector, direction)?;
 	let policy: PolicyConfig = unsafe { CoCreateInstance(&POLICY_CONFIG_CLIENT, None, CLSCTX_ALL) }
 		.context("Windows global audio policy API is unavailable")?;
 	let endpoint = HSTRING::from(&endpoint_id);
