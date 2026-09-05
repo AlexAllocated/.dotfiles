@@ -4,7 +4,11 @@ param(
 
    [string]$VacInstallerPath = "",
 
-   [switch]$OpenVacDownload
+   [switch]$OpenVacDownload,
+
+   [switch]$ConfigureConversation,
+
+   [switch]$MigrateControlNames
 )
 
 $ErrorActionPreference = "Stop"
@@ -236,11 +240,11 @@ function Get-VacEndpoints {
             continue
          }
          $currentName = [string]$properties.$friendlyNameProperty
-         if ($currentName -notmatch '^Line [1-5]$' -and $currentName -notmatch '^AudioArray (Game|Comms|Music|ChatGPT|Clean Mic)$') {
+         if ($currentName -notmatch '^Line [1-7]$' -and $currentName -notmatch '^AudioArray (Game|Comms(?: In| Send)?|Music|ChatGPT(?: Out| In)?|Discord Send|Clean Mic)$') {
             continue
          }
          $backingPath = [string]$properties.$backingPathProperty
-         if ($backingPath -notmatch '\\wave(?<Cable>[1-5])_[rc]_rt') {
+         if ($backingPath -notmatch '\\wave(?<Cable>[1-7])_[rc]_rt') {
             continue
          }
          [pscustomobject]@{
@@ -279,14 +283,16 @@ function Get-SoundVolumeViewPath {
 function Assert-AudioArrayEndpointNames {
    $expected = @{
       1 = "AudioArray Game"
-      2 = "AudioArray Comms"
+      2 = "AudioArray Comms In"
       3 = "AudioArray Music"
       4 = "AudioArray Clean Mic"
-      5 = "AudioArray ChatGPT"
+      5 = "AudioArray ChatGPT Out"
+      6 = "AudioArray ChatGPT In"
+      7 = "AudioArray Comms Send"
    }
    $endpoints = @(Get-VacEndpoints)
    $incorrect = foreach ($direction in @("Render", "Capture")) {
-      foreach ($cable in 1..5) {
+      foreach ($cable in 1..7) {
          $endpoint = $endpoints | Where-Object {
             $_.Direction -eq $direction -and $_.Cable -eq $cable
          } | Select-Object -First 1
@@ -423,7 +429,7 @@ function Set-AudioArrayUnityGain {
          -Wait | Out-Null
       return @(Import-Csv -LiteralPath $exportPath | Where-Object {
          $_."Device Name" -eq "Virtual Audio Cable" -and (
-            ($_.Type -eq "Device" -and $_.Name -match '^AudioArray (Game|Comms|Music|ChatGPT|Clean Mic)$') -or
+            ($_.Type -eq "Device" -and $_.Name -match '^AudioArray (Game|Comms(?: In| Send)?|Music|ChatGPT(?: Out| In)?|Discord Send|Clean Mic)$') -or
             $_.Type -eq "Subunit"
          )
       })
@@ -442,8 +448,8 @@ function Set-AudioArrayUnityGain {
 
    try {
       $items = @(Get-AudioArrayLevelItems)
-      if ($items.Count -lt 20) {
-         throw "Expected at least 20 AudioArray endpoint and pin gain stages; found $($items.Count)."
+      if ($items.Count -lt 28) {
+         throw "Expected at least 28 AudioArray endpoint and pin gain stages; found $($items.Count)."
       }
       $itemsToUpdate = @($items | Where-Object { -not (Test-UnityGain -Item $_) })
       if ($itemsToUpdate.Count -eq 0) {
@@ -568,7 +574,7 @@ if ($rebuilt) {
    Assert-AudioArrayApplicationPolicy -InterfacePath $builtUiBinary
 }
 
-# Do not replace a working four-bus engine until the installed driver can
+# Do not replace a working engine until the installed driver can
 # support the new graph. This preflight elevates/restarts audio only on drift.
 if (Test-Path -LiteralPath $vacRegistryPath) {
    if (-not (Test-FileEqual -Source $endpointConfiguratorSource -Destination $endpointConfiguratorPath)) {
@@ -637,7 +643,7 @@ licensed installer private. Rerun this script with:
 
   -VacInstallerPath 'C:\path\to\vac471.exe'
 
-After installation, set "Cables" to 5 in VAC Control Panel and click Set/Restart.
+After installation, set "Cables" to 7 in VAC Control Panel and click Set/Restart.
 AudioArray is built but will not auto-start until audioarray doctor passes.
 "@
    if ($OpenVacDownload) {
@@ -647,10 +653,21 @@ AudioArray is built but will not auto-start until audioarray doctor passes.
 }
 
 $endpointNamesChanged = Assert-AudioArrayEndpointNames
+if ($ConfigureConversation) {
+   # The UI is the normal writer. Stop it for this explicitly requested,
+   # fresh-read/merge migration so concurrent user edits cannot be lost.
+   Stop-AudioArray
+   & $binaryPath --config $configPath setup-conversation
+   if ($LASTEXITCODE -ne 0) { throw "Conversation route migration failed." }
+} elseif ($MigrateControlNames) {
+   Stop-AudioArray
+   & $binaryPath --config $configPath migrate-control-names
+   if ($LASTEXITCODE -ne 0) { throw "Control name migration failed." }
+}
 $null = Set-AudioArraySpatialFormats
 $null = Set-AudioArrayUnityGain
 $taskChanged = -not (Test-AudioArrayTaskCurrent)
-$restartRequired = $rebuilt -or $configChanged -or $endpointNamesChanged -or $taskChanged
+$restartRequired = $rebuilt -or $configChanged -or $endpointNamesChanged -or $taskChanged -or $ConfigureConversation -or $MigrateControlNames
 
 $doctorOutput = & $binaryPath --config $configPath doctor 2>&1
 $doctorExitCode = $LASTEXITCODE
@@ -661,7 +678,7 @@ if ($doctorExitCode -ne 0) {
    if (Test-Path -LiteralPath $controlPanel -PathType Leaf) {
       Start-Process -FilePath $controlPanel
    }
-   Write-Warning "VAC is installed but the five-cable graph is incomplete. Set Cables to 5, restart the driver, then rerun dotctl apply."
+   Write-Warning "VAC is installed but the seven-cable graph is incomplete. Set Cables to 7, restart the driver, then rerun dotctl apply."
    exit 0
 }
 

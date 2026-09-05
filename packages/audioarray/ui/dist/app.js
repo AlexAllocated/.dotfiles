@@ -7,9 +7,11 @@ const meterDefinitions = [
 	["physical-mic", "Active Mic"],
 	["clean-mic", "Clean Mic"],
 	["game", "Game"],
-	["comms", "Comms"],
+	["comms", "Comms In"],
 	["music", "Music"],
-	["chatgpt", "ChatGPT"],
+	["chatgpt", "ChatGPT Out"],
+	["chatgpt-in", "ChatGPT In"],
+	["comms-send", "Comms Send"],
 	["monitor", "Main Output"]
 ];
 
@@ -142,6 +144,7 @@ function replaceOptions(select, devices) {
 }
 
 function renderRoutes(routes) {
+	const portLabel = (id) => ({ comms: "Comms In", comms_send: "Comms Send", chatgpt: "ChatGPT Out", chatgpt_in: "ChatGPT In", clean_mic: "Clean Mic" }[id] || id);
 	elements.routeTable.replaceChildren();
 	if (!routes.length) {
 		const empty = document.createElement("div");
@@ -159,13 +162,13 @@ function renderRoutes(routes) {
 		if (route.output) {
 			const output = document.createElement("span");
 			output.className = "route-chip";
-			output.textContent = route.output;
+			output.textContent = portLabel(route.output);
 			row.append(output);
 		}
 		if (route.input) {
 			const input = document.createElement("span");
 			input.className = "route-chip input";
-			input.textContent = route.input.replace("_", " ");
+			input.textContent = portLabel(route.input);
 			row.append(input);
 		}
 		elements.routeTable.append(row);
@@ -192,6 +195,19 @@ function patchWouldLoop(connections, source, destination) {
 		if (visited.has(current)) continue;
 		visited.add(current);
 		pending.push(...(adjacency.get(current) || []));
+	}
+	if (!adjacency.has(source)) adjacency.set(source, []);
+	adjacency.get(source).push(destination);
+	for (const [origin, ownInput] of [["comms", "comms_send"], ["chatgpt", "chatgpt_in"]]) {
+		const queue = [origin];
+		const seen = new Set();
+		while (queue.length) {
+			const node = queue.pop();
+			if (node === ownInput) return true;
+			if (seen.has(node)) continue;
+			seen.add(node);
+			queue.push(...(adjacency.get(node) || []));
+		}
 	}
 	return false;
 }
@@ -245,20 +261,16 @@ function renderPatchMatrix(snapshot) {
 }
 
 function crossedPatchPath(patch, index) {
-	const sourceY = { game: 159, comms: 223, music: 287, chatgpt: 351, clean_mic: 531 }[patch.source];
+	const sourceY = { game: 159, comms: 223, music: 287, chatgpt: 351, clean_mic: 603 }[patch.source];
 	if (!sourceY) return null;
 	if (patch.destination === "monitor") {
 		return `M684 ${sourceY} H754 Q770 ${sourceY} 770 ${sourceY - 16} V310 Q770 294 786 294 H894 V290`;
 	}
-	const destinationY = { game: 159, comms: 223, music: 287, chatgpt: 351, clean_mic: 531 }[patch.destination];
+	const destinationY = { game: 159, comms: 223, music: 287, chatgpt_in: 415, comms_send: 479 }[patch.destination];
 	if (!destinationY) return null;
-	const laneY = 590 + index * 10;
+	const laneY = 670 + index * 10;
 	const rightX = 730 + index * 5;
 	const leftX = 500 - index * 5;
-	if (patch.destination === "clean_mic") {
-		const entryX = 560 + (index % 4) * 28;
-		return `M684 ${sourceY} H${rightX - 12} Q${rightX} ${sourceY} ${rightX} ${sourceY + 12} V${laneY - 12} Q${rightX} ${laneY} ${rightX - 12} ${laneY} H${entryX + 12} Q${entryX} ${laneY} ${entryX} ${laneY - 12} V562`;
-	}
 	return `M684 ${sourceY} H${rightX - 12} Q${rightX} ${sourceY} ${rightX} ${sourceY + 12} V${laneY - 12} Q${rightX} ${laneY} ${rightX - 12} ${laneY} H${leftX + 12} Q${leftX} ${laneY} ${leftX} ${laneY - 12} V${destinationY + 12} Q${leftX} ${destinationY} ${leftX + 12} ${destinationY} H520`;
 }
 
@@ -277,7 +289,7 @@ function renderPatchGraph(patches) {
 	let crossedIndex = 0;
 	for (const patch of patches) {
 		const key = patchKey(patch.source, patch.destination);
-		if (["game:monitor", "comms:monitor", "music:monitor"].includes(key)) continue;
+		if (["game:monitor", "comms:monitor", "music:monitor", "chatgpt:monitor"].includes(key)) continue;
 		const geometry = crossedPatchPath(patch, crossedIndex++);
 		if (!geometry) continue;
 		const path = document.createElementNS(SVG_NAMESPACE, "path");

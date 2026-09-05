@@ -342,7 +342,8 @@ struct CableEndpointIds {
 	comms: String,
 	music: String,
 	chatgpt_render: String,
-	chatgpt_capture: String,
+	chatgpt_in: String,
+	comms_send: String,
 	clean_mic: String,
 }
 
@@ -375,6 +376,16 @@ pub(crate) fn print_cable_endpoints(config: &Config) -> Result<()> {
 			WasapiDirection::Capture,
 			config.cables.clean_mic.as_str(),
 		),
+		(
+			"chatgpt_in",
+			WasapiDirection::Capture,
+			config.cables.chatgpt_in.as_str(),
+		),
+		(
+			"comms_send",
+			WasapiDirection::Capture,
+			config.cables.comms_send.as_str(),
+		),
 	] {
 		println!(
 			"{name}\t{}",
@@ -404,10 +415,15 @@ impl AppRouter {
 				WasapiDirection::Render,
 				&config.cables.chatgpt,
 			)?,
-			chatgpt_capture: resolve_endpoint_id(
+			chatgpt_in: resolve_endpoint_id(
 				&enumerator,
 				WasapiDirection::Capture,
-				&config.cables.chatgpt,
+				&config.cables.chatgpt_in,
+			)?,
+			comms_send: resolve_endpoint_id(
+				&enumerator,
+				WasapiDirection::Capture,
+				&config.cables.comms_send,
 			)?,
 			clean_mic: resolve_endpoint_id(
 				&enumerator,
@@ -465,7 +481,8 @@ impl AppRouter {
 			if let Some(input) = &route.input {
 				let endpoint = match input.as_str() {
 					"clean_mic" => &self.endpoints.clean_mic,
-					"chatgpt" => &self.endpoints.chatgpt_capture,
+					"chatgpt_in" => &self.endpoints.chatgpt_in,
+					"comms_send" => &self.endpoints.comms_send,
 					_ => unreachable!(),
 				};
 				match self.factory.set(process_id, eCapture, endpoint) {

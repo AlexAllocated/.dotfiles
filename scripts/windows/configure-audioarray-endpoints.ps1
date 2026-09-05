@@ -44,24 +44,24 @@ if ($EnsureCableCapacity) {
             if ((Get-ItemProperty -LiteralPath $endpoint.PSPath).DeviceState -ne 1) { continue }
             $properties = Get-ItemProperty -LiteralPath (Join-Path $endpoint.PSPath "Properties")
             if ($properties.'{b3f8fa53-0004-438e-9003-51a46e139bfc},6' -ne "Virtual Audio Cable") { continue }
-            if ($properties.'{233164c8-1b2c-4c7d-bc68-b671687a2567},1' -match '\\wave(?<Cable>[1-5])_[rc]_rt') {
+            if ($properties.'{233164c8-1b2c-4c7d-bc68-b671687a2567},1' -match '\\wave(?<Cable>[1-7])_[rc]_rt') {
                $found["$direction/$($Matches.Cable)"] = $true
             }
          }
       }
-      return $found.Count -eq 10
+      return $found.Count -eq 14
    }
    $oldSoftwareCount = [int](Get-ItemProperty -LiteralPath $softwareKey).'Number of cables'
    $oldDriverCount = [int](Get-ItemProperty -LiteralPath $driverKey).'Number of cables'
-   if ($oldSoftwareCount -ge 5 -and $oldDriverCount -ge 5 -and (Test-VacCapacity)) {
-      if ($LogPath) { "Five active VAC cable pairs verified; no elevation or restart needed." | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
-      Write-Host "VAC already exposes all five AudioArray cables; no elevation or restart needed."
+   if ($oldSoftwareCount -ge 7 -and $oldDriverCount -ge 7 -and (Test-VacCapacity)) {
+      if ($LogPath) { "Seven active VAC cable pairs verified; no elevation or restart needed." | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
+      Write-Host "VAC already exposes all seven AudioArray cables; no elevation or restart needed."
       exit 0
    }
    $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
       if (-not $LogPath) { $LogPath = Join-Path $env:TEMP "audioarray-vac-capacity.log" }
-      Write-Host "VAC needs five cables. Approve the Windows UAC prompt; audio will briefly restart."
+      Write-Host "VAC needs seven cables. Approve the Windows UAC prompt; audio will briefly restart."
       $process = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
          -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList @(
             "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"",
@@ -74,8 +74,8 @@ if ($EnsureCableCapacity) {
          $details = if (Test-Path -LiteralPath $LogPath) { Get-Content -LiteralPath $LogPath -Raw } else { "No driver log was produced." }
          throw "VAC capacity reconciliation failed ($($process.ExitCode)): $details"
       }
-      if (-not (Test-VacCapacity)) { throw "VAC restart did not publish all five cables. No reboot was attempted." }
-      Write-Host "VAC now exposes five playback and five recording endpoints."
+      if (-not (Test-VacCapacity)) { throw "VAC restart did not publish all seven cables. No reboot was attempted." }
+      Write-Host "VAC now exposes seven playback and seven recording endpoints."
       exit 0
    }
 
@@ -89,7 +89,7 @@ if ($EnsureCableCapacity) {
    $audio = Get-Service Audiosrv
    $resumeAudio = $audio.Status -eq "Running"
    $dependents = @($audio.DependentServices | Where-Object Status -eq "Running" | Select-Object -ExpandProperty Name)
-   $desiredCount = [Math]::Max(5, [Math]::Max($oldSoftwareCount, $oldDriverCount))
+   $desiredCount = [Math]::Max(7, [Math]::Max($oldSoftwareCount, $oldDriverCount))
    $failure = $null
    try {
       if ($resumeArray) {
@@ -127,8 +127,8 @@ if ($EnsureCableCapacity) {
       if (Test-VacCapacity) { $ready = $true; break }
       Start-Sleep -Milliseconds 500
    }
-   if (-not $ready) { throw "VAC restart completed but five active cable pairs did not appear. Existing AudioArray was restarted; no reboot was attempted." }
-   if ($LogPath) { "VAC capacity is $desiredCount; five active playback/recording pairs verified. Existing AudioArray resumed." | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
+   if (-not $ready) { throw "VAC restart completed but seven active cable pairs did not appear. Existing AudioArray was restarted; no reboot was attempted." }
+   if ($LogPath) { "VAC capacity is $desiredCount; seven active playback/recording pairs verified. Existing AudioArray resumed." | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
    Write-Host "VAC capacity reconciled; existing AudioArray resumed."
    exit 0
 }
@@ -214,10 +214,12 @@ $deviceNameProperty = "{b3f8fa53-0004-438e-9003-51a46e139bfc},6"
 $backingPathProperty = "{233164c8-1b2c-4c7d-bc68-b671687a2567},1"
 $names = @{
    1 = "AudioArray Game"
-   2 = "AudioArray Comms"
+   2 = "AudioArray Comms In"
    3 = "AudioArray Music"
    4 = "AudioArray Clean Mic"
-   5 = "AudioArray ChatGPT"
+   5 = "AudioArray ChatGPT Out"
+   6 = "AudioArray ChatGPT In"
+   7 = "AudioArray Comms Send"
 }
 $changed = $false
 $found = @{}
@@ -234,11 +236,11 @@ foreach ($direction in @("Render", "Capture")) {
          continue
       }
       $currentName = [string]$properties.$friendlyNameProperty
-      if ($currentName -notmatch '^Line [1-5]$' -and $currentName -notin $names.Values) {
+      if ($currentName -notmatch '^Line [1-7]$' -and $currentName -notin $names.Values -and $currentName -notin @("AudioArray ChatGPT", "AudioArray Comms", "AudioArray Discord Send")) {
          continue
       }
       $backingPath = [string]$properties.$backingPathProperty
-      if ($backingPath -notmatch '\\wave(?<Cable>[1-5])_[rc]_rt') {
+      if ($backingPath -notmatch '\\wave(?<Cable>[1-7])_[rc]_rt') {
          continue
       }
       $cable = [int]$Matches.Cable
@@ -259,7 +261,7 @@ foreach ($direction in @("Render", "Capture")) {
 }
 
 $missing = foreach ($direction in @("Render", "Capture")) {
-   foreach ($cable in 1..5) {
+   foreach ($cable in 1..7) {
       if (-not $found.ContainsKey("$direction/$cable")) {
          "$direction cable $cable"
       }

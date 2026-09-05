@@ -2,9 +2,11 @@
 # opposite device directions. AudioArray deliberately refuses ambiguous matches.
 [cables]
 game = "AudioArray Game (Virtual Audio Cable)"
-comms = "AudioArray Comms (Virtual Audio Cable)"
+comms = "AudioArray Comms In (Virtual Audio Cable)"
 music = "AudioArray Music (Virtual Audio Cable)"
-chatgpt = "AudioArray ChatGPT (Virtual Audio Cable)"
+chatgpt = "AudioArray ChatGPT Out (Virtual Audio Cable)"
+chatgpt_in = "AudioArray ChatGPT In (Virtual Audio Cable)"
+comms_send = "AudioArray Comms Send (Virtual Audio Cable)"
 clean_mic = "AudioArray Clean Mic (Virtual Audio Cable)"
 
 [monitor]
@@ -60,17 +62,19 @@ post_filter_beta = 0.0
 
 [patchbay]
 # These unity-gain links behave like plugging cables into a small hardware
-# patch panel. The four default links send Game, Comms, Music, and ChatGPT to
-# the selected Main Output. ChatGPT is NOT sent to Clean Mic or Comms by
-# default. Saved patch choices replace these defaults, including intentionally
-# disconnected buses. The UI can fan any bus out
-# to other buses or Clean Mic; AudioArray rejects self-patches, duplicates, and
-# direct or indirect loops.
+# patch panel. Clean Mic is filtered physical speech only, never a mixed sink.
+# ChatGPT In hears Clean Mic + Comms. Comms Send hears Clean Mic + ChatGPT Out.
+# Neither conversation receives its own playback. Saved choices remain
+# authoritative; setup-conversation is an explicit one-time migration command.
 connections = [
    { source = "game", destination = "monitor" },
    { source = "comms", destination = "monitor" },
    { source = "music", destination = "monitor" },
    { source = "chatgpt", destination = "monitor" },
+   { source = "clean_mic", destination = "comms_send" },
+   { source = "clean_mic", destination = "chatgpt_in" },
+   { source = "comms", destination = "chatgpt_in" },
+   { source = "chatgpt", destination = "comms_send" },
 ]
 
 # These are persisted Windows per-app endpoint preferences. AudioArray applies
@@ -81,12 +85,22 @@ connections = [
 [[routes]]
 process = "Discord.exe"
 output = "comms"
-input = "clean_mic"
+input = "comms_send"
 
 [[routes]]
 process = "Vesktop.exe"
 output = "comms"
-input = "clean_mic"
+input = "comms_send"
+
+[[routes]]
+process = "ChatGPT.exe"
+output = "chatgpt"
+input = "chatgpt_in"
+
+[[routes]]
+process = "Codex.exe"
+output = "chatgpt"
+input = "chatgpt_in"
 
 [[routes]]
 process = "Spotify.exe"

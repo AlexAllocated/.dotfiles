@@ -15,7 +15,7 @@ use audioarray::{default_config_path, Config, DEFAULT_CONFIG};
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(about = "Five-bus Windows audio router", version)]
+#[command(about = "Seven-bus Windows audio router", version)]
 struct Cli {
 	#[arg(long, global = true, value_name = "FILE")]
 	config: Option<PathBuf>,
@@ -26,6 +26,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+	/// Explicitly configure isolated ChatGPT and communications mixes.
+	SetupConversation,
+	/// Persist legacy control names without changing the selected routes.
+	MigrateControlNames,
 	/// Run the audio graph until interrupted.
 	Run,
 	/// Validate the configuration and required audio endpoints.
@@ -42,14 +46,14 @@ enum Command {
 		#[arg(value_name = "ENDPOINT")]
 		endpoint: String,
 	},
-	/// Print the five resolved VAC endpoint IDs as tab-separated records.
+	/// Print the seven resolved VAC endpoint IDs as tab-separated records.
 	Endpoints,
 	/// Measure the configured suppression backend with speech-like noisy audio.
 	Benchmark {
 		#[arg(long, default_value_t = 10)]
 		seconds: u32,
 	},
-	/// Measure live peak levels at the physical input and all five buses.
+	/// Measure live peak levels at the physical input and all seven buses.
 	Levels {
 		#[arg(long, default_value_t = 6)]
 		seconds: u32,
@@ -81,6 +85,16 @@ fn main() -> Result<()> {
 	}
 
 	let config_path = cli.config.map(Ok).unwrap_or_else(default_config_path)?;
+	if matches!(cli.command, Command::SetupConversation) {
+		audioarray::setup_conversation(&config_path)?;
+		println!("Isolated conversation routes saved; other controls preserved.");
+		return Ok(());
+	}
+	if matches!(cli.command, Command::MigrateControlNames) {
+		audioarray::migrate_control_names(&config_path)?;
+		println!("Control names migrated; selected routes preserved.");
+		return Ok(());
+	}
 	let config = Config::load(&config_path)?;
 
 	#[cfg(windows)]
@@ -100,7 +114,9 @@ fn main() -> Result<()> {
 			Command::Benchmark { seconds } => audioarray::benchmark(&config, seconds),
 			Command::Levels { seconds } => audioarray::levels(&config, seconds),
 			Command::Devices => unreachable!(),
-			Command::ExampleConfig => unreachable!(),
+			Command::ExampleConfig | Command::SetupConversation | Command::MigrateControlNames => {
+				unreachable!()
+			}
 		}
 	}
 
@@ -117,7 +133,10 @@ fn main() -> Result<()> {
 			| Command::Run => {
 				bail!("AudioArray's live audio graph runs on Windows; build and run audioarray.exe")
 			}
-			Command::Devices | Command::ExampleConfig => unreachable!(),
+			Command::Devices
+			| Command::ExampleConfig
+			| Command::SetupConversation
+			| Command::MigrateControlNames => unreachable!(),
 		}
 	}
 }

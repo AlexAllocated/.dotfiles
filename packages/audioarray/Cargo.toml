@@ -3,7 +3,7 @@ name = "audioarray"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
-description = "Private four-bus Windows audio router for game streaming"
+description = "Private seven-bus Windows audio router for streaming and isolated voice mixes"
 publish = false
 license = "MIT OR Apache-2.0"
 

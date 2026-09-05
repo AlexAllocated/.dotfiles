@@ -862,6 +862,14 @@ pub(crate) fn levels(config: &Config, seconds: u32) -> Result<()> {
 			resolve_named_device(&host, Direction::Input, &config.cables.chatgpt)?,
 		),
 		(
+			"ChatGPT In",
+			resolve_named_device(&host, Direction::Input, &config.cables.chatgpt_in)?,
+		),
+		(
+			"Comms Send",
+			resolve_named_device(&host, Direction::Input, &config.cables.comms_send)?,
+		),
+		(
 			"Clean Mic",
 			resolve_named_device(&host, Direction::Input, &config.cables.clean_mic)?,
 		),
@@ -966,7 +974,7 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 			BusSummary {
 				id: "comms",
 				name: config.cables.comms.clone(),
-				purpose: "Voice communications",
+				purpose: "Incoming voice communications",
 				spatial: None,
 			},
 			BusSummary {
@@ -978,13 +986,25 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 			BusSummary {
 				id: "chatgpt",
 				name: config.cables.chatgpt.clone(),
-				purpose: "ChatGPT and Codex voice",
+				purpose: "ChatGPT / Codex playback only",
 				spatial: None,
 			},
 			BusSummary {
 				id: "clean-mic",
 				name: config.cables.clean_mic.clone(),
 				purpose: "Suppressed microphone",
+				spatial: None,
+			},
+			BusSummary {
+				id: "chatgpt-in",
+				name: config.cables.chatgpt_in.clone(),
+				purpose: "Filtered mic + received communications; no AI return",
+				spatial: None,
+			},
+			BusSummary {
+				id: "comms-send",
+				name: config.cables.comms_send.clone(),
+				purpose: "Filtered mic + ChatGPT Out; no communications self-return",
 				spatial: None,
 			},
 		],
@@ -1236,6 +1256,14 @@ impl MeterProbe {
 			(
 				"chatgpt",
 				resolve_named_device(&host, Direction::Input, &config.cables.chatgpt)?,
+			),
+			(
+				"chatgpt-in",
+				resolve_named_device(&host, Direction::Input, &config.cables.chatgpt_in)?,
+			),
+			(
+				"comms-send",
+				resolve_named_device(&host, Direction::Input, &config.cables.comms_send)?,
 			),
 			(
 				"clean-mic",
@@ -1677,6 +1705,31 @@ fn validate_cables(host: &cpal::Host, config: &Config) -> Result<()> {
 		("Music", config.cables.music.as_str(), Direction::Input),
 		("ChatGPT", config.cables.chatgpt.as_str(), Direction::Input),
 		(
+			"ChatGPT Out render",
+			config.cables.chatgpt.as_str(),
+			Direction::Output,
+		),
+		(
+			"ChatGPT In",
+			config.cables.chatgpt_in.as_str(),
+			Direction::Input,
+		),
+		(
+			"ChatGPT In render",
+			config.cables.chatgpt_in.as_str(),
+			Direction::Output,
+		),
+		(
+			"Comms Send",
+			config.cables.comms_send.as_str(),
+			Direction::Input,
+		),
+		(
+			"Comms Send render",
+			config.cables.comms_send.as_str(),
+			Direction::Output,
+		),
+		(
 			"Clean Mic",
 			config.cables.clean_mic.as_str(),
 			Direction::Output,
@@ -1852,6 +1905,8 @@ fn patch_source_selector<'a>(config: &'a Config, source: &str) -> Result<&'a str
 		"comms" => Ok(&config.cables.comms),
 		"music" => Ok(&config.cables.music),
 		"chatgpt" => Ok(&config.cables.chatgpt),
+		"chatgpt_in" => Ok(&config.cables.chatgpt_in),
+		"comms_send" => Ok(&config.cables.comms_send),
 		"clean_mic" => Ok(&config.cables.clean_mic),
 		other => bail!("unknown patch port {other:?}"),
 	}
@@ -1862,7 +1917,9 @@ fn patch_label(source: &str) -> &'static str {
 		"game" => "Patch Game",
 		"comms" => "Patch Comms",
 		"music" => "Patch Music",
-		"chatgpt" => "Patch ChatGPT",
+		"chatgpt" => "Patch ChatGPT Out",
+		"chatgpt_in" => "Patch ChatGPT In",
+		"comms_send" => "Patch Comms Send",
 		"clean_mic" => "Patch Clean Mic",
 		_ => "Patch Unknown",
 	}

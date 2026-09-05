@@ -50,13 +50,29 @@ pub struct CableConfig {
 	pub comms: String,
 	pub music: String,
 	pub chatgpt: String,
+	pub chatgpt_in: String,
+	#[serde(alias = "discord_send")]
+	pub comms_send: String,
 	pub clean_mic: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct PatchConnection {
+	#[serde(deserialize_with = "deserialize_patch_port")]
 	pub source: String,
+	#[serde(deserialize_with = "deserialize_patch_port")]
 	pub destination: String,
+}
+
+fn deserialize_patch_port<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> std::result::Result<String, D::Error> {
+	let port = String::deserialize(deserializer)?;
+	Ok(if port == "discord_send" {
+		"comms_send".into()
+	} else {
+		port
+	})
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -84,6 +100,22 @@ impl Default for PatchbayConfig {
 				PatchConnection {
 					source: "chatgpt".into(),
 					destination: "monitor".into(),
+				},
+				PatchConnection {
+					source: "clean_mic".into(),
+					destination: "comms_send".into(),
+				},
+				PatchConnection {
+					source: "clean_mic".into(),
+					destination: "chatgpt_in".into(),
+				},
+				PatchConnection {
+					source: "comms".into(),
+					destination: "chatgpt_in".into(),
+				},
+				PatchConnection {
+					source: "chatgpt".into(),
+					destination: "comms_send".into(),
 				},
 			],
 		}
@@ -317,10 +349,12 @@ impl Config {
 			self.cables.comms.trim(),
 			self.cables.music.trim(),
 			self.cables.chatgpt.trim(),
+			self.cables.chatgpt_in.trim(),
+			self.cables.comms_send.trim(),
 			self.cables.clean_mic.trim(),
 		];
 		if cable_names.iter().any(|name| name.is_empty()) {
-			bail!("all five VAC cable names must be non-empty");
+			bail!("all seven VAC cable names must be non-empty");
 		}
 		for (index, name) in cable_names.iter().enumerate() {
 			if cable_names
@@ -393,9 +427,9 @@ impl Config {
 				}
 			}
 			if let Some(input) = &route.input {
-				if !matches!(input.as_str(), "clean_mic" | "chatgpt") {
+				if !matches!(input.as_str(), "clean_mic" | "chatgpt_in" | "comms_send") {
 					bail!(
-						"route input for {} must be clean_mic or chatgpt",
+						"route input for {} must be clean_mic, chatgpt_in, or comms_send",
 						route.process
 					);
 				}
@@ -407,17 +441,17 @@ impl Config {
 
 const PATCH_SOURCES: [(&str, &str); 5] = [
 	("game", "Game"),
-	("comms", "Comms"),
+	("comms", "Comms In"),
 	("music", "Music"),
-	("chatgpt", "ChatGPT"),
+	("chatgpt", "ChatGPT Out"),
 	("clean_mic", "Clean Mic"),
 ];
 const PATCH_DESTINATIONS: [(&str, &str); 6] = [
 	("game", "Game"),
-	("comms", "Comms"),
+	("comms", "Comms In"),
 	("music", "Music"),
-	("chatgpt", "ChatGPT"),
-	("clean_mic", "Clean Mic"),
+	("chatgpt_in", "ChatGPT In"),
+	("comms_send", "Comms Send"),
 	("monitor", "Main Output"),
 ];
 
@@ -457,14 +491,13 @@ pub fn validate_patch_connections(connections: &[PatchConnection]) -> Result<()>
 		if !seen.insert((source.to_string(), destination.to_string())) {
 			bail!("duplicate patch {source} -> {destination}");
 		}
-		if destination != "monitor" {
+		if let Some(destination_index) = source_ids
+			.iter()
+			.position(|candidate| candidate == &destination)
+		{
 			let source_index = source_ids
 				.iter()
 				.position(|candidate| candidate == &source)
-				.unwrap();
-			let destination_index = source_ids
-				.iter()
-				.position(|candidate| candidate == &destination)
 				.unwrap();
 			adjacency[source_index].push(destination_index);
 		}
@@ -492,7 +525,81 @@ pub fn validate_patch_connections(connections: &[PatchConnection]) -> Result<()>
 	if (0..source_ids.len()).any(|node| visit(node, &adjacency, &mut state)) {
 		bail!("patch would create an audio feedback loop");
 	}
+	for (source, destination) in [("comms", "comms_send"), ("chatgpt", "chatgpt_in")] {
+		if patch_reaches(connections, source, destination) {
+			bail!("patch would return {source} to its own conversation input {destination}");
+		}
+	}
 	Ok(())
+}
+
+pub fn patch_reaches(connections: &[PatchConnection], source: &str, destination: &str) -> bool {
+	let mut pending = vec![source];
+	let mut visited = BTreeSet::new();
+	while let Some(node) = pending.pop() {
+		if !visited.insert(node) {
+			continue;
+		}
+		for edge in connections.iter().filter(|edge| edge.source == node) {
+			if edge.destination == destination {
+				return true;
+			}
+			pending.push(&edge.destination);
+		}
+	}
+	false
+}
+
+/// Explicit conversation setup only, never a generic config-load migration.
+pub fn conversation_connections(existing: Vec<PatchConnection>) -> Result<Vec<PatchConnection>> {
+	let mut merged = Vec::new();
+	for mut edge in existing {
+		if matches!(edge.source.as_str(), "chatgpt_in" | "comms_send") {
+			continue;
+		}
+		// Replace the old mixed conversation paths with the isolated topology.
+		if matches!(edge.source.as_str(), "comms" | "chatgpt") && edge.destination != "monitor" {
+			continue;
+		}
+		if edge.destination == "clean_mic" {
+			edge.destination = "comms_send".into();
+		}
+		if edge.destination == "chatgpt" {
+			edge.destination = "chatgpt_in".into();
+		}
+		if !merged.contains(&edge) {
+			merged.push(edge);
+		}
+	}
+	for edge in PatchbayConfig::default().connections {
+		if !merged.contains(&edge) {
+			merged.push(edge);
+		}
+	}
+	validate_patch_connections(&merged)?;
+	Ok(merged)
+}
+
+pub fn setup_conversation(config_path: &Path) -> Result<()> {
+	let mut controls = load_runtime_controls(config_path)?;
+	let existing = controls
+		.patchbay
+		.take()
+		.map(|patchbay| patchbay.connections)
+		.unwrap_or_default();
+	controls.patchbay = Some(PatchbayControls {
+		connections: conversation_connections(existing)?,
+	});
+	write_runtime_controls(config_path, &controls)
+}
+
+/// Persist compatibility aliases without adding, removing, or reconnecting routes.
+pub fn migrate_control_names(config_path: &Path) -> Result<()> {
+	let controls = load_runtime_controls(config_path)?;
+	if let Some(patchbay) = &controls.patchbay {
+		validate_patch_connections(&patchbay.connections)?;
+	}
+	write_runtime_controls(config_path, &controls)
 }
 
 pub fn suppression_intensity(config: &NoiseSuppressionConfig) -> u8 {
@@ -755,7 +862,7 @@ mod tests {
 		config.validate().unwrap();
 		assert_eq!(
 			config.cables.chatgpt,
-			"AudioArray ChatGPT (Virtual Audio Cable)"
+			"AudioArray ChatGPT Out (Virtual Audio Cable)"
 		);
 		assert_eq!(config.patchbay, PatchbayConfig::default());
 		let chatgpt_routes: Vec<_> = config
@@ -767,10 +874,16 @@ mod tests {
 			.collect();
 		assert_eq!(
 			chatgpt_routes,
-			vec![PatchConnection {
-				source: "chatgpt".into(),
-				destination: "monitor".into(),
-			}]
+			vec![
+				PatchConnection {
+					source: "chatgpt".into(),
+					destination: "monitor".into(),
+				},
+				PatchConnection {
+					source: "chatgpt".into(),
+					destination: "comms_send".into()
+				}
+			]
 		);
 		let mut without_patchbay: toml::Value = toml::from_str(DEFAULT_CONFIG).unwrap();
 		without_patchbay.as_table_mut().unwrap().remove("patchbay");
@@ -803,7 +916,7 @@ mod tests {
 				},
 				PatchConnection {
 					source: "music".into(),
-					destination: "clean_mic".into(),
+					destination: "comms_send".into(),
 				},
 			],
 		] {
@@ -820,9 +933,117 @@ mod tests {
 	}
 
 	#[test]
-	fn chatgpt_is_a_persistent_patch_source_and_destination() {
+	fn conversation_sources_and_sinks_are_isolated() {
 		assert!(patch_sources().iter().any(|port| port.id == "chatgpt"));
-		assert!(patch_destinations().iter().any(|port| port.id == "chatgpt"));
+		assert!(patch_destinations()
+			.iter()
+			.any(|port| port.id == "chatgpt_in"));
+		assert!(!patch_sources()
+			.iter()
+			.any(|port| matches!(port.id, "chatgpt_in" | "comms_send")));
+		assert!(!patch_destinations()
+			.iter()
+			.any(|port| matches!(port.id, "chatgpt" | "clean_mic")));
+		let defaults = PatchbayConfig::default().connections;
+		for (source, destination) in [
+			("clean_mic", "chatgpt_in"),
+			("clean_mic", "comms_send"),
+			("comms", "chatgpt_in"),
+			("chatgpt", "comms_send"),
+		] {
+			assert!(super::patch_reaches(&defaults, source, destination));
+		}
+		assert!(!super::patch_reaches(&defaults, "comms", "comms_send"));
+		assert!(!super::patch_reaches(&defaults, "chatgpt", "chatgpt_in"));
+		assert!(!super::patch_reaches(&defaults, "comms", "clean_mic"));
+		assert!(!super::patch_reaches(&defaults, "chatgpt", "clean_mic"));
+	}
+
+	#[test]
+	fn explicit_conversation_setup_removes_old_echo_paths_and_preserves_music_send() {
+		let edges = [
+			("comms", "chatgpt"),
+			("clean_mic", "chatgpt"),
+			("chatgpt", "clean_mic"),
+			("music", "clean_mic"),
+		]
+		.into_iter()
+		.map(|(source, destination)| PatchConnection {
+			source: source.into(),
+			destination: destination.into(),
+		})
+		.collect();
+		let migrated = super::conversation_connections(edges).unwrap();
+		assert!(super::patch_reaches(&migrated, "music", "comms_send"));
+		assert!(!super::patch_reaches(&migrated, "comms", "comms_send"));
+		assert!(!super::patch_reaches(&migrated, "chatgpt", "chatgpt_in"));
+		assert_eq!(
+			super::conversation_connections(migrated.clone()).unwrap(),
+			migrated
+		);
+	}
+
+	#[test]
+	fn conversation_guard_blocks_direct_and_indirect_self_return() {
+		for (source, sink) in [("comms", "comms_send"), ("chatgpt", "chatgpt_in")] {
+			for through_music in [false, true] {
+				let mut edges = PatchbayConfig::default().connections;
+				edges.push(PatchConnection {
+					source: source.into(),
+					destination: if through_music {
+						"music".into()
+					} else {
+						sink.into()
+					},
+				});
+				if through_music {
+					edges.push(PatchConnection {
+						source: "music".into(),
+						destination: sink.into(),
+					});
+				}
+				assert!(validate_patch_connections(&edges).is_err());
+			}
+		}
+	}
+
+	#[test]
+	fn legacy_send_name_deserializes_to_generic_comms_without_rewiring() {
+		let edge: PatchConnection =
+			toml::from_str("source = 'chatgpt'\ndestination = 'discord_send'\n").unwrap();
+		assert_eq!(edge.source, "chatgpt");
+		assert_eq!(edge.destination, "comms_send");
+		let encoded = toml::to_string(&edge).unwrap();
+		assert!(!encoded.contains("discord_send"));
+		assert!(encoded.contains("comms_send"));
+	}
+
+	#[test]
+	fn default_voice_app_policies_use_separate_input_and_output_buses() {
+		let config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+		for process in ["ChatGPT.exe", "Codex.exe"] {
+			let route = config
+				.routes
+				.iter()
+				.find(|route| route.process == process)
+				.unwrap();
+			assert_eq!(route.output.as_deref(), Some("chatgpt"));
+			assert_eq!(route.input.as_deref(), Some("chatgpt_in"));
+		}
+		for process in ["Discord.exe", "Vesktop.exe"] {
+			let route = config
+				.routes
+				.iter()
+				.find(|route| route.process == process)
+				.unwrap();
+			assert_eq!(route.output.as_deref(), Some("comms"));
+			assert_eq!(route.input.as_deref(), Some("comms_send"));
+		}
+		assert!(!super::patch_reaches(
+			&config.patchbay.connections,
+			"game",
+			"chatgpt_in"
+		));
 	}
 
 	#[test]
@@ -915,7 +1136,7 @@ mod tests {
 		let patches = vec![
 			PatchConnection {
 				source: "game".into(),
-				destination: "clean_mic".into(),
+				destination: "comms_send".into(),
 			},
 			PatchConnection {
 				source: "game".into(),
@@ -923,7 +1144,7 @@ mod tests {
 			},
 			PatchConnection {
 				source: "music".into(),
-				destination: "clean_mic".into(),
+				destination: "comms_send".into(),
 			},
 			PatchConnection {
 				source: "chatgpt".into(),
@@ -931,7 +1152,7 @@ mod tests {
 			},
 			PatchConnection {
 				source: "clean_mic".into(),
-				destination: "chatgpt".into(),
+				destination: "chatgpt_in".into(),
 			},
 		];
 		assert!(validate_patch_connections(&patches).is_ok());

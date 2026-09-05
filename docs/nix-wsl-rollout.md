@@ -92,18 +92,25 @@ Windows default. AudioArray observes that actual endpoint transition, yields
 only the render roles, and sends the configured monitor mix (Game, Comms, Music,
 and ChatGPT by default) to Steam Streaming Speakers. At disconnect it restores
 AudioArray Game and
-AudioArray Comms as the normal and communications defaults and selects the
+AudioArray Comms In as the normal and communications defaults and selects the
 first usable device from its recency-ordered physical input/output histories.
 Temporary Steam and Oculus
 endpoints are never persisted as physical hardware selections.
 
 Eugene Muzychenko's signed Virtual Audio Cable driver remains a private,
-manually installed prerequisite. The reconciler provisions at least five cables,
+manually installed prerequisite. The reconciler provisions at least seven cables,
 requesting UAC and briefly restarting audio only if capacity is missing. It
 preserves existing cable settings and never reboots automatically. The public
 repository never stores the licensed installer. OBS master track 1 is the complete single-track stream mix. The clean
 Branch Output recording embeds five audio streams in order: Publish Mix without
 music, Clean Mic, Comms, Game, and Music.
+
+ChatGPT/Codex playback uses ChatGPT Out (VAC 5), and its input uses ChatGPT In
+(VAC 6: filtered mic + Comms). Discord input uses Comms Send (VAC 7: filtered
+mic + ChatGPT Out). Clean Mic (VAC 4) remains pure for OBS. Fresh defaults wire
+both conversation directions without either participant's self-return.
+Existing installations use the explicitly requested `-ConfigureConversation`
+Windows reconciler option once; normal updates do not replace saved patch choices.
 
 ## Minecraft VR
 
