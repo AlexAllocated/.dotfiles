@@ -97,9 +97,10 @@ Temporary Steam and Oculus
 endpoints are never persisted as physical hardware selections.
 
 Eugene Muzychenko's signed Virtual Audio Cable driver remains a private,
-manually installed prerequisite. Configure exactly five cables in VAC Control
-Panel and click **Set/Restart**. The public repository never stores the licensed
-installer. OBS master track 1 is the complete single-track stream mix. The clean
+manually installed prerequisite. The reconciler provisions at least five cables,
+requesting UAC and briefly restarting audio only if capacity is missing. It
+preserves existing cable settings and never reboots automatically. The public
+repository never stores the licensed installer. OBS master track 1 is the complete single-track stream mix. The clean
 Branch Output recording embeds five audio streams in order: Publish Mix without
 music, Clean Mic, Comms, Game, and Music.
 

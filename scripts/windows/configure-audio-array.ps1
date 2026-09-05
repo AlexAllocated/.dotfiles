@@ -566,6 +566,21 @@ if ($rebuilt) {
       throw "AudioArray interface build completed without producing $builtUiBinary."
    }
    Assert-AudioArrayApplicationPolicy -InterfacePath $builtUiBinary
+}
+
+# Do not replace a working four-bus engine until the installed driver can
+# support the new graph. This preflight elevates/restarts audio only on drift.
+if (Test-Path -LiteralPath $vacRegistryPath) {
+   if (-not (Test-FileEqual -Source $endpointConfiguratorSource -Destination $endpointConfiguratorPath)) {
+      Copy-Item -LiteralPath $endpointConfiguratorSource -Destination $endpointConfiguratorPath -Force
+   }
+   & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
+      -File $endpointConfiguratorPath -EnsureCableCapacity `
+      -LogPath (Join-Path $logRoot "configure-vac-capacity.log")
+   if ($LASTEXITCODE -ne 0) { throw "VAC capacity preflight failed; installed AudioArray binaries and configuration were left unchanged." }
+}
+
+if ($rebuilt) {
    Stop-AudioArray
    $copied = $false
    for ($attempt = 1; $attempt -le 20; $attempt++) {

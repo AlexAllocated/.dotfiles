@@ -57,6 +57,12 @@ cables from Eugene Muzychenko's signed
 [Virtual Audio Cable](https://vac.muzychenko.net/en/) driver. The licensed
 installer is private and must never be committed here.
 
+After VAC is installed, the Windows reconciler ensures at least five active
+cable pairs before replacing the running engine. It requests UAC only when
+capacity is missing, preserves existing cable settings, and briefly restarts
+Windows audio and the VAC device. It never reboots Windows automatically.
+Subsequent runs leave a healthy five-cable driver untouched.
+
 DTS Headphone:X is attached to the AudioArray Game render endpoint and Dolby
 Atmos for Headphones is attached to the AudioArray Music render endpoint. The
 spatial renderers therefore become part of those two bus signals before

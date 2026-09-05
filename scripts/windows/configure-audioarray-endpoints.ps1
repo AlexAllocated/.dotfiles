@@ -1,5 +1,7 @@
 param(
-   [string]$LogPath = ""
+   [string]$LogPath = "",
+
+   [switch]$EnsureCableCapacity
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +12,125 @@ trap {
    }
    Write-Error $_
    exit 1
+}
+
+# VAC documents both registry locations in its installed configure.htm and
+# setvars.cmd. Increasing capacity preserves every existing per-cable setting.
+# Keep this separate from naming so installation can preflight the driver before
+# replacing a working engine with one that requires additional endpoints.
+if ($EnsureCableCapacity) {
+   $softwareKey = "HKLM:\SOFTWARE\EuMus Design\Virtual Audio Cable\4"
+   if (-not (Test-Path -LiteralPath $softwareKey)) {
+      throw "Install Virtual Audio Cable before provisioning AudioArray cables."
+   }
+   $devices = @(Get-PnpDevice -PresentOnly -Class MEDIA | Where-Object FriendlyName -eq "Virtual Audio Cable")
+   if ($devices.Count -ne 1) {
+      throw "Expected exactly one installed Virtual Audio Cable driver; found $($devices.Count)."
+   }
+   $device = $devices[0]
+   $service = (Get-PnpDeviceProperty -InstanceId $device.InstanceId -KeyName DEVPKEY_Device_Service).Data
+   if ($service -notmatch '^VirtualAudioCable_[a-fA-F0-9]+$') {
+      throw "Unexpected Virtual Audio Cable service: $service"
+   }
+   $driverKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$service\Parameters"
+   if (-not (Test-Path -LiteralPath $driverKey)) {
+      throw "VAC boot-time parameter key is missing: $driverKey"
+   }
+   function Test-VacCapacity {
+      $found = @{}
+      foreach ($direction in @("Render", "Capture")) {
+         $root = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\$direction"
+         foreach ($endpoint in Get-ChildItem -LiteralPath $root) {
+            if ((Get-ItemProperty -LiteralPath $endpoint.PSPath).DeviceState -ne 1) { continue }
+            $properties = Get-ItemProperty -LiteralPath (Join-Path $endpoint.PSPath "Properties")
+            if ($properties.'{b3f8fa53-0004-438e-9003-51a46e139bfc},6' -ne "Virtual Audio Cable") { continue }
+            if ($properties.'{233164c8-1b2c-4c7d-bc68-b671687a2567},1' -match '\\wave(?<Cable>[1-5])_[rc]_rt') {
+               $found["$direction/$($Matches.Cable)"] = $true
+            }
+         }
+      }
+      return $found.Count -eq 10
+   }
+   $oldSoftwareCount = [int](Get-ItemProperty -LiteralPath $softwareKey).'Number of cables'
+   $oldDriverCount = [int](Get-ItemProperty -LiteralPath $driverKey).'Number of cables'
+   if ($oldSoftwareCount -ge 5 -and $oldDriverCount -ge 5 -and (Test-VacCapacity)) {
+      if ($LogPath) { "Five active VAC cable pairs verified; no elevation or restart needed." | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
+      Write-Host "VAC already exposes all five AudioArray cables; no elevation or restart needed."
+      exit 0
+   }
+   $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+   if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+      if (-not $LogPath) { $LogPath = Join-Path $env:TEMP "audioarray-vac-capacity.log" }
+      Write-Host "VAC needs five cables. Approve the Windows UAC prompt; audio will briefly restart."
+      $process = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+         -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList @(
+            "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"",
+            "-EnsureCableCapacity", "-LogPath", "`"$LogPath`""
+         )
+      $null = $process.Handle
+      $process.WaitForExit()
+      $process.Refresh()
+      if ($process.ExitCode -ne 0) {
+         $details = if (Test-Path -LiteralPath $LogPath) { Get-Content -LiteralPath $LogPath -Raw } else { "No driver log was produced." }
+         throw "VAC capacity reconciliation failed ($($process.ExitCode)): $details"
+      }
+      if (-not (Test-VacCapacity)) { throw "VAC restart did not publish all five cables. No reboot was attempted." }
+      Write-Host "VAC now exposes five playback and five recording endpoints."
+      exit 0
+   }
+
+   $binaryRoot = Join-Path $env:LOCALAPPDATA "AudioArray\bin"
+   $processes = @(Get-Process audioarray,audioarray-ui -ErrorAction SilentlyContinue | Where-Object {
+      $_.Path -in @((Join-Path $binaryRoot "audioarray.exe"), (Join-Path $binaryRoot "audioarray-ui.exe"))
+   })
+   $task = Get-ScheduledTask -TaskName AudioArray -ErrorAction SilentlyContinue
+   $resumeArray = $processes.Count -gt 0 -or ($task -and $task.State -eq "Running")
+   if ($resumeArray -and -not $task) { throw "Cannot safely restore AudioArray: its scheduled task is missing." }
+   $audio = Get-Service Audiosrv
+   $resumeAudio = $audio.Status -eq "Running"
+   $dependents = @($audio.DependentServices | Where-Object Status -eq "Running" | Select-Object -ExpandProperty Name)
+   $desiredCount = [Math]::Max(5, [Math]::Max($oldSoftwareCount, $oldDriverCount))
+   $failure = $null
+   try {
+      if ($resumeArray) {
+         Stop-ScheduledTask -TaskName AudioArray
+         $processes | Stop-Process -Force -ErrorAction SilentlyContinue
+      }
+      if ($resumeAudio) { Stop-Service Audiosrv -Force }
+      foreach ($key in @($softwareKey, $driverKey)) {
+         New-ItemProperty -LiteralPath $key -Name "Number of cables" -Value $desiredCount -PropertyType DWord -Force | Out-Null
+      }
+      $restart = Start-Process -FilePath "$env:SystemRoot\System32\pnputil.exe" `
+         -ArgumentList @("/restart-device", "`"$($device.InstanceId)`"") -NoNewWindow -PassThru
+      $null = $restart.Handle
+      $restart.WaitForExit()
+      $restart.Refresh()
+      if ($restart.ExitCode -ne 0) {
+         throw "VAC device restart returned $($restart.ExitCode). A manual reboot may be required; none was requested."
+      }
+   } catch {
+      $failure = $_
+      New-ItemProperty -LiteralPath $softwareKey -Name "Number of cables" -Value $oldSoftwareCount -PropertyType DWord -Force | Out-Null
+      New-ItemProperty -LiteralPath $driverKey -Name "Number of cables" -Value $oldDriverCount -PropertyType DWord -Force | Out-Null
+   } finally {
+      try {
+         if ($resumeAudio) { Start-Service Audiosrv }
+         foreach ($name in $dependents) { Start-Service -Name $name }
+      } finally {
+         if ($resumeArray) { Start-ScheduledTask -TaskName AudioArray }
+      }
+   }
+   if ($failure) { throw $failure }
+   $ready = $false
+   # Endpoint Builder can publish a new cable well after Audiosrv is running.
+   for ($attempt = 0; $attempt -lt 90; $attempt++) {
+      if (Test-VacCapacity) { $ready = $true; break }
+      Start-Sleep -Milliseconds 500
+   }
+   if (-not $ready) { throw "VAC restart completed but five active cable pairs did not appear. Existing AudioArray was restarted; no reboot was attempted." }
+   if ($LogPath) { "VAC capacity is $desiredCount; five active playback/recording pairs verified. Existing AudioArray resumed." | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
+   Write-Host "VAC capacity reconciled; existing AudioArray resumed."
+   exit 0
 }
 
 if (-not ("AudioArray.EndpointPolicy" -as [type])) {
