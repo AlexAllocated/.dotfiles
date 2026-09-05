@@ -49,6 +49,7 @@ pub struct CableConfig {
 	pub game: String,
 	pub comms: String,
 	pub music: String,
+	pub chatgpt: String,
 	pub clean_mic: String,
 }
 
@@ -95,6 +96,7 @@ pub struct MonitorConfig {
 	pub game_gain: f32,
 	pub comms_gain: f32,
 	pub music_gain: f32,
+	pub chatgpt_gain: f32,
 }
 
 impl Default for MonitorConfig {
@@ -107,6 +109,7 @@ impl Default for MonitorConfig {
 			game_gain: 1.0,
 			comms_gain: 1.0,
 			music_gain: 1.0,
+			chatgpt_gain: 1.0,
 		}
 	}
 }
@@ -309,10 +312,11 @@ impl Config {
 			self.cables.game.trim(),
 			self.cables.comms.trim(),
 			self.cables.music.trim(),
+			self.cables.chatgpt.trim(),
 			self.cables.clean_mic.trim(),
 		];
 		if cable_names.iter().any(|name| name.is_empty()) {
-			bail!("all four VAC cable names must be non-empty");
+			bail!("all five VAC cable names must be non-empty");
 		}
 		for (index, name) in cable_names.iter().enumerate() {
 			if cable_names
@@ -327,6 +331,7 @@ impl Config {
 			("game_gain", self.monitor.game_gain),
 			("comms_gain", self.monitor.comms_gain),
 			("music_gain", self.monitor.music_gain),
+			("chatgpt_gain", self.monitor.chatgpt_gain),
 			("microphone gain", self.microphone.gain),
 		] {
 			if !value.is_finite() || !(0.0..=4.0).contains(&value) {
@@ -376,16 +381,19 @@ impl Config {
 				);
 			}
 			if let Some(output) = &route.output {
-				if !matches!(output.as_str(), "game" | "comms" | "music") {
+				if !matches!(output.as_str(), "game" | "comms" | "music" | "chatgpt") {
 					bail!(
-						"route output for {} must be game, comms, or music",
+						"route output for {} must be game, comms, music, or chatgpt",
 						route.process
 					);
 				}
 			}
 			if let Some(input) = &route.input {
-				if input != "clean_mic" {
-					bail!("route input for {} must be clean_mic", route.process);
+				if !matches!(input.as_str(), "clean_mic" | "chatgpt") {
+					bail!(
+						"route input for {} must be clean_mic or chatgpt",
+						route.process
+					);
 				}
 			}
 		}
@@ -393,16 +401,18 @@ impl Config {
 	}
 }
 
-const PATCH_SOURCES: [(&str, &str); 4] = [
+const PATCH_SOURCES: [(&str, &str); 5] = [
 	("game", "Game"),
 	("comms", "Comms"),
 	("music", "Music"),
+	("chatgpt", "ChatGPT"),
 	("clean_mic", "Clean Mic"),
 ];
-const PATCH_DESTINATIONS: [(&str, &str); 5] = [
+const PATCH_DESTINATIONS: [(&str, &str); 6] = [
 	("game", "Game"),
 	("comms", "Comms"),
 	("music", "Music"),
+	("chatgpt", "ChatGPT"),
 	("clean_mic", "Clean Mic"),
 	("monitor", "Main Output"),
 ];
@@ -729,10 +739,32 @@ impl MeterProbe {
 #[cfg(test)]
 mod tests {
 	use super::{
-		attenuation_for_intensity, suppression_intensity, suppression_transition,
-		validate_patch_connections, NoiseSuppressionConfig, PatchConnection, SuppressionBackend,
-		SuppressionTransition, MAX_SUPPRESSION_ATTENUATION_DB,
+		attenuation_for_intensity, patch_destinations, patch_sources, suppression_intensity,
+		suppression_transition, validate_patch_connections, Config, NoiseSuppressionConfig,
+		PatchConnection, SuppressionBackend, SuppressionTransition, DEFAULT_CONFIG,
+		MAX_SUPPRESSION_ATTENUATION_DB,
 	};
+
+	#[test]
+	fn bundled_config_defines_the_chatgpt_peer_bus() {
+		let config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+		config.validate().unwrap();
+		assert_eq!(
+			config.cables.chatgpt,
+			"AudioArray ChatGPT (Virtual Audio Cable)"
+		);
+		assert!(config
+			.patchbay
+			.connections
+			.iter()
+			.all(|patch| patch.source != "chatgpt" && patch.destination != "chatgpt"));
+	}
+
+	#[test]
+	fn chatgpt_is_a_persistent_patch_source_and_destination() {
+		assert!(patch_sources().iter().any(|port| port.id == "chatgpt"));
+		assert!(patch_destinations().iter().any(|port| port.id == "chatgpt"));
+	}
 
 	#[test]
 	fn default_suppression_is_balanced() {
@@ -833,6 +865,14 @@ mod tests {
 			PatchConnection {
 				source: "music".into(),
 				destination: "clean_mic".into(),
+			},
+			PatchConnection {
+				source: "chatgpt".into(),
+				destination: "monitor".into(),
+			},
+			PatchConnection {
+				source: "clean_mic".into(),
+				destination: "chatgpt".into(),
 			},
 		];
 		assert!(validate_patch_connections(&patches).is_ok());

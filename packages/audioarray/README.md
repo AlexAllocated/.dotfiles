@@ -3,12 +3,14 @@
 AudioArray is Alex's private cross-platform streaming-audio graph. Its Windows
 engine is paired with a Tauri operations console; a future Linux engine will
 implement the same Rust status/control contract beneath the identical UI. The
-four buses stay intentionally boring and can be plugged together like a small
+five buses stay intentionally boring and can be plugged together like a small
 hardware patch panel:
 
 - **Game**: the Windows default for games and otherwise-unassigned applications.
 - **Comms**: Discord/Vesktop playback.
 - **Music**: Spotify and other music players.
+- **ChatGPT**: ChatGPT/Codex voice input or output, wired explicitly in the
+  patch bay.
 - **Clean Mic**: the selected Windows input after GPU-preferred noise suppression.
 
 Windows exposes both ends of the signed VAC cables with semantic names instead
@@ -17,6 +19,8 @@ of the driver's generic `Line N` labels:
 - **AudioArray Game**: normal/default playback and OBS's isolated game capture.
 - **AudioArray Comms**: communications playback and OBS's isolated chat capture.
 - **AudioArray Music**: music playback and OBS's isolated music capture.
+- **AudioArray ChatGPT**: a neutral voice-AI source and destination with no
+  default wiring.
 - **AudioArray Clean Mic**: the suppressed microphone selected by chat apps and OBS.
 
 AudioArray makes Game the normal Windows output, Comms the Windows
@@ -32,7 +36,7 @@ VAC volume processing remains disabled so its buses stay bit-perfect. The
 normal Windows volume/mute control on AudioArray Game is instead an event-driven
 master control: AudioArray mirrors it to the selected physical output and
 mirrors Windows-visible physical-device changes back. That volume sits only on
-the final monitor sink, downstream of the four buses, so OBS's isolated tracks
+the final monitor sink, downstream of the five buses, so OBS's isolated tracks
 and stream mix are never attenuated. A newly selected physical output supplies
 the initial safe volume. Analog controls that do not report state to Windows
 cannot be mirrored back.
@@ -48,9 +52,10 @@ side silently muted, without confusing an intentional user mute for a fault.
 
 ## Driver boundary
 
-AudioArray does not install an unsigned kernel driver. It uses four endpoints
-from Eugene Muzychenko's signed [Virtual Audio Cable](https://vac.muzychenko.net/en/)
-driver. The licensed installer is private and must never be committed here.
+AudioArray does not install an unsigned kernel driver. It uses five full-duplex
+cables from Eugene Muzychenko's signed
+[Virtual Audio Cable](https://vac.muzychenko.net/en/) driver. The licensed
+installer is private and must never be committed here.
 
 DTS Headphone:X is attached to the AudioArray Game render endpoint and Dolby
 Atmos for Headphones is attached to the AudioArray Music render endpoint. The
@@ -70,8 +75,9 @@ altering the samples passing through that cable.
 VAC playback applications write into each cable's render endpoint. AudioArray
 captures the matching recording endpoint. Its persistent patch bay sends Game,
 Comms, and Music to Main Output by default, reproducing the original monitor
-mix without hard-coding it into the engine. Any bus can fan out to another bus,
-Clean Mic, or Main Output at unity gain. During a Sunshine/Moonlight
+mix without hard-coding it into the engine. ChatGPT starts disconnected, and
+all five buses can fan out to another bus, Clean Mic, or Main Output at unity
+gain. During a Sunshine/Moonlight
 session, Sunshine temporarily makes Steam Streaming Speakers the Windows
 default. AudioArray observes that real transition, sends the complete mix there,
 and yields the render defaults until Sunshine restores them at disconnect. Meta
@@ -106,6 +112,9 @@ flowchart LR
    musicRender --> atmos[Dolby Atmos for Headphones]
    atmos --> musicCapture[AudioArray Music<br/>VAC capture]
 
+   voiceAi[ChatGPT / Codex voice] --> chatgptRender[AudioArray ChatGPT<br/>VAC render]
+   chatgptRender --> chatgptCapture[AudioArray ChatGPT<br/>VAC capture]
+
    mic[Selected physical microphone] --> denoise[AudioArray<br/>NVIDIA AFX or DeepFilterNet3]
    denoise --> micRender[AudioArray Clean Mic<br/>VAC render]
    micRender --> micCapture[AudioArray Clean Mic<br/>VAC capture]
@@ -114,6 +123,7 @@ flowchart LR
    gameCapture --> patchbay[AudioArray patch bay]
    commsCapture --> patchbay
    musicCapture --> patchbay
+   chatgptCapture --> patchbay
    micCapture --> patchbay
    patchbay --> monitor[AudioArray monitor mix]
    patchbay -. optional crossed wires .-> micRender
@@ -142,7 +152,7 @@ but intentionally includes no bridge ambience or generic background hum.
 The first interface release is operationally conservative. It provides:
 
 - the complete signal graph with activity-driven routes;
-- live meters for the physical mic, four buses, and final monitor output;
+- live meters for the physical mic, five buses, and final monitor output;
 - background-engine, routing-policy, session-override, format, filter, and
   latency telemetry;
 - the declarative application routes and six-track OBS recording matrix; and
@@ -158,9 +168,11 @@ the AudioArray virtual defaults exactly as it does when a device is selected in
 Windows Settings. Either interface therefore produces the same durable result.
 
 The patch matrix is the flexible-plugging layer. Selecting a cell connects its
-row bus to its column destination without replacing any other connection. Game
-and Music can therefore both feed Clean Mic while retaining their original OBS
-stems, allowing Discord or any other Clean Mic consumer to hear those sources.
+row bus to its column destination without replacing any other connection. Game,
+Comms, Music, ChatGPT, and Clean Mic all appear as peer sources and targets.
+Game and Music can therefore both feed Clean Mic while retaining their original
+OBS stems, allowing Discord or any other Clean Mic consumer to hear those
+sources.
 Disconnecting Game, Comms, or Music from Main Output silences only that local
 monitor path. AudioArray rejects self-patches, duplicates, and direct or
 indirect feedback loops. In particular, feeding Comms into Clean Mic returns
@@ -177,7 +189,8 @@ single-instance activation.
 
 In an application's device picker, choose **AudioArray Game** for ordinary
 sound, **AudioArray Comms** for chat playback, **AudioArray Music** for music,
-and **AudioArray Clean Mic** for microphone input. Apps without a device picker
+**AudioArray ChatGPT** for the voice-AI bus, and **AudioArray Clean Mic** for
+microphone input. Apps without a device picker
 inherit the appropriate Windows default automatically.
 
 ## Commands
@@ -214,10 +227,10 @@ Backend and bypass changes are likewise isolated to that worker. The choice is s
 `%APPDATA%\AudioArray\controls.toml`, separate from the declarative base graph,
 so a later dotfiles reconciliation does not erase it.
 
-Patch-bay choices are stored in that same machine-local controls file. A
-dedicated patch worker notices changes and replaces only the crossed-wire
-streams; the physical-microphone capture, suppression worker, application
-defaults, and unaffected bus routes stay alive.
+Patch-bay choices—including ChatGPT links—are stored in that same machine-local
+controls file. A dedicated patch worker notices changes and replaces only the
+crossed-wire streams; the physical-microphone capture, suppression worker,
+application defaults, and unaffected bus routes stay alive.
 
 **Monitor Clean Mic** opens a temporary local route from the filtered Clean Mic
 VAC endpoint to the active physical output. It never enters a content bus or an

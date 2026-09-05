@@ -90,13 +90,14 @@ output preference.
 The installed Sunshine release temporarily makes its capture endpoint the
 Windows default. AudioArray observes that actual endpoint transition, yields
 only the render roles, and sends the combined Game, Comms, and Music monitor mix
-to Steam Streaming Speakers. At disconnect it restores Lines 1 and 2 as the
-normal and communications defaults and selects the first usable device from its
-recency-ordered physical input/output histories. Temporary Steam and Oculus
+to Steam Streaming Speakers. At disconnect it restores AudioArray Game and
+AudioArray Comms as the normal and communications defaults and selects the
+first usable device from its recency-ordered physical input/output histories.
+Temporary Steam and Oculus
 endpoints are never persisted as physical hardware selections.
 
 Eugene Muzychenko's signed Virtual Audio Cable driver remains a private,
-manually installed prerequisite. Configure exactly four cables in VAC Control
+manually installed prerequisite. Configure exactly five cables in VAC Control
 Panel and click **Set/Restart**. The public repository never stores the licensed
 installer. OBS master track 1 is the complete single-track stream mix. The clean
 Branch Output recording embeds five audio streams in order: Publish Mix without

@@ -341,6 +341,8 @@ struct CableEndpointIds {
 	game: String,
 	comms: String,
 	music: String,
+	chatgpt_render: String,
+	chatgpt_capture: String,
 	clean_mic: String,
 }
 
@@ -362,6 +364,11 @@ pub(crate) fn print_cable_endpoints(config: &Config) -> Result<()> {
 			"music",
 			WasapiDirection::Capture,
 			config.cables.music.as_str(),
+		),
+		(
+			"chatgpt",
+			WasapiDirection::Capture,
+			config.cables.chatgpt.as_str(),
 		),
 		(
 			"clean_mic",
@@ -392,6 +399,16 @@ impl AppRouter {
 			game: resolve_endpoint_id(&enumerator, WasapiDirection::Render, &config.cables.game)?,
 			comms: resolve_endpoint_id(&enumerator, WasapiDirection::Render, &config.cables.comms)?,
 			music: resolve_endpoint_id(&enumerator, WasapiDirection::Render, &config.cables.music)?,
+			chatgpt_render: resolve_endpoint_id(
+				&enumerator,
+				WasapiDirection::Render,
+				&config.cables.chatgpt,
+			)?,
+			chatgpt_capture: resolve_endpoint_id(
+				&enumerator,
+				WasapiDirection::Capture,
+				&config.cables.chatgpt,
+			)?,
 			clean_mic: resolve_endpoint_id(
 				&enumerator,
 				WasapiDirection::Capture,
@@ -432,6 +449,7 @@ impl AppRouter {
 					"game" => &self.endpoints.game,
 					"comms" => &self.endpoints.comms,
 					"music" => &self.endpoints.music,
+					"chatgpt" => &self.endpoints.chatgpt_render,
 					_ => unreachable!(),
 				};
 				match self.factory.set(process_id, eRender, endpoint) {
@@ -444,11 +462,13 @@ impl AppRouter {
 					),
 				}
 			}
-			if route.input.as_deref() == Some("clean_mic") {
-				match self
-					.factory
-					.set(process_id, eCapture, &self.endpoints.clean_mic)
-				{
+			if let Some(input) = &route.input {
+				let endpoint = match input.as_str() {
+					"clean_mic" => &self.endpoints.clean_mic,
+					"chatgpt" => &self.endpoints.chatgpt_capture,
+					_ => unreachable!(),
+				};
+				match self.factory.set(process_id, eCapture, endpoint) {
 					Ok(()) => input_routed = true,
 					Err(error) => debug!(
 						%process_id,

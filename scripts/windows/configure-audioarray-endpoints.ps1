@@ -96,6 +96,7 @@ $names = @{
    2 = "AudioArray Comms"
    3 = "AudioArray Music"
    4 = "AudioArray Clean Mic"
+   5 = "AudioArray ChatGPT"
 }
 $changed = $false
 $found = @{}
@@ -112,11 +113,11 @@ foreach ($direction in @("Render", "Capture")) {
          continue
       }
       $currentName = [string]$properties.$friendlyNameProperty
-      if ($currentName -notmatch '^Line [1-4]$' -and $currentName -notin $names.Values) {
+      if ($currentName -notmatch '^Line [1-5]$' -and $currentName -notin $names.Values) {
          continue
       }
       $backingPath = [string]$properties.$backingPathProperty
-      if ($backingPath -notmatch '\\wave(?<Cable>[1-4])_[rc]_rt') {
+      if ($backingPath -notmatch '\\wave(?<Cable>[1-5])_[rc]_rt') {
          continue
       }
       $cable = [int]$Matches.Cable
@@ -137,7 +138,7 @@ foreach ($direction in @("Render", "Capture")) {
 }
 
 $missing = foreach ($direction in @("Render", "Capture")) {
-   foreach ($cable in 1..4) {
+   foreach ($cable in 1..5) {
       if (-not $found.ContainsKey("$direction/$cable")) {
          "$direction cable $cable"
       }

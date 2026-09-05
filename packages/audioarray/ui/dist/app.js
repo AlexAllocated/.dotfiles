@@ -9,6 +9,7 @@ const meterDefinitions = [
 	["game", "Game"],
 	["comms", "Comms"],
 	["music", "Music"],
+	["chatgpt", "ChatGPT"],
 	["monitor", "Main Output"]
 ];
 
@@ -164,7 +165,7 @@ function renderRoutes(routes) {
 		if (route.input) {
 			const input = document.createElement("span");
 			input.className = "route-chip input";
-			input.textContent = "clean mic";
+			input.textContent = route.input.replace("_", " ");
 			row.append(input);
 		}
 		elements.routeTable.append(row);
@@ -244,19 +245,19 @@ function renderPatchMatrix(snapshot) {
 }
 
 function crossedPatchPath(patch, index) {
-	const sourceY = { game: 159, comms: 223, music: 287, clean_mic: 445 }[patch.source];
+	const sourceY = { game: 159, comms: 223, music: 287, chatgpt: 351, clean_mic: 531 }[patch.source];
 	if (!sourceY) return null;
 	if (patch.destination === "monitor") {
 		return `M684 ${sourceY} H754 Q770 ${sourceY} 770 ${sourceY - 16} V310 Q770 294 786 294 H894 V290`;
 	}
-	const destinationY = { game: 159, comms: 223, music: 287, clean_mic: 445 }[patch.destination];
+	const destinationY = { game: 159, comms: 223, music: 287, chatgpt: 351, clean_mic: 531 }[patch.destination];
 	if (!destinationY) return null;
-	const laneY = 510 + index * 10;
+	const laneY = 590 + index * 10;
 	const rightX = 730 + index * 5;
 	const leftX = 500 - index * 5;
 	if (patch.destination === "clean_mic") {
 		const entryX = 560 + (index % 4) * 28;
-		return `M684 ${sourceY} H${rightX - 12} Q${rightX} ${sourceY} ${rightX} ${sourceY + 12} V${laneY - 12} Q${rightX} ${laneY} ${rightX - 12} ${laneY} H${entryX + 12} Q${entryX} ${laneY} ${entryX} ${laneY - 12} V476`;
+		return `M684 ${sourceY} H${rightX - 12} Q${rightX} ${sourceY} ${rightX} ${sourceY + 12} V${laneY - 12} Q${rightX} ${laneY} ${rightX - 12} ${laneY} H${entryX + 12} Q${entryX} ${laneY} ${entryX} ${laneY - 12} V562`;
 	}
 	return `M684 ${sourceY} H${rightX - 12} Q${rightX} ${sourceY} ${rightX} ${sourceY + 12} V${laneY - 12} Q${rightX} ${laneY} ${rightX - 12} ${laneY} H${leftX + 12} Q${leftX} ${laneY} ${leftX} ${laneY - 12} V${destinationY + 12} Q${leftX} ${destinationY} ${leftX + 12} ${destinationY} H520`;
 }

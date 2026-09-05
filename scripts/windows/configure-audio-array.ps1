@@ -236,11 +236,11 @@ function Get-VacEndpoints {
             continue
          }
          $currentName = [string]$properties.$friendlyNameProperty
-         if ($currentName -notmatch '^Line [1-4]$' -and $currentName -notmatch '^AudioArray (Game|Comms|Music|Clean Mic)$') {
+         if ($currentName -notmatch '^Line [1-5]$' -and $currentName -notmatch '^AudioArray (Game|Comms|Music|ChatGPT|Clean Mic)$') {
             continue
          }
          $backingPath = [string]$properties.$backingPathProperty
-         if ($backingPath -notmatch '\\wave(?<Cable>[1-4])_[rc]_rt') {
+         if ($backingPath -notmatch '\\wave(?<Cable>[1-5])_[rc]_rt') {
             continue
          }
          [pscustomobject]@{
@@ -282,10 +282,11 @@ function Assert-AudioArrayEndpointNames {
       2 = "AudioArray Comms"
       3 = "AudioArray Music"
       4 = "AudioArray Clean Mic"
+      5 = "AudioArray ChatGPT"
    }
    $endpoints = @(Get-VacEndpoints)
    $incorrect = foreach ($direction in @("Render", "Capture")) {
-      foreach ($cable in 1..4) {
+      foreach ($cable in 1..5) {
          $endpoint = $endpoints | Where-Object {
             $_.Direction -eq $direction -and $_.Cable -eq $cable
          } | Select-Object -First 1
@@ -422,7 +423,7 @@ function Set-AudioArrayUnityGain {
          -Wait | Out-Null
       return @(Import-Csv -LiteralPath $exportPath | Where-Object {
          $_."Device Name" -eq "Virtual Audio Cable" -and (
-            ($_.Type -eq "Device" -and $_.Name -match '^AudioArray (Game|Comms|Music|Clean Mic)$') -or
+            ($_.Type -eq "Device" -and $_.Name -match '^AudioArray (Game|Comms|Music|ChatGPT|Clean Mic)$') -or
             $_.Type -eq "Subunit"
          )
       })
@@ -441,8 +442,8 @@ function Set-AudioArrayUnityGain {
 
    try {
       $items = @(Get-AudioArrayLevelItems)
-      if ($items.Count -lt 16) {
-         throw "Expected at least 16 AudioArray endpoint and pin gain stages; found $($items.Count)."
+      if ($items.Count -lt 20) {
+         throw "Expected at least 20 AudioArray endpoint and pin gain stages; found $($items.Count)."
       }
       $itemsToUpdate = @($items | Where-Object { -not (Test-UnityGain -Item $_) })
       if ($itemsToUpdate.Count -eq 0) {
@@ -621,7 +622,7 @@ licensed installer private. Rerun this script with:
 
   -VacInstallerPath 'C:\path\to\vac471.exe'
 
-After installation, set "Cables" to 4 in VAC Control Panel and click Set/Restart.
+After installation, set "Cables" to 5 in VAC Control Panel and click Set/Restart.
 AudioArray is built but will not auto-start until audioarray doctor passes.
 "@
    if ($OpenVacDownload) {
@@ -645,7 +646,7 @@ if ($doctorExitCode -ne 0) {
    if (Test-Path -LiteralPath $controlPanel -PathType Leaf) {
       Start-Process -FilePath $controlPanel
    }
-   Write-Warning "VAC is installed but the four-cable graph is incomplete. Set Cables to 4, restart the driver, then rerun dotctl apply."
+   Write-Warning "VAC is installed but the five-cable graph is incomplete. Set Cables to 5, restart the driver, then rerun dotctl apply."
    exit 0
 }
 

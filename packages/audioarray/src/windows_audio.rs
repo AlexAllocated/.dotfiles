@@ -858,6 +858,10 @@ pub(crate) fn levels(config: &Config, seconds: u32) -> Result<()> {
 			resolve_named_device(&host, Direction::Input, &config.cables.music)?,
 		),
 		(
+			"ChatGPT",
+			resolve_named_device(&host, Direction::Input, &config.cables.chatgpt)?,
+		),
+		(
 			"Clean Mic",
 			resolve_named_device(&host, Direction::Input, &config.cables.clean_mic)?,
 		),
@@ -970,6 +974,12 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 				name: config.cables.music.clone(),
 				purpose: "Music applications",
 				spatial: Some("Dolby Atmos for Headphones"),
+			},
+			BusSummary {
+				id: "chatgpt",
+				name: config.cables.chatgpt.clone(),
+				purpose: "ChatGPT and Codex voice",
+				spatial: None,
 			},
 			BusSummary {
 				id: "clean-mic",
@@ -1222,6 +1232,10 @@ impl MeterProbe {
 			(
 				"music",
 				resolve_named_device(&host, Direction::Input, &config.cables.music)?,
+			),
+			(
+				"chatgpt",
+				resolve_named_device(&host, Direction::Input, &config.cables.chatgpt)?,
 			),
 			(
 				"clean-mic",
@@ -1661,6 +1675,7 @@ fn validate_cables(host: &cpal::Host, config: &Config) -> Result<()> {
 		("Game", config.cables.game.as_str(), Direction::Input),
 		("Comms", config.cables.comms.as_str(), Direction::Input),
 		("Music", config.cables.music.as_str(), Direction::Input),
+		("ChatGPT", config.cables.chatgpt.as_str(), Direction::Input),
 		(
 			"Clean Mic",
 			config.cables.clean_mic.as_str(),
@@ -1813,6 +1828,7 @@ fn build_patch_streams(config: &Config, failed: Arc<AtomicBool>) -> Result<Vec<S
 				"game" => config.monitor.game_gain,
 				"comms" => config.monitor.comms_gain,
 				"music" => config.monitor.music_gain,
+				"chatgpt" => config.monitor.chatgpt_gain,
 				_ => 1.0,
 			}
 		} else {
@@ -1835,6 +1851,7 @@ fn patch_source_selector<'a>(config: &'a Config, source: &str) -> Result<&'a str
 		"game" => Ok(&config.cables.game),
 		"comms" => Ok(&config.cables.comms),
 		"music" => Ok(&config.cables.music),
+		"chatgpt" => Ok(&config.cables.chatgpt),
 		"clean_mic" => Ok(&config.cables.clean_mic),
 		other => bail!("unknown patch port {other:?}"),
 	}
@@ -1845,6 +1862,7 @@ fn patch_label(source: &str) -> &'static str {
 		"game" => "Patch Game",
 		"comms" => "Patch Comms",
 		"music" => "Patch Music",
+		"chatgpt" => "Patch ChatGPT",
 		"clean_mic" => "Patch Clean Mic",
 		_ => "Patch Unknown",
 	}

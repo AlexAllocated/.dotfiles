@@ -121,11 +121,11 @@
 					<section class="graph-deck" aria-labelledby="graph-title">
 						<div class="text-bar"><span id="graph-title">LIVE SIGNAL TOPOLOGY</span><i></i><b>47-710</b></div>
 						<div class="graph-key" aria-label="Signal graph legend">
-							<span><i class="game"></i>Game</span><span><i class="comms"></i>Comms</span><span><i class="music"></i>Music</span><span><i class="mic"></i>Clean Mic</span>
+							<span><i class="game"></i>Game</span><span><i class="comms"></i>Comms</span><span><i class="music"></i>Music</span><span><i class="chatgpt"></i>ChatGPT</span><span><i class="mic"></i>Clean Mic</span>
 						</div>
 						<div class="graph-frame">
-							<svg id="signalGraph" viewBox="0 0 1240 660" role="img" aria-labelledby="graph-title graph-description">
-								<desc id="graph-description">Games, chat, music, and the physical microphone flow through four AudioArray buses to monitoring, applications, and isolated OBS tracks.</desc>
+							<svg id="signalGraph" viewBox="0 0 1240 740" role="img" aria-labelledby="graph-title graph-description">
+								<desc id="graph-description">Games, communications, music, ChatGPT voice, and the physical microphone flow through five AudioArray buses to configurable destinations.</desc>
 								<defs>
 									<filter id="signalGlow" filterUnits="userSpaceOnUse" x="-100" y="-100" width="1440" height="760"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 								</defs>
@@ -139,10 +139,11 @@
 									<path class="signal music" data-meter="music" d="M178 327 H310 Q330 327 330 307 Q330 287 350 287 H520"/>
 									<path class="signal music" data-meter="music" data-patch="music:monitor" d="M684 287 H814"/>
 									<path class="signal music" data-meter="music" d="M974 287 H1098 Q1110 287 1110 299 V392"/>
-									<path class="signal mic" data-meter="physical-mic" d="M178 445 H310"/>
-									<path class="signal mic" data-meter="processed-mic" d="M474 445 H520"/>
-									<path class="signal mic" data-meter="clean-mic" d="M684 445 H814"/>
-									<path class="signal mic" data-meter="clean-mic" d="M974 445 H1003 Q1015 445 1015 433 V404 Q1015 392 1027 392 H1060"/>
+									<path class="signal chatgpt" data-meter="chatgpt" d="M178 405 H488 Q508 405 508 385 V371 Q508 351 520 351"/>
+									<path class="signal mic" data-meter="physical-mic" d="M178 531 H310"/>
+									<path class="signal mic" data-meter="processed-mic" d="M474 531 H520"/>
+									<path class="signal mic" data-meter="clean-mic" d="M684 531 H814"/>
+									<path class="signal mic" data-meter="clean-mic" d="M974 531 H1003 Q1015 531 1015 519 V404 Q1015 392 1027 392 H1060"/>
 									<path class="signal monitor" data-meter="monitor" d="M974 184 H1020 Q1040 184 1040 164 V103 Q1040 91 1052 91 H1060"/>
 									<path class="signal obs" data-meter="complete-mix" d="M1035 392 H1192"/>
 									<g id="patchLines" class="patch-lines" aria-label="Active crossed wires"></g>
@@ -151,16 +152,18 @@
 									<g class="node source" transform="translate(28 60)"><rect width="150" height="62"/><text x="14" y="24">GAMES + DEFAULT</text><text class="node-data" x="14" y="45">WINDOWS OUTPUT</text></g>
 									<g class="node source" transform="translate(28 178)"><rect width="150" height="62"/><text x="14" y="24">DISCORD</text><text class="node-data" x="14" y="45">COMMS OUTPUT</text></g>
 									<g class="node source" transform="translate(28 296)"><rect width="150" height="62"/><text x="14" y="24">SPOTIFY + MUSIC</text><text class="node-data" x="14" y="45">APP POLICY</text></g>
-									<g class="node source" transform="translate(28 414)"><rect width="150" height="62"/><text x="14" y="24">ACTIVE MIC</text><text id="graphMicName" class="node-data" x="14" y="45">SELECTED INPUT</text></g>
+									<g class="node source" transform="translate(28 374)"><rect width="150" height="62"/><text x="14" y="24">CHATGPT + CODEX</text><text class="node-data" x="14" y="45">VOICE OUTPUT</text></g>
+									<g class="node source" transform="translate(28 500)"><rect width="150" height="62"/><text x="14" y="24">ACTIVE MIC</text><text id="graphMicName" class="node-data" x="14" y="45">SELECTED INPUT</text></g>
 									<g class="node processor" transform="translate(310 128)"><rect width="164" height="62"/><text x="14" y="24">DTS HEADPHONE:X</text><text class="node-data" x="14" y="45">SPATIAL PROCESSOR</text></g>
 									<g class="node processor" transform="translate(310 256)"><rect width="164" height="62"/><text x="14" y="24">DOLBY ATMOS</text><text class="node-data" x="14" y="45">SPATIAL PROCESSOR</text></g>
-									<g id="suppressionNode" class="node processor" transform="translate(310 414)"><rect width="164" height="62"/><text id="graphSuppressionName" x="14" y="24">NVIDIA AFX</text><text id="graphSuppressionMode" class="node-data" x="14" y="45">50% INTENSITY</text></g>
+									<g id="suppressionNode" class="node processor" transform="translate(310 500)"><rect width="164" height="62"/><text id="graphSuppressionName" x="14" y="24">NVIDIA AFX</text><text id="graphSuppressionMode" class="node-data" x="14" y="45">50% INTENSITY</text></g>
 									<g class="node bus game-node" transform="translate(520 131)"><rect width="164" height="56"/><text x="14" y="21">GAME BUS</text><text class="node-data" x="14" y="42">VAC 01 / DEFAULT</text></g>
 									<g class="node bus comms-node" transform="translate(520 195)"><rect width="164" height="56"/><text x="14" y="21">COMMS BUS</text><text class="node-data" x="14" y="42">VAC 02 / VOICE</text></g>
 									<g class="node bus music-node" transform="translate(520 259)"><rect width="164" height="56"/><text x="14" y="21">MUSIC BUS</text><text class="node-data" x="14" y="42">VAC 03 / MEDIA</text></g>
-									<g class="node bus mic-node" transform="translate(520 414)"><rect width="164" height="62"/><text x="14" y="24">CLEAN MIC</text><text class="node-data" x="14" y="45">VAC 04 / INPUT</text></g>
+									<g class="node bus chatgpt-node" transform="translate(520 323)"><rect width="164" height="56"/><text x="14" y="21">CHATGPT BUS</text><text class="node-data" x="14" y="42">VAC 05 / VOICE AI</text></g>
+									<g class="node bus mic-node" transform="translate(520 500)"><rect width="164" height="62"/><text x="14" y="24">CLEAN MIC</text><text class="node-data" x="14" y="45">VAC 04 / INPUT</text></g>
 									<g class="node junction" transform="translate(814 128)"><rect width="160" height="166"/><text x="14" y="25">MONITOR MATRIX</text><text class="node-data" x="14" y="49">GAME</text><text class="node-data" x="14" y="86">COMMS</text><text class="node-data" x="14" y="123">MUSIC</text><text class="node-data" x="14" y="151">COMPLETE MIX</text></g>
-									<g class="node junction" transform="translate(814 414)"><rect width="160" height="62"/><text x="14" y="24">APPLICATION INPUT</text><text class="node-data" x="14" y="45">DISCORD + OBS</text></g>
+									<g class="node junction" transform="translate(814 500)"><rect width="160" height="62"/><text x="14" y="24">APPLICATION INPUT</text><text class="node-data" x="14" y="45">DISCORD + OBS</text></g>
 									<g class="node destination" transform="translate(1060 60)"><rect width="152" height="62"/><text x="14" y="24">MAIN OUTPUT</text><text id="graphOutputName" class="node-data" x="14" y="45">SELECTED DEVICE</text></g>
 									<g class="node destination" transform="translate(1035 360)"><rect width="177" height="62"/><text x="14" y="24">OBS STUDIO</text><text class="node-data" x="14" y="45">STREAM + 6 TRACKS</text></g>
 								</g>
@@ -171,7 +174,7 @@
 					<div class="operations-grid">
 						<section id="patchbay" class="patchbay-deck" aria-labelledby="patchbay-title">
 							<div class="section-heading compact"><span>02</span><div><small>Flexible signal routing</small><h2 id="patchbay-title">Patch Bay</h2></div></div>
-							<p class="patchbay-help">Plug any bus into another bus, Clean Mic, or Main Output. Connections are unity gain and fan-out is allowed; feedback loops are blocked.</p>
+							<p class="patchbay-help">Plug any bus into another bus, Clean Mic, or Main Output. ChatGPT is an ordinary source and target; connections persist at unity gain and feedback loops are blocked.</p>
 							<div id="patchMatrix" class="patch-matrix" aria-live="polite"></div>
 						</section>
 

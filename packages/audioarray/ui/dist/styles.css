@@ -19,6 +19,7 @@
 	--andorian-blue: #55a7ff;
 	--autumn-leaves: #fb9004;
 	--command-gold: #ffbb33;
+	--computer-violet: #cc99ff;
 	--frost: #99ccff;
 	--frozen-pond: #e6f2ff;
 	--green-apple: #94b300;
@@ -745,6 +746,7 @@ a {
 .graph-key .game { background: var(--science-blue); }
 .graph-key .comms { background: var(--salmon); }
 .graph-key .music { background: var(--command-gold); }
+.graph-key .chatgpt { background: var(--computer-violet); }
 .graph-key .mic { background: var(--green-apple); }
 
 .graph-frame {
@@ -778,6 +780,7 @@ a {
 .signal.game { stroke: var(--science-blue); }
 .signal.comms { stroke: var(--salmon); }
 .signal.music { stroke: var(--command-gold); }
+.signal.chatgpt { stroke: var(--computer-violet); }
 .signal.mic { stroke: var(--green-apple); }
 .signal.monitor { stroke: var(--frost); }
 .signal.obs { stroke: var(--silver); stroke-dasharray: 8 7; }
@@ -823,6 +826,7 @@ a {
 .node.game-node rect { stroke: var(--science-blue); }
 .node.comms-node rect { stroke: var(--salmon); }
 .node.music-node rect { stroke: var(--command-gold); }
+.node.chatgpt-node rect { stroke: var(--computer-violet); }
 .node.mic-node rect { stroke: var(--green-apple); }
 .node.junction rect { stroke: var(--frost); }
 .node.destination rect { fill: #0a1020; stroke: var(--andorian-blue); }
@@ -889,6 +893,7 @@ a {
 .patch-source.game { border-left-color: var(--science-blue); }
 .patch-source.comms { border-left-color: var(--salmon); }
 .patch-source.music { border-left-color: var(--command-gold); }
+.patch-source.chatgpt { border-left-color: var(--computer-violet); }
 .patch-source.clean-mic { border-left-color: var(--green-apple); }
 
 .patch-cell {

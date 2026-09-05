@@ -15,7 +15,7 @@ use audioarray::{default_config_path, Config, DEFAULT_CONFIG};
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(about = "Four-bus Windows audio router", version)]
+#[command(about = "Five-bus Windows audio router", version)]
 struct Cli {
 	#[arg(long, global = true, value_name = "FILE")]
 	config: Option<PathBuf>,
@@ -42,14 +42,14 @@ enum Command {
 		#[arg(value_name = "ENDPOINT")]
 		endpoint: String,
 	},
-	/// Print the four resolved VAC endpoint IDs as tab-separated records.
+	/// Print the five resolved VAC endpoint IDs as tab-separated records.
 	Endpoints,
 	/// Measure the configured suppression backend with speech-like noisy audio.
 	Benchmark {
 		#[arg(long, default_value_t = 10)]
 		seconds: u32,
 	},
-	/// Measure live peak levels at the physical input and all four buses.
+	/// Measure live peak levels at the physical input and all five buses.
 	Levels {
 		#[arg(long, default_value_t = 6)]
 		seconds: u32,

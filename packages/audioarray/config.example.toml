@@ -4,6 +4,7 @@
 game = "AudioArray Game (Virtual Audio Cable)"
 comms = "AudioArray Comms (Virtual Audio Cable)"
 music = "AudioArray Music (Virtual Audio Cable)"
+chatgpt = "AudioArray ChatGPT (Virtual Audio Cable)"
 clean_mic = "AudioArray Clean Mic (Virtual Audio Cable)"
 
 [monitor]
@@ -25,6 +26,7 @@ latency_ms = 35
 game_gain = 1.0
 comms_gain = 1.0
 music_gain = 1.0
+chatgpt_gain = 1.0
 
 [microphone]
 # On first launch, "default" remembers the current physical Windows recording
@@ -59,8 +61,10 @@ post_filter_beta = 0.0
 [patchbay]
 # These unity-gain links behave like plugging cables into a small hardware
 # patch panel. The three default links send Game, Comms, and Music to the
-# selected Main Output. The UI can fan any bus out to other buses or Clean Mic;
-# AudioArray rejects self-patches, duplicates, and direct or indirect loops.
+# selected Main Output. ChatGPT starts deliberately unpatched so its input and
+# output mix can be assembled explicitly in the UI. The UI can fan any bus out
+# to other buses or Clean Mic; AudioArray rejects self-patches, duplicates, and
+# direct or indirect loops.
 connections = [
    { source = "game", destination = "monitor" },
    { source = "comms", destination = "monitor" },
