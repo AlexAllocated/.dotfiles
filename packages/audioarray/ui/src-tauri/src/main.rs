@@ -13,7 +13,8 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use audioarray::{GraphSnapshot, MeterReading, PatchConnection};
+use audioarray::{GraphSnapshot, MeterReading};
+use serde::Serialize;
 use tauri::{
 	menu::{Menu, MenuItem},
 	tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -137,7 +138,6 @@ struct UiState {
 	config_path: PathBuf,
 	meters: Arc<RwLock<Vec<MeterReading>>>,
 	engine: Arc<EngineControl>,
-	controls: Mutex<()>,
 	clean_mic_monitor: Mutex<Option<audioarray::CleanMicMonitor>>,
 }
 
@@ -149,6 +149,43 @@ fn load_config(state: &UiState) -> Result<audioarray::Config, String> {
 fn graph_snapshot(state: tauri::State<'_, UiState>) -> Result<GraphSnapshot, String> {
 	let config = load_config(&state)?;
 	audioarray::graph_snapshot(&config).map_err(|error| error.to_string())
+}
+
+#[derive(Serialize)]
+struct CanvasSnapshot {
+	graph: GraphSnapshot,
+	runtime: Option<audioarray::control::Status>,
+	topology: audioarray::topology::Topology,
+}
+
+#[tauri::command]
+fn routing_snapshot(state: tauri::State<'_, UiState>) -> Result<CanvasSnapshot, String> {
+	let graph = graph_snapshot(state.clone())?;
+	let runtime = audioarray::control::status(&state.config_path).ok();
+	let patches = runtime
+		.as_ref()
+		.filter(|r| r.online && r.applied_revision.is_some())
+		.map(|r| r.patches.as_slice())
+		.unwrap_or(&graph.patches);
+	let topology = audioarray::topology::project(&graph, patches, runtime.as_ref());
+	Ok(CanvasSnapshot {
+		graph,
+		runtime,
+		topology,
+	})
+}
+
+#[tauri::command]
+async fn edit_routing(
+	request: audioarray::control::Request,
+	state: tauri::State<'_, UiState>,
+) -> Result<audioarray::control::Reply, String> {
+	let path = state.config_path.clone();
+	tauri::async_runtime::spawn_blocking(move || {
+		audioarray::control::submit(&path, &request).map_err(|e| format!("{e:#}"))
+	})
+	.await
+	.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -171,53 +208,6 @@ fn select_main_input(endpoint_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_noise_suppression(
-	enabled: bool,
-	intensity: u8,
-	engine: String,
-	state: tauri::State<'_, UiState>,
-) -> Result<GraphSnapshot, String> {
-	let _guard = state
-		.controls
-		.lock()
-		.map_err(|_| "AudioArray control state is unavailable".to_string())?;
-	audioarray::save_suppression_controls(&state.config_path, enabled, intensity, &engine)
-		.map_err(|error| error.to_string())?;
-	let updated = load_config(&state)?;
-	audioarray::graph_snapshot(&updated).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn set_patch_connection(
-	source: String,
-	destination: String,
-	enabled: bool,
-	state: tauri::State<'_, UiState>,
-) -> Result<GraphSnapshot, String> {
-	let _guard = state
-		.controls
-		.lock()
-		.map_err(|_| "AudioArray control state is unavailable".to_string())?;
-	let current = load_config(&state)?;
-	let mut connections = current.patchbay.connections;
-	let matches = |patch: &PatchConnection| {
-		patch.source == source && patch.destination == destination
-	};
-	if enabled && !connections.iter().any(matches) {
-		connections.push(PatchConnection {
-			source,
-			destination,
-		});
-	} else if !enabled {
-		connections.retain(|patch| !matches(patch));
-	}
-	audioarray::save_patch_connections(&state.config_path, connections)
-		.map_err(|error| error.to_string())?;
-	let updated = load_config(&state)?;
-	audioarray::graph_snapshot(&updated).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
 fn set_clean_mic_monitor(
 	enabled: bool,
 	state: tauri::State<'_, UiState>,
@@ -228,7 +218,8 @@ fn set_clean_mic_monitor(
 		.map_err(|_| "Clean Mic monitor state is unavailable".to_string())?;
 	if enabled && monitor.is_none() {
 		let config = load_config(&state)?;
-		*monitor = Some(audioarray::CleanMicMonitor::new(&config).map_err(|error| error.to_string())?);
+		*monitor =
+			Some(audioarray::CleanMicMonitor::new(&config).map_err(|error| error.to_string())?);
 	} else if !enabled {
 		*monitor = None;
 	}
@@ -425,7 +416,6 @@ fn main() {
 			config_path,
 			meters,
 			engine,
-			controls: Mutex::new(()),
 			clean_mic_monitor: Mutex::new(None),
 		})
 		.setup(move |app| {
@@ -488,8 +478,8 @@ fn main() {
 			meter_snapshot,
 			select_main_output,
 			select_main_input,
-			set_noise_suppression,
-			set_patch_connection,
+			routing_snapshot,
+			edit_routing,
 			set_clean_mic_monitor,
 		])
 		.build(tauri::generate_context!())

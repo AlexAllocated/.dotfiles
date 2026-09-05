@@ -10,6 +10,9 @@ use std::sync::{atomic::AtomicBool, Arc};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
+pub mod control;
+pub mod topology;
+
 #[cfg(windows)]
 mod app_routing;
 #[cfg(windows)]
@@ -194,9 +197,11 @@ pub(crate) enum SuppressionTransition {
 	Rebuild,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 struct RuntimeControls {
+	schema_version: u32,
+	revision: u64,
 	noise_suppression: Option<NoiseSuppressionControls>,
 	patchbay: Option<PatchbayControls>,
 }
@@ -204,13 +209,15 @@ struct RuntimeControls {
 impl Default for RuntimeControls {
 	fn default() -> Self {
 		Self {
+			schema_version: 1,
+			revision: 0,
 			noise_suppression: None,
 			patchbay: None,
 		}
 	}
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 struct NoiseSuppressionControls {
 	enabled: bool,
@@ -218,7 +225,7 @@ struct NoiseSuppressionControls {
 	engine: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct PatchbayControls {
 	connections: Vec<PatchConnection>,
 }
@@ -324,6 +331,7 @@ impl Config {
 					controls_path.display()
 				)
 			})?;
+			control::check_schema(controls.schema_version)?;
 			if let Some(suppression) = controls.noise_suppression {
 				if suppression.intensity > 100 {
 					bail!("noise suppression intensity must be between 0 and 100");
@@ -668,11 +676,15 @@ fn load_runtime_controls(config_path: &Path) -> Result<RuntimeControls> {
 	}
 	let text = fs::read_to_string(&path)
 		.with_context(|| format!("could not read AudioArray controls {}", path.display()))?;
-	toml::from_str(&text)
-		.with_context(|| format!("could not parse AudioArray controls {}", path.display()))
+	let controls: RuntimeControls = toml::from_str(&text)
+		.with_context(|| format!("could not parse AudioArray controls {}", path.display()))?;
+	control::check_schema(controls.schema_version)?;
+	Ok(controls)
 }
 
 fn write_runtime_controls(config_path: &Path, controls: &RuntimeControls) -> Result<()> {
+	let _offline_guard = control::EngineLock::acquire(config_path)
+		.context("AudioArray is running; use the revisioned control command instead")?;
 	let controls_path = runtime_controls_path(config_path);
 	if let Some(parent) = controls_path.parent() {
 		fs::create_dir_all(parent).with_context(|| {
@@ -684,7 +696,7 @@ fn write_runtime_controls(config_path: &Path, controls: &RuntimeControls) -> Res
 	}
 	let text = toml::to_string_pretty(&controls)
 		.context("could not serialize AudioArray runtime controls")?;
-	fs::write(&controls_path, text).with_context(|| {
+	control::atomic_write(&controls_path, text.as_bytes()).with_context(|| {
 		format!(
 			"could not write AudioArray controls {}",
 			controls_path.display()

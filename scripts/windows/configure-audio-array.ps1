@@ -12,9 +12,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$deploymentBackup = $null
+$restoreOnFailure = $false
 
 trap {
-   Write-Error $_
+	$failure = $_
+	if ($restoreOnFailure -and $deploymentBackup) {
+		try {
+			Stop-AudioArray
+			Copy-Item -LiteralPath $configRoot -Destination (Join-Path $deploymentBackup "failed-state") -Recurse
+			foreach ($name in @("audioarray.exe", "audioarray-ui.exe")) {
+				Copy-Item -LiteralPath (Join-Path $deploymentBackup $name) -Destination (Join-Path $binaryRoot $name) -Force
+			}
+			Get-ChildItem -LiteralPath (Join-Path $deploymentBackup "state") -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $configRoot -Force }
+			if (Test-Path -LiteralPath (Join-Path $deploymentBackup "source.sha256")) { Copy-Item -LiteralPath (Join-Path $deploymentBackup "source.sha256") -Destination $stampPath -Force }
+			Start-ScheduledTask -TaskName $taskName
+			Write-Warning "Restored the previous AudioArray build/state. Failed state is preserved in $deploymentBackup."
+		} catch { Write-Warning "Automatic restore needs attention: $_. Backup: $deploymentBackup" }
+	}
+   Write-Error $failure
    exit 1
 }
 
@@ -39,7 +55,7 @@ $cargoPath = Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe"
 $vswherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 $manifestPath = Join-Path $SourceDirectory "Cargo.toml"
 $uiManifestPath = Join-Path $SourceDirectory "ui\src-tauri\Cargo.toml"
-$uiEntryPath = Join-Path $SourceDirectory "ui\dist\index.html"
+$uiEntryPath = Join-Path $SourceDirectory "ui\index.html"
 $uiShortcutPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\AudioArray.lnk"
 $exampleConfigPath = Join-Path $SourceDirectory "config.example.toml"
 
@@ -56,7 +72,7 @@ function Get-SourceHash {
    $relativePaths += Get-ChildItem -LiteralPath (Join-Path $Root "src") -File -Recurse |
       ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart("\") }
    $relativePaths += Get-ChildItem -LiteralPath (Join-Path $Root "ui") -File -Recurse |
-      Where-Object { $_.FullName -notmatch '\\src-tauri\\(gen|target)\\' } |
+      Where-Object { $_.FullName -notmatch '\\src-tauri\\(gen|target)\\' -and $_.FullName -notmatch '\\ui\\(node_modules|web|test-results)\\' } |
       ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart("\") }
    $hashText = foreach ($relativePath in $relativePaths | Sort-Object) {
       $path = Join-Path $Root $relativePath
@@ -419,6 +435,7 @@ owns the license, then rerun dotctl apply.
 
 function Set-AudioArrayUnityGain {
    $soundVolumeView = Get-SoundVolumeViewPath
+	$preserveMaster = Test-AudioArrayRunning
    $exportPath = Join-Path $env:TEMP "audioarray-levels-$([guid]::NewGuid().ToString('N')).csv"
 
    function Get-AudioArrayLevelItems {
@@ -437,6 +454,14 @@ function Set-AudioArrayUnityGain {
 
    function Test-UnityGain {
       param([Parameter(Mandatory = $true)]$Item)
+
+		# VAC 1 render and its matching pin mirror the physical master while
+		# AudioArray runs. Volume processing is disabled: this is a control
+		# surface, not a gain error. Do not fight the live volume bridge.
+		if ($preserveMaster -and $Item.Direction -eq "Render" -and (
+			($Item.Type -eq "Device" -and $Item.Name -eq "AudioArray Game") -or
+			($Item.Type -eq "Subunit" -and $Item."Item ID" -match '\\topo1_r_rt/')
+		)) { return $true }
 
       $levels = if ($Item.Type -eq "Device") {
          @($Item."Volume dB")
@@ -556,6 +581,24 @@ $rebuilt = $sourceHash -ne $installedHash -or
    -not (Test-Path -LiteralPath $binaryPath -PathType Leaf) -or
    -not (Test-Path -LiteralPath $uiBinaryPath -PathType Leaf)
 if ($rebuilt) {
+   # Build locally from the pinned npm lock, never from CDN assets. WSL is the
+   # first-class Windows source host; invoke its own Node/toolchain, not Linux
+   # node_modules through a native Windows package manager.
+   $frontend = Join-Path $SourceDirectory "ui"
+   if ($frontend -match '^\\\\(?:wsl\.localhost|wsl\$)\\([^\\]+)\\(.+)$') {
+      $buildDistro = $Matches[1]
+      $linuxFrontend = "/" + $Matches[2].Replace("\", "/")
+      & wsl.exe --distribution $buildDistro --cd $linuxFrontend --exec bash -lc 'export PATH="$HOME/.local/state/nix/profiles/profile/bin:/nix/var/nix/profiles/default/bin:$PATH"; npm ci --no-fund --no-audit && npm run build'
+      if ($LASTEXITCODE -ne 0) { throw "AudioArray frontend build failed; live binaries remain unchanged." }
+   } else {
+      Push-Location $frontend
+      try {
+         & npm.cmd ci --no-fund --no-audit
+         if ($LASTEXITCODE -ne 0) { throw "AudioArray frontend dependency installation failed." }
+         & npm.cmd run build
+         if ($LASTEXITCODE -ne 0) { throw "AudioArray frontend build failed." }
+      } finally { Pop-Location }
+   }
    $env:CARGO_TARGET_DIR = $buildRoot
    $builtBinary = Join-Path $buildRoot "release\audioarray.exe"
    $builtUiBinary = Join-Path $buildRoot "release\audioarray-ui.exe"
@@ -588,6 +631,14 @@ if (Test-Path -LiteralPath $vacRegistryPath) {
 
 if ($rebuilt) {
    Stop-AudioArray
+	if ((Test-Path -LiteralPath $binaryPath) -and (Test-Path -LiteralPath $uiBinaryPath)) {
+		$deploymentBackup = Join-Path $applicationRoot ("backups\canvas-install-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+		New-Item -ItemType Directory -Path $deploymentBackup -Force | Out-Null
+		Copy-Item -LiteralPath $binaryPath, $uiBinaryPath -Destination $deploymentBackup
+		Copy-Item -LiteralPath $configRoot -Destination (Join-Path $deploymentBackup "state") -Recurse
+		if (Test-Path -LiteralPath $stampPath) { Copy-Item -LiteralPath $stampPath -Destination $deploymentBackup }
+		$restoreOnFailure = $true
+	}
    $copied = $false
    for ($attempt = 1; $attempt -le 20; $attempt++) {
       try {
@@ -673,6 +724,7 @@ $doctorOutput = & $binaryPath --config $configPath doctor 2>&1
 $doctorExitCode = $LASTEXITCODE
 $doctorOutput | Write-Host
 if ($doctorExitCode -ne 0) {
+	if ($restoreOnFailure) { throw "Replacement AudioArray failed its endpoint check; restoring the previous installation." }
    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
    $controlPanel = Join-Path $env:ProgramFiles "Virtual Audio Cable\vcctlpan.exe"
    if (Test-Path -LiteralPath $controlPanel -PathType Leaf) {
@@ -696,6 +748,18 @@ if ($restartRequired) {
    Write-Host "AudioArray configuration and processes are current; no restart was needed."
 }
 if ($rebuilt) {
+	$deadline = (Get-Date).AddSeconds(25)
+	$verified = $false
+	do {
+		Start-Sleep -Milliseconds 500
+		try {
+			$status = (& $binaryPath --config $configPath control-status 2>$null) | ConvertFrom-Json
+			$verified = $status.online -and ($null -ne $status.appliedRevision) -and ($status.revision -eq $status.appliedRevision)
+		} catch { $verified = $false }
+	} until ($verified -or (Get-Date) -ge $deadline)
+	if (-not $verified) { throw "New AudioArray did not acknowledge an active graph; restoring the previous installation." }
+	$restoreOnFailure = $false
+	Write-Host "Verified the engine's applied graph at revision $($status.revision). Recovery backup: $deploymentBackup"
    # Smart App Control applies a stricter policy when PowerShell directly
    # creates an unknown locally-built GUI process. Ask the trusted Windows
    # shell to activate the already-installed binary, matching a Start-menu

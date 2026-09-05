@@ -4,7 +4,7 @@
 	"version": "0.1.0",
 	"identifier": "ai.hivetech.audioarray",
 	"build": {
-		"frontendDist": "../dist"
+		"frontendDist": "../web"
 	},
 	"app": {
 		"withGlobalTauri": true,
@@ -14,8 +14,8 @@
 				"title": "AudioArray / LCARS 47-A",
 				"width": 1480,
 				"height": 920,
-				"minWidth": 960,
-				"minHeight": 660,
+				"minWidth": 600,
+				"minHeight": 480,
 				"center": true,
 				"visible": false,
 				"resizable": true,

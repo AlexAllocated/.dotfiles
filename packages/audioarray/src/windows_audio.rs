@@ -1563,6 +1563,12 @@ fn build_level_input(
 }
 
 pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -> Result<()> {
+	let _control_owner = crate::control::EngineLock::acquire(&config_path)?;
+	crate::control::mark_offline(&config_path)?;
+	// Discard any uncommitted filter target left by an interrupted transaction.
+	for name in ["filter-target.json", "filter-applied.json"] {
+		let _ = fs::remove_file(config_path.with_file_name(name));
+	}
 	clear_active_suppression();
 	let _active_suppression_guard = ActiveSuppressionGuard;
 	let mut endpoints = EndpointCoordinator::new(&config)?;
@@ -1619,6 +1625,11 @@ fn wait_for_graph(
 ) -> Result<(RunningGraph, Config)> {
 	let mut attempts = 0_u64;
 	let mut retry_delay = Duration::from_secs(1);
+	// Prior workers have joined before recovery reaches here. Discard a staged
+	// mic target so hardware recovery always reconstructs the committed graph.
+	for name in ["filter-target.json", "filter-applied.json"] {
+		let _ = fs::remove_file(config_path.with_file_name(name));
+	}
 	loop {
 		if stop.load(Ordering::Acquire) {
 			bail!("AudioArray stopped while waiting for audio devices");
@@ -1626,7 +1637,8 @@ fn wait_for_graph(
 		if let Err(err) = endpoints.reconcile(config) {
 			warn!(%err, "could not reconcile Windows audio defaults while waiting for devices");
 		}
-		let effective = match endpoints.effective_config(config) {
+		let current = Config::load(config_path)?;
+		let effective = match endpoints.effective_config(&current) {
 			Ok(effective) => effective,
 			Err(err) => {
 				attempts += 1;
@@ -1796,107 +1808,282 @@ fn spawn_patchbay(
 }
 
 fn run_patchbay(
-	mut desired: Config,
+	config: Config,
 	config_path: PathBuf,
 	failed: Arc<AtomicBool>,
 	stop: Arc<AtomicBool>,
 ) {
-	let physical_input = desired.microphone.input.clone();
-	let physical_output = desired.monitor.output.clone();
-	let mut revision = suppression_revision(&config_path);
-	let mut applied: Option<Vec<PatchConnection>> = None;
-	let mut streams = Vec::new();
-	let mut next_retry = Instant::now();
-
-	while !stop.load(Ordering::Acquire) {
-		let observed_revision = suppression_revision(&config_path);
-		if observed_revision != revision {
-			match Config::load(&config_path) {
-				Ok(mut updated) => {
-					updated.microphone.input = physical_input.clone();
-					updated.monitor.output = physical_output.clone();
-					desired = updated;
-					revision = observed_revision;
-					next_retry = Instant::now();
-				}
-				Err(error) => warn!(
-					error = %format!("{error:#}"),
-					"could not hot-reload patchbay controls; retaining the active crossed wires"
-				),
+	use crate::control::Backend;
+	let result = (|| -> Result<()> {
+		let mut backend = LivePatchBackend {
+			routes: std::collections::BTreeMap::new(),
+			path: config_path.clone(),
+		};
+		let mut empty = config.clone();
+		empty.patchbay.connections.clear();
+		let mut initial = backend.stage(&empty, &config)?;
+		backend.activate(&mut initial)?;
+		backend.finish(initial);
+		let mut server = crate::control::Server::new(&config_path, config)?;
+		server.ready()?;
+		let mut heartbeat = Instant::now();
+		while !stop.load(Ordering::Acquire) {
+			if backend
+				.routes
+				.values()
+				.any(|r| r.failed.load(Ordering::Acquire))
+			{
+				bail!("An active patch endpoint failed; rebuilding against current devices");
 			}
-		}
-
-		if applied.as_ref() != Some(&desired.patchbay.connections) && Instant::now() >= next_retry {
-			match build_patch_streams(&desired, failed.clone()) {
-				Ok(updated_streams) => {
-					for stream in &updated_streams {
-						if let Err(error) = stream.play() {
-							warn!(%error, "could not start an AudioArray patch connection");
-							failed.store(true, Ordering::Release);
-							return;
-						}
-					}
-					streams = updated_streams;
-					applied = Some(desired.patchbay.connections.clone());
-					info!(
-						connections = desired.patchbay.connections.len(),
-						"AudioArray patchbay applied"
-					);
-				}
-				Err(error) => {
-					warn!(
-						error = %format!("{error:#}"),
-						"could not apply crossed wires; retaining the active patchbay and retrying"
-					);
-					next_retry = Instant::now() + Duration::from_secs(1);
+			if let Some(request) = server.next_request()? {
+				let reply = server.execute(&request, &mut backend)?;
+				info!(request = %reply.id, applied = reply.applied, revision = reply.revision, error = ?reply.error, "routing command acknowledged");
+				if server.status.applied_revision.is_none() {
+					bail!("Controller requires recovery from the last committed graph");
 				}
 			}
+			if heartbeat.elapsed() >= Duration::from_secs(2) {
+				server.publish()?;
+				heartbeat = Instant::now();
+			}
+			thread::sleep(Duration::from_millis(100));
 		}
-		thread::sleep(Duration::from_millis(100));
+		Ok(())
+	})();
+	if let Err(error) = result {
+		error!(%error, "patch controller stopped");
+		failed.store(true, Ordering::Release);
 	}
-	drop(streams);
 }
 
-fn build_patch_streams(config: &Config, failed: Arc<AtomicBool>) -> Result<Vec<Stream>> {
-	config.validate()?;
-	let host = cpal::default_host();
-	let mut streams = Vec::new();
-	for patch in &config.patchbay.connections {
-		let input = resolve_named_device(
-			&host,
-			Direction::Input,
-			patch_source_selector(config, &patch.source)?,
-		)?;
-		let output = if patch.destination == "monitor" {
-			resolve_monitor_device(&host, config)?
-		} else {
-			resolve_named_device(
-				&host,
-				Direction::Output,
-				patch_source_selector(config, &patch.destination)?,
-			)?
-		};
-		let gain = if patch.destination == "monitor" {
-			match patch.source.as_str() {
-				"game" => config.monitor.game_gain,
-				"comms" => config.monitor.comms_gain,
-				"music" => config.monitor.music_gain,
-				"chatgpt" => config.monitor.chatgpt_gain,
-				_ => 1.0,
+struct LivePatch {
+	_streams: Vec<Stream>,
+	gate: Arc<AtomicBool>,
+	failed: Arc<AtomicBool>,
+}
+struct LivePatchBackend {
+	routes: std::collections::BTreeMap<String, LivePatch>,
+	path: PathBuf,
+}
+struct StagedPatch {
+	added: std::collections::BTreeMap<String, LivePatch>,
+	removed: Vec<String>,
+	previous_filter: crate::NoiseSuppressionConfig,
+	filter_changed: bool,
+}
+fn patch_id(patch: &PatchConnection) -> String {
+	format!("{}:{}", patch.source, patch.destination)
+}
+
+impl crate::control::Backend for LivePatchBackend {
+	type Staged = StagedPatch;
+	fn stage(&mut self, previous: &Config, next: &Config) -> Result<StagedPatch> {
+		next.validate()?;
+		let host = cpal::default_host();
+		let mut added = std::collections::BTreeMap::new();
+		let wanted = next
+			.patchbay
+			.connections
+			.iter()
+			.map(patch_id)
+			.collect::<Vec<_>>();
+		for patch in &next.patchbay.connections {
+			let id = patch_id(patch);
+			if self.routes.contains_key(&id) {
+				continue;
 			}
-		} else {
-			1.0
-		};
-		streams.extend(build_stereo_route(
-			patch_label(&patch.source),
-			&input,
-			&[output],
-			config.monitor.latency_ms,
-			gain,
-			failed.clone(),
-		)?);
+			let input = resolve_named_device(
+				&host,
+				Direction::Input,
+				patch_source_selector(next, &patch.source)?,
+			)?;
+			let output = if patch.destination == "monitor" {
+				resolve_monitor_device(&host, next)?
+			} else {
+				resolve_named_device(
+					&host,
+					Direction::Output,
+					patch_source_selector(next, &patch.destination)?,
+				)?
+			};
+			let gain = if patch.destination == "monitor" {
+				match patch.source.as_str() {
+					"game" => next.monitor.game_gain,
+					"comms" => next.monitor.comms_gain,
+					"music" => next.monitor.music_gain,
+					"chatgpt" => next.monitor.chatgpt_gain,
+					_ => 1.0,
+				}
+			} else {
+				1.0
+			};
+			let gate = Arc::new(AtomicBool::new(false));
+			let local_failed = Arc::new(AtomicBool::new(false));
+			let streams = build_gated_stereo_route(
+				patch_label(&patch.source),
+				&input,
+				&[output],
+				next.monitor.latency_ms,
+				gain,
+				local_failed.clone(),
+				gate.clone(),
+			)?;
+			for stream in &streams {
+				stream.play().context("Could not stage new connection")?;
+			}
+			added.insert(
+				id,
+				LivePatch {
+					_streams: streams,
+					gate,
+					failed: local_failed,
+				},
+			);
+		}
+		// Warm new streams muted. Existing routes remain untouched and audible.
+		if !added.is_empty() {
+			thread::sleep(Duration::from_millis(50));
+		}
+		if added.values().any(|r| r.failed.load(Ordering::Acquire)) {
+			bail!("A new endpoint failed while staging; existing routes retained");
+		}
+		let filter_changed = previous.noise_suppression != next.noise_suppression;
+		if filter_changed {
+			if let Err(error) = set_filter_target(&self.path, &next.noise_suppression) {
+				if let Err(rollback) = set_filter_target(&self.path, &previous.noise_suppression) {
+					for route in self.routes.values() {
+						route.failed.store(true, Ordering::Release);
+					}
+					return Err(error.context(format!(
+						"Could not restore mic filter ({rollback:#}); recovering saved graph"
+					)));
+				}
+				return Err(error);
+			}
+		}
+		Ok(StagedPatch {
+			added,
+			removed: self
+				.routes
+				.keys()
+				.filter(|id| !wanted.contains(id))
+				.cloned()
+				.collect(),
+			previous_filter: previous.noise_suppression.clone(),
+			filter_changed,
+		})
 	}
-	Ok(streams)
+	fn activate(&mut self, staged: &mut StagedPatch) -> Result<()> {
+		if staged
+			.added
+			.values()
+			.chain(self.routes.values())
+			.any(|r| r.failed.load(Ordering::Acquire))
+		{
+			bail!("A device disappeared before activation");
+		}
+		for id in &staged.removed {
+			if let Some(route) = self.routes.get(id) {
+				route.gate.store(false, Ordering::Release);
+			}
+		}
+		for route in staged.added.values() {
+			route.gate.store(true, Ordering::Release);
+		}
+		Ok(())
+	}
+	fn rollback(&mut self, staged: StagedPatch) -> Result<()> {
+		for route in staged.added.values() {
+			route.gate.store(false, Ordering::Release);
+		}
+		for id in &staged.removed {
+			if let Some(route) = self.routes.get(id) {
+				route.gate.store(true, Ordering::Release);
+			}
+		}
+		if staged.filter_changed {
+			set_filter_target(&self.path, &staged.previous_filter)?;
+		}
+		Ok(())
+	}
+	fn finish(&mut self, staged: StagedPatch) {
+		for id in staged.removed {
+			self.routes.remove(&id);
+		}
+		self.routes.extend(staged.added);
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+struct FilterTarget {
+	token: String,
+	config: crate::NoiseSuppressionConfig,
+}
+#[derive(Serialize, Deserialize)]
+struct FilterReceipt {
+	token: String,
+	config: crate::NoiseSuppressionConfig,
+	error: Option<String>,
+}
+impl FilterReceipt {
+	fn acknowledges(&self, target: &FilterTarget) -> bool {
+		self.token == target.token && self.config == target.config
+	}
+}
+fn publish_filter_receipt(
+	path: &Path,
+	target: &FilterTarget,
+	processor: &Option<SuppressionProcessor>,
+) {
+	let config = &target.config;
+	let receipt = FilterReceipt {
+		token: target.token.clone(),
+		config: config.clone(),
+		error: if config.enabled && processor.is_none() {
+			Some("Noise processor unavailable; microphone is bypassed".into())
+		} else {
+			None
+		},
+	};
+	if let Ok(bytes) = serde_json::to_vec(&receipt) {
+		let _ = crate::control::atomic_write(&path.with_file_name("filter-applied.json"), &bytes);
+	}
+}
+fn filter_target(path: &Path) -> Result<FilterTarget> {
+	let target = path.with_file_name("filter-target.json");
+	if target.exists() {
+		Ok(serde_json::from_slice(&fs::read(target)?)?)
+	} else {
+		Ok(FilterTarget {
+			token: "committed".into(),
+			config: Config::load(path)?.noise_suppression,
+		})
+	}
+}
+fn set_filter_target(path: &Path, config: &crate::NoiseSuppressionConfig) -> Result<()> {
+	let target = FilterTarget {
+		token: crate::control::token(),
+		config: config.clone(),
+	};
+	crate::control::atomic_write(
+		&path.with_file_name("filter-target.json"),
+		&serde_json::to_vec(&target)?,
+	)?;
+	let started = Instant::now();
+	while started.elapsed() < Duration::from_secs(4) {
+		if let Ok(bytes) = fs::read(path.with_file_name("filter-applied.json")) {
+			if let Ok(receipt) = serde_json::from_slice::<FilterReceipt>(&bytes) {
+				if receipt.acknowledges(&target) {
+					if let Some(error) = receipt.error {
+						bail!("{error}");
+					}
+					return Ok(());
+				}
+			}
+		}
+		thread::sleep(Duration::from_millis(30));
+	}
+	bail!("Microphone processor did not acknowledge the requested settings")
 }
 
 fn patch_source_selector<'a>(config: &'a Config, source: &str) -> Result<&'a str> {
@@ -1932,6 +2119,26 @@ fn build_stereo_route(
 	latency_ms: u32,
 	gain: f32,
 	failed: Arc<AtomicBool>,
+) -> Result<Vec<Stream>> {
+	build_gated_stereo_route(
+		label,
+		input,
+		outputs,
+		latency_ms,
+		gain,
+		failed,
+		Arc::new(AtomicBool::new(true)),
+	)
+}
+
+fn build_gated_stereo_route(
+	label: &'static str,
+	input: &Device,
+	outputs: &[Device],
+	latency_ms: u32,
+	gain: f32,
+	failed: Arc<AtomicBool>,
+	gate: Arc<AtomicBool>,
 ) -> Result<Vec<Stream>> {
 	let input_supported = preferred_config(input, Direction::Input, false)?;
 	let input_config: StreamConfig = input_supported.clone().into();
@@ -1970,6 +2177,7 @@ fn build_stereo_route(
 			input_rate as f64 / output_rate as f64,
 			label,
 			failed.clone(),
+			gate.clone(),
 		)?);
 	}
 	Ok(streams)
@@ -2041,16 +2249,19 @@ fn run_suppression(
 	config_path: &Path,
 	stop: &AtomicBool,
 ) -> Result<()> {
-	let mut active_config = Config::load(config_path)
-		.map(|loaded| loaded.noise_suppression)
-		.unwrap_or_else(|error| {
-			warn!(
-				error = %format!("{error:#}"),
-				"could not reload the initial suppression controls; using the graph configuration"
-			);
-			config.clone()
-		});
+	let mut active_target = filter_target(config_path).unwrap_or_else(|error| {
+		warn!(
+			error = %format!("{error:#}"),
+			"could not reload the initial suppression controls; using the graph configuration"
+		);
+		FilterTarget {
+			token: "committed".into(),
+			config: config.clone(),
+		}
+	});
+	let mut active_config = active_target.config.clone();
 	let mut processor = create_suppression_processor(&active_config, &clean);
+	publish_filter_receipt(config_path, &active_target, &processor);
 	let mut telemetry = ProcessedMicPublisher::new();
 	let mut input_frame = Vec::new();
 	let mut output_frame = Vec::new();
@@ -2062,14 +2273,16 @@ fn run_suppression(
 			next_control_check = Instant::now() + Duration::from_millis(50);
 			let observed_revision = suppression_revision(config_path);
 			if observed_revision != revision {
-				match Config::load(config_path) {
-					Ok(updated) => {
+				match filter_target(config_path) {
+					Ok(target) => {
+						let updated = target.config.clone();
 						revision = observed_revision;
-						let updated = updated.noise_suppression;
-						if updated != active_config {
+						if updated != active_config || (updated.enabled && processor.is_none()) {
 							reconfigure_suppression(&mut processor, &active_config, &updated, &clean);
 							active_config = updated;
 						}
+						active_target = target;
+						publish_filter_receipt(config_path, &active_target, &processor);
 					}
 					Err(error) => warn!(
 						error = %format!("{error:#}"),
@@ -2107,6 +2320,7 @@ fn run_suppression(
 			);
 			processor = None;
 			publish_active_suppression("Suppression error · mic bypassed");
+			publish_filter_receipt(config_path, &active_target, &processor);
 			continue;
 		}
 		for &sample in &output_frame {
@@ -2219,10 +2433,15 @@ fn reconfigure_suppression(
 
 fn suppression_revision(
 	config_path: &Path,
-) -> (Option<(u64, SystemTime)>, Option<(u64, SystemTime)>) {
+) -> (
+	Option<(u64, SystemTime)>,
+	Option<(u64, SystemTime)>,
+	Option<(u64, SystemTime)>,
+) {
 	(
 		file_revision(config_path),
 		file_revision(&config_path.with_file_name("controls.toml")),
+		file_revision(&config_path.with_file_name("filter-target.json")),
 	)
 }
 
@@ -2666,6 +2885,7 @@ fn build_stereo_output(
 	source_frames_per_output: f64,
 	label: &'static str,
 	failed: Arc<AtomicBool>,
+	gate: Arc<AtomicBool>,
 ) -> Result<Stream> {
 	macro_rules! build {
 		($sample:ty) => {{
@@ -2682,10 +2902,15 @@ fn build_stereo_output(
 			device.build_output_stream(
 				config,
 				move |data: &mut [$sample], _| {
+					let audible = gate.load(Ordering::Acquire);
 					for frame in data.chunks_mut(channels) {
 						let (left, right) = reader.next();
 						for (channel, sample) in frame.iter_mut().enumerate() {
-							let value = stereo_output_value(left, right, channels, channel);
+							let value = if audible {
+								stereo_output_value(left, right, channels, channel)
+							} else {
+								0.0
+							};
 							*sample = <$sample>::from_sample(value);
 						}
 					}
@@ -2756,6 +2981,24 @@ fn build_mono_output(
 #[cfg(test)]
 mod tests {
 	use super::stereo_output_value;
+	#[test]
+	fn repeated_filter_settings_require_a_fresh_acknowledgement() {
+		let config = toml::from_str::<crate::Config>(crate::DEFAULT_CONFIG)
+			.unwrap()
+			.noise_suppression;
+		let target = super::FilterTarget {
+			token: "new-request".into(),
+			config: config.clone(),
+		};
+		let mut receipt = super::FilterReceipt {
+			token: "old-request".into(),
+			config,
+			error: None,
+		};
+		assert!(!receipt.acknowledges(&target));
+		receipt.token = target.token.clone();
+		assert!(receipt.acknowledges(&target));
+	}
 
 	#[test]
 	fn hands_free_mono_output_preserves_both_stereo_channels() {

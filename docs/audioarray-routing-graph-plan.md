@@ -1,8 +1,31 @@
-# AudioArray: unified routing canvas proposal
+# AudioArray: unified routing canvas design and rollout
 
-Status: planning only, September 5, 2026. No canvas redesign or new DSP engine
-has been implemented by this proposal. The deployed seven-bus conversation
-release is `8af62e4`; it remains the working baseline.
+Status: implementation, September 5, 2026. The user approved implementing,
+installing, and verifying the existing-capability canvas without another approval
+checkpoint. The original seven-bus baseline is `8af62e4`. The runtime foundation,
+React Flow/ELK canvas, and supported editing are implemented; see the
+[current AudioArray guide](../packages/audioarray/README.md) for actual behavior.
+
+The detailed design below retains longer-term targets, not a claim that every
+future gate is complete. Current boundaries: undo history is session-local;
+device selection retains the existing Windows coordinator; OBS/app connections
+are explicitly unverified external policies; no arbitrary DSP insertion or Linux
+audio backend has been added. Automated native and isolated browser tests cover
+the first three phases. Native hotplug/Bluetooth/VR and game/stream soak testing
+are separate follow-up verification, not prerequisites for another permission
+request to install this approved canvas.
+
+Deployed verification: 29 native Rust tests and six frontend tests pass. The
+production-browser suite checks actual port/node dragging, keyboard undo,
+guarded menu edits, slider draft preservation, node spacing, and desktop/iPad
+layouts under the packaged CSP. Windows engine/UI release hashes match the
+installed binaries. Startup preserved all eight routes and the old controls
+file byte-for-byte. Live native checks then verified disconnect/undo of an idle
+monitor route, duplicate request handling, stale-revision rejection, feedback
+blocking, and RTX intensity changes/undo with an unchanged engine session.
+The original routes and filter intensity were restored. The native window
+could not be inspected with Computer Use because that tool's WSL context failed;
+browser visual checks are not represented as native-window inspection.
 
 ## Recommendation
 
@@ -50,7 +73,7 @@ the bus. A game with separate voice-device settings can use Comms In/Comms Send;
 an application that combines voice and game audio cannot be separated by drawing
 an extra wire. The UI must explain that limitation.
 
-## What the current implementation can actually do
+## Original implementation assessment (baseline `8af62e4`)
 
 - The frontend is vanilla JavaScript and static HTML/SVG inside Tauri. Moving to
   React requires a deliberate frontend build step; this is not a drop-in library
@@ -321,7 +344,7 @@ Honor reduced motion and independent sound mute. Test focus/selection through
 device refreshes and background state updates so controls do not jump back while
 being edited.
 
-Proposed implementation phases, each requiring its own acceptance gate:
+Implementation/verification phases (technical checks, not extra user approval gates):
 
 1. **Contract and transaction foundation.** Add revisioned applied state,
    single-writer commands, durable recovery, provenance validation, and a mock
@@ -352,6 +375,7 @@ Proposed implementation phases, each requiring its own acceptance gate:
    new processor becomes connectable. Endpoint spatial effects stay constrained
    unless a separately verified backend capability makes more possible.
 
-The next approval should cover phases 1–3 first, not an unrestricted rewrite or
-new plugin ecosystem. Today's functioning conversation routes remain available
-throughout development, with a recoverable configuration and binary rollback.
+Phases 1–3 are authorized through deployment and verification. Preserve the
+functioning conversation routes and a recoverable binary/configuration backup.
+Phase 5 remains an optional future expansion, not a reason to delay the approved
+existing-capability editor or silently broaden its scope.

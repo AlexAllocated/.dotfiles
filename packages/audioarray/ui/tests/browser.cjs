@@ -1,0 +1,266 @@
+// Isolated browser UI tests. Never connects to the native/live audio command API.
+const { createRequire } = require("node:module");
+const fs = require("node:fs");
+const path = require("node:path");
+const assert = require("node:assert/strict");
+const requireRuntime = createRequire(process.env.AUDIOARRAY_PLAYWRIGHT_MODULE || __filename);
+const { chromium } = requireRuntime("playwright");
+(async () => {
+	const fixture = JSON.parse(fs.readFileSync(process.argv[2], "utf8").replace(/^\uFEFF/, ""));
+	const output = process.argv[3];
+	fs.mkdirSync(output, { recursive: true });
+	const browser = await chromium.launch({
+		channel: process.env.AUDIOARRAY_BROWSER_CHANNEL || "chrome",
+		headless: true,
+		args: ["--disable-gpu"]
+	});
+	try {
+		const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+		const errors = [];
+		page.on("pageerror", e => errors.push(String(e)));
+		// Match the packaged WebView policy, including the locally bundled ELK worker.
+		await page.route("**/*", async route => {
+			if (route.request().resourceType() !== "document") return route.continue();
+			const response = await route.fetch();
+			await route.fulfill({
+				response,
+				headers: {
+					...response.headers(),
+					"content-security-policy":
+						"default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'"
+				}
+			});
+		});
+		await page.addInitScript(
+			({ fixture }) => {
+				const patches = fixture.graph.patches;
+				fixture.runtime = {
+					schemaVersion: 1,
+					session: "isolated-test",
+					revision: 1,
+					appliedRevision: 1,
+					online: true,
+					updatedAt: Date.now(),
+					patches,
+					suppression: {
+						enabled: true,
+						engine: "nvidia_afx",
+						attenuation_limit_db: 40,
+						post_filter_beta: 0
+					},
+					canUndo: false,
+					canRedo: false,
+					inputName: fixture.graph.mainInput?.name,
+					outputName: fixture.graph.mainOutput?.name
+				};
+				const undo = [],
+					redo = [];
+				const regenerate = () => {
+					fixture.topology.edges = fixture.topology.edges
+						.filter(e => e.kind !== "patch")
+						.concat(
+							fixture.runtime.patches.map(p => ({
+								id: `patch:${p.source}:${p.destination}`,
+								source: p.source,
+								target: p.destination,
+								sourceHandle: "out",
+								targetHandle: "in",
+								kind: "patch",
+								meter: fixture.topology.nodes.find(n => n.id === p.source)?.meter,
+								label: "Unity gain"
+							}))
+						);
+				};
+				regenerate();
+				window.__TEST_REQUESTS__ = [];
+				window.__AUDIOARRAY_TEST__ = {
+					invoke: async (cmd, args) => {
+						if (cmd === "routing_snapshot") return structuredClone(fixture);
+						if (cmd === "meter_snapshot")
+							return [
+								"game",
+								"comms",
+								"music",
+								"chatgpt",
+								"chatgpt-in",
+								"comms-send",
+								"clean-mic",
+								"processed-mic",
+								"physical-mic",
+								"monitor"
+							].map(id => ({
+								id,
+								peak: id.includes("mic") ? 0 : 0.3,
+								dbfs: id.includes("mic") ? -90 : -12,
+								waveform: Array.from({ length: 192 }, (_, i) =>
+									id.includes("mic") ? 0 : Math.sin(i * 0.4) * 0.15
+								)
+							}));
+						if (cmd === "edit_routing") {
+							const r = args.request;
+							window.__TEST_REQUESTS__.push(r);
+							if (r.expectedRevision !== fixture.runtime.revision)
+								return { id: r.id, applied: false, error: "stale revision" };
+							const prev = structuredClone(fixture.runtime.patches),
+								edit = r.edit;
+							if (edit.kind === "undo") {
+								redo.push(prev);
+								fixture.runtime.patches = undo.pop();
+							} else if (edit.kind === "redo") {
+								undo.push(prev);
+								fixture.runtime.patches = redo.pop();
+							} else {
+								undo.push(prev);
+								redo.length = 0;
+								if (edit.kind === "connect")
+									fixture.runtime.patches.push({
+										source: edit.source,
+										destination: edit.destination
+									});
+								if (edit.kind === "disconnect")
+									fixture.runtime.patches = prev.filter(
+										p => !(p.source === edit.source && p.destination === edit.destination)
+									);
+								if (edit.kind === "suppression")
+									fixture.runtime.suppression = {
+										enabled: edit.enabled,
+										engine: edit.engine,
+										attenuation_limit_db: edit.intensity * 0.4,
+										post_filter_beta: 0
+									};
+							}
+							fixture.runtime.revision++;
+							fixture.runtime.appliedRevision = fixture.runtime.revision;
+							fixture.runtime.canUndo = !!undo.length;
+							fixture.runtime.canRedo = !!redo.length;
+							regenerate();
+							return { id: r.id, applied: true, revision: fixture.runtime.revision };
+						}
+						if (cmd === "set_clean_mic_monitor") return args.enabled ? "Test output" : null;
+						if (cmd.startsWith("select_main_")) {
+							window.__TEST_REQUESTS__.push({ cmd, args });
+							return null;
+						}
+						throw new Error(`Unmocked native command ${cmd}`);
+					}
+				};
+			},
+			{ fixture }
+		);
+		await page.goto(process.env.AUDIOARRAY_TEST_URL || "http://127.0.0.1:5173");
+		await page.waitForSelector(".react-flow__node");
+		await page.waitForFunction(() => document.querySelectorAll(".react-flow__edge").length > 10);
+		await page.waitForTimeout(1800);
+		assert.equal(errors.length, 0, errors.join("\n"));
+		const bounds = await page.locator(".react-flow__node").evaluateAll(nodes =>
+			nodes.map(n => {
+				const r = n.getBoundingClientRect();
+				return { id: n.dataset.id, x: r.x, y: r.y, right: r.right, bottom: r.bottom };
+			})
+		);
+		for (let i = 0; i < bounds.length; i++)
+			for (let j = i + 1; j < bounds.length; j++) {
+				const a = bounds[i],
+					b = bounds[j];
+				assert(
+					!(a.x < b.right && a.right > b.x && a.y < b.bottom && a.bottom > b.y),
+					`Nodes overlap: ${a.id}/${b.id}`
+				);
+			}
+		await page.screenshot({ path: path.join(output, "desktop.png"), fullPage: true });
+		const movable = page.locator('.react-flow__node[data-id="game"]');
+		const beforeMove = await movable.getAttribute("style");
+		const grip = await movable.locator(".node-drag").boundingBox();
+		await page.mouse.move(grip.x + 20, grip.y + 15);
+		await page.mouse.down();
+		await page.mouse.move(grip.x + 48, grip.y + 27, { steps: 8 });
+		await page.mouse.up();
+		await page.waitForTimeout(1700);
+		assert.notEqual(
+			await movable.getAttribute("style"),
+			beforeMove,
+			"Meter/snapshot refresh undid node drag"
+		);
+		await page.getByLabel("Connection source", { exact: true }).selectOption("comms");
+		await page.getByLabel("Connection destination", { exact: true }).selectOption("comms_send");
+		await page.getByRole("button", { name: "Connect", exact: true }).click();
+		await page.getByRole("alert").filter({ hasText: "Blocked self-return" }).waitFor();
+		assert.equal(
+			await page.evaluate(() => window.__TEST_REQUESTS__.length),
+			0,
+			"Invalid edit reached native bridge"
+		);
+		await page.getByLabel("Connection source", { exact: true }).selectOption("music");
+		await page.getByRole("button", { name: "Connect", exact: true }).click();
+		await page.waitForFunction(() => window.__TEST_REQUESTS__.length === 1);
+		await page.getByRole("button", { name: "Undo", exact: true }).click();
+		await page.waitForFunction(() => window.__TEST_REQUESTS__.length === 2);
+		await page.getByRole("button", { name: "Redo", exact: true }).click();
+		await page.waitForFunction(() => window.__TEST_REQUESTS__.length === 3);
+		await page.locator('.react-flow__node[data-id="noise_filter"]').click();
+		await page.getByRole("slider").fill("25");
+		await page.waitForTimeout(2000);
+		assert.equal(
+			await page.getByRole("slider").inputValue(),
+			"25",
+			"Snapshot reset in-progress slider"
+		);
+		await page.getByRole("button", { name: "Apply filter settings" }).click();
+		await page.waitForFunction(
+			() => window.__TEST_REQUESTS__.at(-1)?.edit?.kind === "suppression"
+		);
+		// Exercise actual graph-port dragging and keyboard undo, not just menu controls.
+		const from = await page
+			.locator('.react-flow__node[data-id="clean_mic"] .react-flow__handle.source')
+			.boundingBox();
+		const to = await page
+			.locator('.react-flow__node[data-id="monitor"] .react-flow__handle.target')
+			.boundingBox();
+		await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+		await page.mouse.up();
+		await page.waitForFunction(
+			() => window.__TEST_REQUESTS__.at(-1)?.edit?.source === "clean_mic"
+		);
+		await page.locator(".masthead").click();
+		await page.keyboard.press("Control+z");
+		await page.waitForFunction(() => window.__TEST_REQUESTS__.at(-1)?.edit?.kind === "undo");
+		await page.setViewportSize({ width: 1024, height: 1366 });
+		await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+		await page.waitForTimeout(500);
+		await page.screenshot({ path: path.join(output, "ipad.png"), fullPage: true });
+		await page.getByRole("button", { name: "Focus node", exact: true }).click();
+		await page.waitForTimeout(200);
+		await page.screenshot({ path: path.join(output, "ipad-focus.png"), fullPage: true });
+		assert(
+			await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+			"Horizontal page overflow"
+		);
+		await page.emulateMedia({ reducedMotion: "reduce" });
+		await page.setViewportSize({ width: 650, height: 1000 });
+		await page.waitForTimeout(300);
+		await page.screenshot({ path: path.join(output, "narrow.png"), fullPage: true });
+		assert(
+			await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+			"Narrow page overflow"
+		);
+		assert.equal(errors.length, 0, errors.join("\n"));
+		console.log(
+			JSON.stringify({
+				result: "PASS",
+				nodes: fixture.topology.nodes.length,
+				errors,
+				screenshots: output,
+				requests: await page.evaluate(() =>
+					window.__TEST_REQUESTS__.map(r => r.edit?.kind ?? r.cmd)
+				)
+			})
+		);
+	} finally {
+		await browser.close();
+	}
+})().catch(e => {
+	console.error(e);
+	process.exitCode = 1;
+});

@@ -78,7 +78,9 @@ stage to `0.00 dB` before AudioArray starts. VAC maps unity gain to misleading
 percentage values such as 63% or 24.9%; its 100% position is actually a `+12 dB`
 boost. Because VAC volume processing is disabled, AudioArray can subsequently
 reuse Game's normalized slider position as the physical-output master without
-altering the samples passing through that cable.
+altering the samples passing through that cable. Reconciliation preserves that
+live Game render slider and its linked VAC 1 render pin instead of repeatedly
+"repairing" the master control back to 63%.
 
 VAC playback applications write into each cable's render endpoint. AudioArray
 captures the matching recording endpoint. Its persistent patch bay sends Game,
@@ -167,17 +169,23 @@ telemetry, fixed black segmentation, and the canonical responsive elbows and
 bar sequence. It reuses Torplex's key, confirmation, denial, and search clips,
 but intentionally includes no bridge ambience or generic background hum.
 
-The first interface release is operationally conservative. It provides:
+The console uses one React Flow canvas with a locally bundled ELK layout worker.
+The former static SVG and separate patch matrix are removed. It provides:
 
-- the complete signal graph with activity-driven routes;
-- live meters for the physical mic, seven buses, and final monitor output;
-- background-engine, routing-policy, session-override, format, filter, and
-  latency telemetry;
-- the declarative application routes and six-track OBS recording matrix; and
-- editable Main Input and Main Output selectors; and
-- a live patch matrix for persistent unity-gain bus fan-out;
-- explicit NVIDIA RTX or DeepFilterNet3 selection, intensity, and bypass controls; and
-- a temporary Clean Mic sidetone for directly auditioning the filtered signal.
+- draggable nodes, labelled directional ports, rounded wires, and real signal waveforms;
+- persistent node positions, explicit Arrange, Fit graph, and Focus node controls;
+- selectable upstream/downstream path tracing and a direct-contributors inspector;
+- connect, reconnect, disconnect, and engine-acknowledged Undo/Redo;
+- keyboard/touch port menus, visible focus, reduced motion, and optional interface sounds;
+- live meters, main device selectors, and temporary Quest/Moonlight override indicators;
+- NVIDIA RTX or DeepFilterNet3 selection, intensity, bypass, and temporary Clean Mic monitoring.
+
+Solid editable PCM routes, fixed mic/device plumbing, and dashed external-app
+policies have different meanings. The dashed OBS/application links describe
+configuration, not verified active sessions, and cannot be edited here. DTS and
+Atmos stay locked to their Windows endpoints. The microphone processor can be
+adjusted but is not an arbitrary movable DSP insert. Selecting a node reveals
+controls without changing audio; dragging it changes only layout.
 
 Those selectors do not create a second device-selection system. They briefly
 apply the chosen physical endpoint through Windows' normal default-device
@@ -185,8 +193,8 @@ policy. The background engine observes and remembers that choice, then restores
 the AudioArray virtual defaults exactly as it does when a device is selected in
 Windows Settings. Either interface therefore produces the same durable result.
 
-The patch matrix is the flexible-plugging layer. Selecting a cell connects its
-row bus to its column destination without replacing any other connection. Game,
+Dragging an output port to an input, or using the inspector's Connect ports
+menus, adds that route without replacing other connections. Game,
 Comms, Music, ChatGPT Out, and Clean Mic are sources. Game, Comms, Music,
 ChatGPT In, Comms Send, and Main Output are destinations. Game and Music can
 feed Comms Send while retaining their original OBS stems.
@@ -254,10 +262,30 @@ Backend and bypass changes are likewise isolated to that worker. The choice is s
 `%APPDATA%\AudioArray\controls.toml`, separate from the declarative base graph,
 so a later dotfiles reconciliation does not erase it.
 
-Patch-bay choices—including ChatGPT links—are stored in that same machine-local
-controls file. A dedicated patch worker notices changes and replaces only the
-crossed-wire streams; the physical-microphone capture, suppression worker,
-application defaults, and unaffected bus routes stay alive.
+Patch choices—including intentionally empty/custom layouts—remain in that same
+machine-local controls file. The engine owns writes while running. Tauri/CLI send
+bounded revisioned requests through the profile-private `control-v1` mailbox;
+no control network listener or shell command is exposed to canvas data. A request
+is displayed as applied only after the engine activates and saves it. Duplicate
+request IDs are idempotent, stale revisions are rejected, and errors preserve or
+restore the previous graph. New streams warm up muted; unchanged streams are
+reused. The physical microphone, app policies, and unrelated buses remain alive.
+
+`controls.toml` has schema version 1 and a monotonic revision. Legacy controls
+default to revision 0 and are not rewritten on startup. Writes use synced,
+atomic replacement, a prepared record, and `control-v1/last-good.toml`.
+Uncommitted prepared changes never replace saved controls after recovery.
+Unknown schemas and detected external control edits are not overwritten.
+Restart Array explicitly adopts external edits. Undo/Redo holds up to 64
+control snapshots **within the current engine/device session**; a device graph
+rebuild clears that history, not the saved routes. Layout is independently
+versioned in local WebView storage.
+
+Filter changes are one explicit **Apply filter settings** transaction; polling
+cannot reset an unsent slider draft. The mic worker acknowledges a unique target
+token after reconfiguration, avoiding stale receipts when returning to previous
+settings. The header's applied revision describes routing/settings; the mic
+inspector separately reports the observed processor, including error/bypass.
 
 **Monitor Clean Mic** opens a temporary local route from the filtered Clean Mic
 VAC endpoint to the active physical output. It never enters a content bus or an
@@ -267,14 +295,16 @@ are recommended because speakers can feed the monitored microphone back into its
 The topology wires render live PCM-derived waveforms rather than decorative
 motion. The existing capture probes retain a 240 ms rolling signal window for
 the physical microphone and each bus, reduce it to standard min/max waveform
-bins, and publish snapshots to the interface at roughly 30 Hz. New samples
-enter at each source and age toward its destination, so visible transients
-actually travel through the graph. The raw and processed Clean Mic paths
+bins. The canvas consumes bounded snapshots at 20 Hz while visible, with no
+synthetic waveform during silence or missing telemetry. Arrowheads show signal
+direction; the waveform is an oscilloscope-style source visualization, not a
+measurement of end-to-end propagation delay. The raw and processed Clean Mic paths
 remain independent: the hidden suppression worker publishes its actual
 post-filter waveform over a loopback-only telemetry channel, while the final
 Clean Mic meter measures its isolated VAC endpoint. ChatGPT In and Comms Send
 have their own post-mix meters, without contaminating that microphone signal.
-Main Output and OBS use derived monitor and complete-mix waveforms. Waveform
+Main Output uses the monitor mix; unverified external policy wires have no
+invented activity. Waveform
 samples use a fixed spatial pitch across every route,
 so short and long wires show the same oscillation density instead of squeezing
 or stretching the captured signal to fit their individual lengths.
@@ -284,3 +314,33 @@ configuration into `%APPDATA%\AudioArray\config.toml`, starts the unified tray
 lifecycle at interactive logon, and installs the console shortcut. Edit
 `config.example.toml` through the `~/code/AudioArray` workspace when changing
 the graph. Use `RUST_LOG=audioarray=debug` for verbose diagnostics.
+
+## Build and verify the canvas
+
+Run `npm ci`, `npm test`, and `npm run build` in `ui/`; build the two Windows
+Cargo manifests with `--locked`. Generated assets are in ignored `ui/web/`,
+including dependency license notices (React Flow/React MIT, ELK EPL-2.0).
+The normal Windows reconciler builds the frontend using the source WSL distro
+and builds the engine/UI natively. Build failures leave the running app intact.
+Before replacing an existing release, it backs up the binaries and local state;
+it verifies the new engine's applied revision and restores the prior installation
+if startup fails. Normal reconciliation never reapplies conversation defaults.
+
+`audioarray.exe snapshot` exports a private native graph fixture; it contains
+device details and must not be committed. `ui/tests/browser.cjs` runs against a
+local production preview with an isolated mock bridge, never the live engine.
+Pass the fixture and screenshot output directory as arguments; point
+`AUDIOARRAY_PLAYWRIGHT_MODULE` at an installed Playwright package and
+`AUDIOARRAY_TEST_URL` at the preview. It checks dragging, keyboard undo, menu
+edits, slider draft stability, node spacing, and desktop/tablet layouts under
+the packaged CSP. Native tests cover validation, stale/duplicate requests,
+failed staging/activation/persistence, external edits, and prepared recovery.
+
+For native diagnostics use `audioarray.exe control-status`; `control --request
+request.json` accepts a typed request containing `id`, `session`,
+`expectedRevision`, and `edit`. Generate a fresh globally unique ID per edit.
+An acknowledgement timeout is an **unknown outcome**: refresh status before
+retrying, rather than assuming the edit failed. Live device/hotplug, Bluetooth,
+Quest/Moonlight, and game/stream soak tests remain distinct from the isolated
+browser checks. Linux audio execution and freely insertable DSP are future
+backend work; the canvas/model themselves are platform-neutral.

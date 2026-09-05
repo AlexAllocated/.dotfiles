@@ -26,6 +26,15 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+	/// Inspect desired and applied control revisions without changing anything.
+	ControlStatus,
+	/// Submit a revisioned request from a JSON file to the running engine.
+	Control {
+		#[arg(long)]
+		request: PathBuf,
+	},
+	/// Export the native canvas snapshot for diagnostics and UI fixtures.
+	Snapshot,
 	/// Explicitly configure isolated ChatGPT and communications mixes.
 	SetupConversation,
 	/// Persist legacy control names without changing the selected routes.
@@ -85,6 +94,21 @@ fn main() -> Result<()> {
 	}
 
 	let config_path = cli.config.map(Ok).unwrap_or_else(default_config_path)?;
+	if matches!(cli.command, Command::ControlStatus) {
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&audioarray::control::status(&config_path)?)?
+		);
+		return Ok(());
+	}
+	if let Command::Control { request } = &cli.command {
+		let request: audioarray::control::Request = serde_json::from_slice(&std::fs::read(request)?)?;
+		println!(
+			"{}",
+			serde_json::to_string_pretty(&audioarray::control::submit(&config_path, &request)?)?
+		);
+		return Ok(());
+	}
 	if matches!(cli.command, Command::SetupConversation) {
 		audioarray::setup_conversation(&config_path)?;
 		println!("Isolated conversation routes saved; other controls preserved.");
@@ -100,6 +124,26 @@ fn main() -> Result<()> {
 	#[cfg(windows)]
 	{
 		match cli.command {
+			Command::Snapshot => {
+				let graph = audioarray::graph_snapshot(&config)?;
+				let runtime = audioarray::control::status(&config_path).ok();
+				let topology = audioarray::topology::project(
+					&graph,
+					runtime
+						.as_ref()
+						.filter(|r| r.online && r.applied_revision.is_some())
+						.map(|r| r.patches.as_slice())
+						.unwrap_or(&graph.patches),
+					runtime.as_ref(),
+				);
+				println!(
+					"{}",
+					serde_json::to_string_pretty(
+						&serde_json::json!({"graph":graph,"runtime":runtime,"topology":topology})
+					)?
+				);
+				Ok(())
+			}
 			Command::Run => {
 				let stop = Arc::new(AtomicBool::new(false));
 				let stop_handler = stop.clone();
@@ -114,7 +158,11 @@ fn main() -> Result<()> {
 			Command::Benchmark { seconds } => audioarray::benchmark(&config, seconds),
 			Command::Levels { seconds } => audioarray::levels(&config, seconds),
 			Command::Devices => unreachable!(),
-			Command::ExampleConfig | Command::SetupConversation | Command::MigrateControlNames => {
+			Command::ExampleConfig
+			| Command::SetupConversation
+			| Command::MigrateControlNames
+			| Command::ControlStatus
+			| Command::Control { .. } => {
 				unreachable!()
 			}
 		}
@@ -125,6 +173,7 @@ fn main() -> Result<()> {
 		let _ = (config, Arc::new(AtomicBool::new(false)), Ordering::Relaxed);
 		match cli.command {
 			Command::Doctor
+			| Command::Snapshot
 			| Command::SelectOutput { .. }
 			| Command::SelectInput { .. }
 			| Command::Endpoints
@@ -137,6 +186,7 @@ fn main() -> Result<()> {
 			| Command::ExampleConfig
 			| Command::SetupConversation
 			| Command::MigrateControlNames => unreachable!(),
+			Command::ControlStatus | Command::Control { .. } => unreachable!(),
 		}
 	}
 }
