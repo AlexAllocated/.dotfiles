@@ -89,8 +89,9 @@ output preference.
 
 The installed Sunshine release temporarily makes its capture endpoint the
 Windows default. AudioArray observes that actual endpoint transition, yields
-only the render roles, and sends the combined Game, Comms, and Music monitor mix
-to Steam Streaming Speakers. At disconnect it restores AudioArray Game and
+only the render roles, and sends the configured monitor mix (Game, Comms, Music,
+and ChatGPT by default) to Steam Streaming Speakers. At disconnect it restores
+AudioArray Game and
 AudioArray Comms as the normal and communications defaults and selects the
 first usable device from its recency-ordered physical input/output histories.
 Temporary Steam and Oculus

@@ -60,15 +60,17 @@ post_filter_beta = 0.0
 
 [patchbay]
 # These unity-gain links behave like plugging cables into a small hardware
-# patch panel. The three default links send Game, Comms, and Music to the
-# selected Main Output. ChatGPT starts deliberately unpatched so its input and
-# output mix can be assembled explicitly in the UI. The UI can fan any bus out
+# patch panel. The four default links send Game, Comms, Music, and ChatGPT to
+# the selected Main Output. ChatGPT is NOT sent to Clean Mic or Comms by
+# default. Saved patch choices replace these defaults, including intentionally
+# disconnected buses. The UI can fan any bus out
 # to other buses or Clean Mic; AudioArray rejects self-patches, duplicates, and
 # direct or indirect loops.
 connections = [
    { source = "game", destination = "monitor" },
    { source = "comms", destination = "monitor" },
    { source = "music", destination = "monitor" },
+   { source = "chatgpt", destination = "monitor" },
 ]
 
 # These are persisted Windows per-app endpoint preferences. AudioArray applies

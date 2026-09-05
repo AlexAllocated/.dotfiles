@@ -81,6 +81,10 @@ impl Default for PatchbayConfig {
 					source: "music".into(),
 					destination: "monitor".into(),
 				},
+				PatchConnection {
+					source: "chatgpt".into(),
+					destination: "monitor".into(),
+				},
 			],
 		}
 	}
@@ -741,7 +745,7 @@ mod tests {
 	use super::{
 		attenuation_for_intensity, patch_destinations, patch_sources, suppression_intensity,
 		suppression_transition, validate_patch_connections, Config, NoiseSuppressionConfig,
-		PatchConnection, SuppressionBackend, SuppressionTransition, DEFAULT_CONFIG,
+		PatchConnection, PatchbayConfig, SuppressionBackend, SuppressionTransition, DEFAULT_CONFIG,
 		MAX_SUPPRESSION_ATTENUATION_DB,
 	};
 
@@ -753,11 +757,66 @@ mod tests {
 			config.cables.chatgpt,
 			"AudioArray ChatGPT (Virtual Audio Cable)"
 		);
-		assert!(config
+		assert_eq!(config.patchbay, PatchbayConfig::default());
+		let chatgpt_routes: Vec<_> = config
 			.patchbay
 			.connections
 			.iter()
-			.all(|patch| patch.source != "chatgpt" && patch.destination != "chatgpt"));
+			.filter(|patch| patch.source == "chatgpt" || patch.destination == "chatgpt")
+			.cloned()
+			.collect();
+		assert_eq!(
+			chatgpt_routes,
+			vec![PatchConnection {
+				source: "chatgpt".into(),
+				destination: "monitor".into(),
+			}]
+		);
+		let mut without_patchbay: toml::Value = toml::from_str(DEFAULT_CONFIG).unwrap();
+		without_patchbay.as_table_mut().unwrap().remove("patchbay");
+		let fallback: Config = without_patchbay.try_into().unwrap();
+		assert_eq!(fallback.patchbay, config.patchbay);
+	}
+
+	#[test]
+	fn saved_patch_choices_replace_defaults_without_adding_chatgpt_routes() {
+		let root = std::env::temp_dir().join(format!(
+			"audioarray-saved-patches-{}-{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_nanos()
+		));
+		std::fs::create_dir(&root).unwrap();
+		let config_path = root.join("config.toml");
+		let controls_path = root.join("controls.toml");
+		std::fs::write(&config_path, DEFAULT_CONFIG).unwrap();
+		// Both an intentionally empty patch board and existing custom routes are
+		// authoritative. Updating defaults must never reconnect a saved choice.
+		for connections in [
+			vec![],
+			vec![
+				PatchConnection {
+					source: "game".into(),
+					destination: "monitor".into(),
+				},
+				PatchConnection {
+					source: "music".into(),
+					destination: "clean_mic".into(),
+				},
+			],
+		] {
+			super::save_suppression_controls(&config_path, false, 23, "deepfilternet3").unwrap();
+			super::save_patch_connections(&config_path, connections.clone()).unwrap();
+			let before = std::fs::read(&controls_path).unwrap();
+			let loaded = Config::load(&config_path).unwrap();
+			assert_eq!(loaded.patchbay.connections, connections);
+			assert!(!loaded.noise_suppression.enabled);
+			assert_eq!(suppression_intensity(&loaded.noise_suppression), 23);
+			assert_eq!(std::fs::read(&controls_path).unwrap(), before);
+		}
+		std::fs::remove_dir_all(root).unwrap();
 	}
 
 	#[test]

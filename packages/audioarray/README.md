@@ -80,11 +80,11 @@ altering the samples passing through that cable.
 
 VAC playback applications write into each cable's render endpoint. AudioArray
 captures the matching recording endpoint. Its persistent patch bay sends Game,
-Comms, and Music to Main Output by default, reproducing the original monitor
-mix without hard-coding it into the engine. ChatGPT starts disconnected, and
-all five buses can fan out to another bus, Clean Mic, or Main Output at unity
-gain. During a Sunshine/Moonlight
-session, Sunshine temporarily makes Steam Streaming Speakers the Windows
+Comms, Music, and ChatGPT to Main Output by default. ChatGPT is not sent to
+Clean Mic or Comms automatically. Saved patch choices are authoritative:
+updating these defaults never reconnects a bus the user has disconnected. All
+five buses can fan out to another bus, Clean Mic, or Main Output at unity gain.
+During a Sunshine/Moonlight session, Sunshine temporarily makes Steam Streaming Speakers the Windows
 default. AudioArray observes that real transition, sends the complete mix there,
 and yields the render defaults until Sunshine restores them at disconnect. Meta
 Quest Link receives the same treatment when Oculus Virtual Audio becomes the
