@@ -15,7 +15,10 @@ const { chromium } = requireRuntime("playwright");
 		args: ["--disable-gpu"]
 	});
 	try {
-		const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+		const page = await browser.newPage({
+			viewport: { width: 1600, height: 1000 },
+			hasTouch: true
+		});
 		const errors = [];
 		page.on("pageerror", e => errors.push(String(e)));
 		// Match the packaged WebView policy, including the locally bundled ELK worker.
@@ -148,7 +151,13 @@ const { chromium } = requireRuntime("playwright");
 			{ fixture }
 		);
 		await page.goto(process.env.AUDIOARRAY_TEST_URL || "http://127.0.0.1:5173");
-		await page.waitForSelector(".react-flow__node");
+		try {
+			await page.waitForSelector(".react-flow__node");
+		} catch (error) {
+			await page.screenshot({ path: path.join(output, "startup-error.png"), fullPage: true });
+			console.error({ errors, body: await page.locator("body").innerText() });
+			throw error;
+		}
 		await page.waitForFunction(() => document.querySelectorAll(".react-flow__edge").length > 10);
 		await page.waitForTimeout(1800);
 		assert.equal(errors.length, 0, errors.join("\n"));
@@ -168,6 +177,29 @@ const { chromium } = requireRuntime("playwright");
 				);
 			}
 		await page.screenshot({ path: path.join(output, "desktop.png"), fullPage: true });
+		const styling = await page.evaluate(() => {
+			const canvas = document.querySelector(".canvas");
+			const handle = document.querySelector(".react-flow__handle");
+			return {
+				background: getComputedStyle(canvas).backgroundColor,
+				width: canvas.clientWidth,
+				height: canvas.clientHeight,
+				font: getComputedStyle(document.querySelector(".toolbar button")).fontFamily,
+				buttonHeight: document.querySelector(".toolbar button").getBoundingClientRect().height,
+				handleWidth: parseFloat(getComputedStyle(handle).width),
+				hitPadding: getComputedStyle(handle, "::after").left
+			};
+		});
+		assert.equal(styling.background, "rgb(0, 0, 0)");
+		assert.match(styling.font, /Antonio/);
+		assert(
+			styling.width >= 1250 && styling.height >= 750,
+			"LCARS framing shrank the usable desktop canvas"
+		);
+		assert(
+			styling.buttonHeight >= 38 && styling.handleWidth >= 16 && styling.hitPadding === "-10px",
+			"Control/port hit target shrank"
+		);
 		const movable = page.locator('.react-flow__node[data-id="game"]');
 		const beforeMove = await movable.getAttribute("style");
 		const grip = await movable.locator(".node-drag").boundingBox();
@@ -180,6 +212,19 @@ const { chromium } = requireRuntime("playwright");
 			await movable.getAttribute("style"),
 			beforeMove,
 			"Meter/snapshot refresh undid node drag"
+		);
+		const savedPosition = await page.evaluate(
+			() => JSON.parse(localStorage.getItem("audioarray:layout:v1")).positions.game
+		);
+		await page.reload();
+		await page.waitForSelector('.react-flow__node[data-id="game"]');
+		await page.waitForTimeout(500);
+		assert.deepEqual(
+			await page.evaluate(
+				() => JSON.parse(localStorage.getItem("audioarray:layout:v1")).positions.game
+			),
+			savedPosition,
+			"Reload discarded saved node positions"
 		);
 		await page.getByLabel("Connection source", { exact: true }).selectOption("comms");
 		await page.getByLabel("Connection destination", { exact: true }).selectOption("comms_send");
@@ -197,6 +242,15 @@ const { chromium } = requireRuntime("playwright");
 		await page.waitForFunction(() => window.__TEST_REQUESTS__.length === 2);
 		await page.getByRole("button", { name: "Redo", exact: true }).click();
 		await page.waitForFunction(() => window.__TEST_REQUESTS__.length === 3);
+		await page.locator('.react-flow__node[data-id="comms_send"]').click();
+		await page.getByRole("button", { name: "Music unity", exact: true }).click();
+		await page.getByRole("button", { name: "Disconnect route", exact: true }).focus();
+		await page.keyboard.press("Enter");
+		await page.waitForFunction(
+			() => window.__TEST_REQUESTS__.at(-1)?.edit?.kind === "disconnect"
+		);
+		await page.getByRole("button", { name: "Undo", exact: true }).click();
+		await page.waitForFunction(() => window.__TEST_REQUESTS__.at(-1)?.edit?.kind === "undo");
 		await page.locator('.react-flow__node[data-id="noise_filter"]').click();
 		await page.getByRole("slider").fill("25");
 		await page.waitForTimeout(2000);
@@ -226,8 +280,11 @@ const { chromium } = requireRuntime("playwright");
 		await page.locator(".masthead").click();
 		await page.keyboard.press("Control+z");
 		await page.waitForFunction(() => window.__TEST_REQUESTS__.at(-1)?.edit?.kind === "undo");
-		await page.setViewportSize({ width: 1024, height: 1366 });
+		await page.setViewportSize({ width: 1480, height: 920 });
 		await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+		await page.screenshot({ path: path.join(output, "window.png"), fullPage: true });
+		await page.setViewportSize({ width: 1024, height: 1366 });
+		await page.getByRole("button", { name: "Fit graph", exact: true }).tap();
 		await page.waitForTimeout(500);
 		await page.screenshot({ path: path.join(output, "ipad.png"), fullPage: true });
 		await page.getByRole("button", { name: "Focus node", exact: true }).click();
@@ -244,6 +301,14 @@ const { chromium } = requireRuntime("playwright");
 		assert(
 			await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
 			"Narrow page overflow"
+		);
+		assert(
+			await page.locator(".registry span").evaluate(label => {
+				const text = label.getBoundingClientRect();
+				const frame = label.parentElement.getBoundingClientRect();
+				return text.left >= frame.left + 8 && text.right <= frame.right - 8;
+			}),
+			"Registry label escaped its narrow LCARS frame"
 		);
 		assert.equal(errors.length, 0, errors.join("\n"));
 		console.log(

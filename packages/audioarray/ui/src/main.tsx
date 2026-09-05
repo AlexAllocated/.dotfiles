@@ -66,7 +66,11 @@ const SignalNode = memo(function SignalNode({ data, selected }: any) {
 	return (
 		<article
 			className={`signal-node ${selected ? "chosen" : ""} ${n.kind}`}
-			style={{ "--signal": colors[n.id] ?? "#a5aec9" } as React.CSSProperties}
+			style={
+				{
+					"--signal": colors[n.id] ?? (n.kind === "processor" ? "#ffbb33" : "#828cad")
+				} as React.CSSProperties
+			}
 		>
 			<header className="node-drag">
 				<small>{n.kind === "external" ? "EXTERNAL POLICY" : n.kind.toUpperCase()}</small>
@@ -194,7 +198,8 @@ const SignalEdge = memo(function SignalEdge(props: any) {
 	}, [data.edge.meter, data.online, data.reducedMotion]);
 	const policy = data.edge.kind === "policy";
 	const color =
-		colors[data.edge.source] ?? (data.edge.source === "noise_filter" ? "#d0e45c" : "#a5aec9");
+		colors[data.edge.source] ??
+		(data.edge.source === "noise_filter" ? colors.clean_mic : "#828cad");
 	return (
 		<g className={`wire ${data.traced ? "" : "dimmed"} ${policy ? "policy" : ""}`}>
 			<BaseEdge
@@ -589,6 +594,15 @@ function Console() {
 								`REV ${snapshot.runtime.revision} · ${snapshot.runtime.appliedRevision === snapshot.runtime.revision ? "ROUTES APPLIED" : "NOT APPLIED"}`
 							:	"AWAITING ENGINE"}
 						</small>
+					</div>
+					<div
+						className="header-stripe"
+						aria-hidden="true"
+					>
+						<i />
+						<i />
+						<i />
+						<i />
 					</div>
 				</header>
 				<nav

@@ -1,13 +1,13 @@
 export const key = (source, destination) => `${source}:${destination}`;
 export const colors = {
-	game: "#69b5ff",
-	comms: "#ec929e",
-	music: "#ffc54b",
-	chatgpt: "#bc99ff",
-	clean_mic: "#d0e45c",
-	chatgpt_in: "#bc99ff",
-	comms_send: "#ec929e",
-	monitor: "#9cc7e3"
+	game: "#2288ff",
+	comms: "#e98181",
+	music: "#ffbb33",
+	chatgpt: "#cc99ff",
+	clean_mic: "#94b300",
+	chatgpt_in: "#cc99ff",
+	comms_send: "#e98181",
+	monitor: "#99ccff"
 };
 export function reaches(edges, from, to) {
 	const queue = [from],

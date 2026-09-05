@@ -170,6 +170,10 @@ bar sequence. It reuses Torplex's key, confirmation, denial, and search clips,
 but intentionally includes no bridge ambience or generic background hum.
 
 The console uses one React Flow canvas with a locally bundled ELK layout worker.
+Compact segmented headers, curved inspector framing, and LCARS control typography
+keep the Intrepid styling without a wide sidebar competing with the routing canvas.
+The framing is decorative; port hit targets and persisted node positions are independent
+of its styling.
 The former static SVG and separate patch matrix are removed. It provides:
 
 - draggable nodes, labelled directional ports, rounded wires, and real signal waveforms;
