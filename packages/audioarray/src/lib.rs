@@ -449,17 +449,17 @@ impl Config {
 
 const PATCH_SOURCES: [(&str, &str); 5] = [
 	("game", "Game"),
-	("comms", "Comms In"),
+	("comms", "Comms Audio"),
 	("music", "Media"),
-	("chatgpt", "ChatGPT Out"),
+	("chatgpt", "AI Audio"),
 	("clean_mic", "Clean Mic"),
 ];
 const PATCH_DESTINATIONS: [(&str, &str); 6] = [
 	("game", "Game"),
-	("comms", "Comms In"),
+	("comms", "Comms Audio"),
 	("music", "Media"),
-	("chatgpt_in", "ChatGPT In"),
-	("comms_send", "Comms Send"),
+	("chatgpt_in", "AI Mic"),
+	("comms_send", "Comms Mic"),
 	("monitor", "Main Output"),
 ];
 
@@ -891,12 +891,42 @@ mod tests {
 	}
 
 	#[test]
+	fn conversation_display_names_preserve_saved_route_keys() {
+		let config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+		for (endpoint, name) in [
+			(&config.cables.comms, "Comms Audio"),
+			(&config.cables.comms_send, "Comms Mic"),
+			(&config.cables.chatgpt, "AI Audio"),
+			(&config.cables.chatgpt_in, "AI Mic"),
+		] {
+			assert_eq!(
+				endpoint,
+				&format!("AudioArray {name} (Virtual Audio Cable)")
+			);
+		}
+		let sources = patch_sources();
+		let destinations = patch_destinations();
+		for (id, name) in [("comms", "Comms Audio"), ("chatgpt", "AI Audio")] {
+			assert_eq!(sources.iter().find(|p| p.id == id).unwrap().name, name);
+		}
+		for (id, name) in [
+			("comms", "Comms Audio"),
+			("comms_send", "Comms Mic"),
+			("chatgpt_in", "AI Mic"),
+		] {
+			assert_eq!(destinations.iter().find(|p| p.id == id).unwrap().name, name);
+		}
+		assert_eq!(config.patchbay, PatchbayConfig::default());
+		config.validate().unwrap();
+	}
+
+	#[test]
 	fn bundled_config_defines_the_chatgpt_peer_bus() {
 		let config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
 		config.validate().unwrap();
 		assert_eq!(
 			config.cables.chatgpt,
-			"AudioArray ChatGPT Out (Virtual Audio Cable)"
+			"AudioArray AI Audio (Virtual Audio Cable)"
 		);
 		assert_eq!(config.patchbay, PatchbayConfig::default());
 		let chatgpt_routes: Vec<_> = config

@@ -189,6 +189,17 @@ const { chromium } = requireRuntime("playwright");
 		await page.waitForFunction(() => document.querySelectorAll(".react-flow__edge").length > 10);
 		await page.waitForTimeout(1800);
 		assert.equal(errors.length, 0, errors.join("\n"));
+		for (const [id, title] of [
+			["comms", "Comms Audio"],
+			["comms_send", "Comms Mic"],
+			["chatgpt", "AI Audio"],
+			["chatgpt_in", "AI Mic"]
+		]) {
+			assert.match(
+				await page.locator(`.react-flow__node[data-id="${id}"]`).innerText(),
+				new RegExp(title, "i")
+			);
+		}
 		// Only AudioArray-owned nodes/routes are drawn; no external-app placeholders.
 		assert.equal(
 			await page

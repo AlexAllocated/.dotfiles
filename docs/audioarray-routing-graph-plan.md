@@ -53,24 +53,24 @@ The conversation layout must preserve these roles:
 | Bus         | Signal                              | Intended consumers                                       |
 | ----------- | ----------------------------------- | -------------------------------------------------------- |
 | Game        | Game/unassigned playback            | Main Output, isolated OBS game track                     |
-| Comms In    | Received voice communications       | Main Output, ChatGPT In, isolated OBS chat track         |
+| Comms Audio | Received voice communications       | Main Output, AI Mic, isolated OBS chat track             |
 | Music       | Music/media playback                | Main Output, isolated OBS music track                    |
-| ChatGPT Out | AI playback                         | Main Output, Comms Send                                  |
-| Clean Mic   | Physical mic after suppression only | ChatGPT In, Comms Send, isolated OBS mic track           |
-| ChatGPT In  | Clean Mic + Comms In                | ChatGPT/Codex microphone input                           |
-| Comms Send  | Clean Mic + ChatGPT Out             | Discord or another communications app's microphone input |
+| AI Audio    | AI playback                         | Main Output, Comms Mic                                   |
+| Clean Mic   | Physical mic after suppression only | AI Mic, Comms Mic, isolated OBS mic track                |
+| AI Mic      | Clean Mic + Comms Audio             | ChatGPT/Codex microphone input                           |
+| Comms Mic   | Clean Mic + AI Audio                | Discord or another communications app's microphone input |
 
 Four playback-to-monitor links plus four conversation links form the eight default
 patches. Existing user-selected patches remain authoritative; migrating the UI
 must not reapply defaults or reconnect intentionally disconnected routes.
 
-Clean Mic and ChatGPT Out are source-only in the patch layer. ChatGPT In and Comms
-Send accept mixes but cannot be used as patch sources. Comms In must not reach
-Comms Send, and ChatGPT Out must not reach ChatGPT In, directly or through another
+Clean Mic and AI Audio are source-only in the patch layer. AI Mic and Comms
+Mic accept mixes but cannot be used as patch sources. Comms Audio must not reach
+Comms Mic, and AI Audio must not reach AI Mic, directly or through another
 bus. Game audio does not enter ChatGPT merely because a game supports voice chat.
 
 Comms is generic. Discord is one associated application, not the owner or name of
-the bus. A game with separate voice-device settings can use Comms In/Comms Send;
+the bus. A game with separate voice-device settings can use Comms Audio/Comms Mic;
 an application that combines voice and game audio cannot be separated by drawing
 an extra wire. The UI must explain that limitation.
 
@@ -149,10 +149,10 @@ Validate in Rust for every client, with frontend previews only for responsivenes
 3. Audio cycles are rejected. Fan-out is allowed; intentional feedback networks
    and delay-based loop exceptions are outside the initial scope.
 4. Propagate signal origin through mixers/processors. Reject a path carrying
-   received communications back to Comms Send, or AI playback back to ChatGPT In,
+   received communications back to Comms Mic, or AI playback back to AI Mic,
    even when a renamed/intermediate node makes it look harmless.
 5. Preserve pure Clean Mic provenance and independent OBS stems. Adding music to
-   Comms Send does not change Clean Mic, the source music signal, or its OBS stem.
+   Comms Mic does not change Clean Mic, the source music signal, or its OBS stem.
 
 Cycle checks alone are insufficient: the return path through Discord's network
 or an AI session is outside the local audio DAG. Keep protected conversation
@@ -365,7 +365,7 @@ Implementation/verification phases (technical checks, not extra user approval ga
    after all its supported operations work on the canvas.
 4. **Audio correctness and soak.** Use isolated test signals to verify the
    contribution to every sink: AI never returns to AI input, incoming comms never
-   returns to Comms Send, and Clean Mic stays pure. Confirm monitoring/OBS stems
+   returns to Comms Mic, and Clean Mic stays pure. Confirm monitoring/OBS stems
    and master-volume isolation. Exercise AirPods HFP/A2DP, unplug/replug, Quest,
    Moonlight, engine restart, and UI crash/reconnect. Compare callback underruns,
    latency, CPU/GPU load, and UI frame time against the current release under the

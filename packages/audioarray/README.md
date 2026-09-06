@@ -7,22 +7,22 @@ seven buses stay intentionally boring and can be plugged together like a small
 hardware patch panel:
 
 - **Game**: the Windows default for games and otherwise-unassigned applications.
-- **Comms In**: received communications from Discord, in-game chat, or other voice apps.
+- **Comms Audio**: received communications from Discord, in-game chat, or other voice apps.
 - **Media**: music, shows, movies, and other media playback.
-- **ChatGPT Out**: only ChatGPT/Codex playback.
-- **ChatGPT In**: filtered microphone + Discord incoming, sent to ChatGPT/Codex.
-- **Comms Send**: filtered microphone + ChatGPT Out, sent to any communications app.
+- **AI Audio**: only ChatGPT/Codex playback.
+- **AI Mic**: filtered microphone + Discord incoming, sent to ChatGPT/Codex.
+- **Comms Mic**: filtered microphone + AI Audio, sent to any communications app.
 - **Clean Mic**: the selected Windows input after GPU-preferred noise suppression.
 
 Windows exposes both ends of the signed VAC cables with semantic names instead
 of the driver's generic `Line N` labels:
 
 - **AudioArray Game**: normal/default playback and OBS's isolated game capture.
-- **AudioArray Comms In** (VAC 2): received communications and OBS's isolated chat capture.
+- **AudioArray Comms Audio** (VAC 2): received communications and OBS's isolated chat capture.
 - **AudioArray Media**: media playback and OBS's isolated media capture.
-- **AudioArray ChatGPT Out** (VAC 5): AI playback only.
-- **AudioArray ChatGPT In** (VAC 6): the AI's recording input.
-- **AudioArray Comms Send** (VAC 7): outgoing communications mix for Discord, in-game chat, or other apps.
+- **AudioArray AI Audio** (VAC 5): AI playback only.
+- **AudioArray AI Mic** (VAC 6): the AI's recording input.
+- **AudioArray Comms Mic** (VAC 7): outgoing communications mix for Discord, in-game chat, or other apps.
 - **AudioArray Clean Mic** (VAC 4): the pure suppressed microphone, including OBS capture.
 
 Media retains the internal `music` routing/meter key and the same VAC 3 endpoint
@@ -31,7 +31,17 @@ renames the existing endpoints in place, preserving saved routes, app selections
 and OBS bindings. Existing custom OBS source labels may still say Music; newly
 provisioned OBS sources and track labels use Media.
 
-AudioArray makes Game the normal Windows output, Comms the Windows
+Conversation devices use the same perspective: **Audio** is what the app plays;
+**Mic** is what it hears. Set Discord's speakers to **AudioArray Comms Audio**
+and its microphone to **AudioArray Comms Mic**. Set the AI app's speakers to
+**AudioArray AI Audio** and its microphone to **AudioArray AI Mic**. Clean Mic
+stays the isolated filtered microphone before either configurable mix.
+The previous Comms In / Comms Send and ChatGPT Out / ChatGPT In endpoint names
+are renamed in place. Internal `comms`, `comms_send`, `chatgpt`, and `chatgpt_in`
+keys, Windows endpoint IDs, routing, and app bindings stay unchanged. Custom OBS
+source labels are not rewritten; newly provisioned sources use Comms Audio.
+
+AudioArray makes Game the normal Windows output, Comms Audio the Windows
 communications output, and Clean Mic the normal and communications input.
 Games without their own device picker therefore land on Game automatically.
 Choosing a physical device in the Windows input or output picker updates
@@ -90,15 +100,15 @@ live Game render slider and its linked VAC 1 render pin instead of repeatedly
 
 VAC playback applications write into each cable's render endpoint. AudioArray
 captures the matching recording endpoint. Its persistent patch bay sends Game,
-Comms, Media, and ChatGPT Out to Main Output by default. Clean Mic feeds both
-ChatGPT In and Comms Send; Comms also feeds ChatGPT In, while ChatGPT Out
-also feeds Comms Send. Clean Mic is source-only; both send mixes are
+Comms Audio, Media, and AI Audio to Main Output by default. Clean Mic feeds both
+AI Mic and Comms Mic; Comms Audio also feeds AI Mic, while AI Audio
+also feeds Comms Mic. Clean Mic is source-only; both send mixes are
 destination-only. No bus can contaminate the filtered microphone or return
 either participant's playback to its own recording input, even indirectly.
 Saved choices remain authoritative during normal updates. The explicit
 `setup-conversation` command migrates the legacy mixed-voice paths and installs
 the complete conversation topology; it preserves noise settings and unrelated
-routes, mapping old Game/Music-to-Clean-Mic sends to Comms Send.
+routes, mapping old Game/Music-to-Clean-Mic sends to Comms Mic.
 During a Sunshine/Moonlight session, Sunshine temporarily makes Steam Streaming Speakers the Windows
 default. AudioArray observes that real transition, sends the complete mix there,
 and yields the render defaults until Sunshine restores them at disconnect. Meta
@@ -127,23 +137,23 @@ flowchart LR
    dts --> gameCapture[AudioArray Game<br/>VAC capture]
 
    chat[Discord / Vesktop playback] --> commsOut[Windows communications output]
-   commsOut --> commsRender[AudioArray Comms In<br/>VAC render]
-   commsRender --> commsCapture[AudioArray Comms In<br/>VAC capture]
+   commsOut --> commsRender[AudioArray Comms Audio<br/>VAC render]
+   commsRender --> commsCapture[AudioArray Comms Audio<br/>VAC capture]
 
    spotify[Music / shows / movies] --> musicRender[AudioArray Media<br/>VAC render]
    musicRender --> atmos[Dolby Atmos for Headphones]
    atmos --> musicCapture[AudioArray Media<br/>VAC capture]
 
-   voiceAi[ChatGPT / Codex playback] --> chatgptRender[AudioArray ChatGPT Out<br/>VAC render]
-   chatgptRender --> chatgptCapture[AudioArray ChatGPT Out<br/>VAC capture]
+   voiceAi[ChatGPT / Codex playback] --> chatgptRender[AudioArray AI Audio<br/>VAC render]
+   chatgptRender --> chatgptCapture[AudioArray AI Audio<br/>VAC capture]
 
    mic[Selected physical microphone] --> denoise[AudioArray<br/>NVIDIA AFX or DeepFilterNet3]
    denoise --> micRender[AudioArray Clean Mic<br/>VAC render]
    micRender --> micCapture[AudioArray Clean Mic<br/>VAC capture]
-   micCapture --> commsSend[AudioArray Comms Send]
+   micCapture --> commsSend[AudioArray Comms Mic]
    chatgptCapture --> commsSend
    commsSend --> chatInput[Communications app input]
-   micCapture --> aiSend[AudioArray ChatGPT In]
+   micCapture --> aiSend[AudioArray AI Mic]
    commsCapture --> aiSend
    aiSend --> aiInput[ChatGPT / Codex input]
 
@@ -214,13 +224,13 @@ Windows Settings. Either interface therefore produces the same durable result.
 
 Dragging an output port to an input, or using the inspector's Connect ports
 menus, adds that route without replacing other connections. Game,
-Comms, Media, ChatGPT Out, and Clean Mic are sources. Game, Comms, Media,
-ChatGPT In, Comms Send, and Main Output are destinations. Game and Media can
-feed Comms Send while retaining their original OBS stems.
+Comms Audio, Media, AI Audio, and Clean Mic are sources. Game, Comms Audio, Media,
+AI Mic, Comms Mic, and Main Output are destinations. Game and Media can
+feed Comms Mic while retaining their original OBS stems.
 Disconnecting Game, Comms, or Media from Main Output silences only that local
 monitor path. AudioArray rejects self-patches, duplicates, and direct or
-indirect feedback loops, including Comms returning to Comms Send or ChatGPT
-Out returning to ChatGPT In through another bus. Clean Mic cannot be a patch
+indirect feedback loops, including Comms Audio returning to Comms Mic or AI
+Audio returning to AI Mic through another bus. Clean Mic cannot be a patch
 destination, so playback mixes never pollute the filtered microphone source.
 
 The tray icon represents the complete AudioArray lifecycle. Its process owns
@@ -233,16 +243,16 @@ left click restores the console; the Start-menu shortcut does the same through
 single-instance activation.
 
 In an application's device picker, choose **AudioArray Game** for ordinary
-sound, **AudioArray Comms In** for received chat, **AudioArray Media** for media,
-**AudioArray ChatGPT Out** for AI playback, and **AudioArray Clean Mic** for
-pure microphone capture. Discord input uses **AudioArray Comms Send**;
-ChatGPT/Codex input uses **AudioArray ChatGPT In**. The Windows per-app policies
+sound, **AudioArray Comms Audio** for received chat, **AudioArray Media** for media,
+**AudioArray AI Audio** for AI playback, and **AudioArray Clean Mic** for
+pure microphone capture. Discord input uses **AudioArray Comms Mic**;
+ChatGPT/Codex input uses **AudioArray AI Mic**. The Windows per-app policies
 apply these automatically when apps use their default devices. An explicit
 in-app device selection can override Windows policy: select the corresponding
 named endpoint or return the app to its default device.
 
-Other voice apps and in-game chat can select **Comms In** for voice playback
-and **Comms Send** for microphone input. Game audio remains on Game; it is not
+Other voice apps and in-game chat can select **Comms Audio** for voice playback
+and **Comms Mic** for microphone input. Game audio remains on Game; it is not
 sent to ChatGPT merely because the game offers voice chat. The old
 `discord_send` identifier is accepted as an alias for `comms_send`;
 `migrate-control-names` persists the new spelling without changing routes.
@@ -320,7 +330,7 @@ direction; the waveform is an oscilloscope-style source visualization, not a
 measurement of end-to-end propagation delay. The raw and processed Clean Mic paths
 remain independent: the hidden suppression worker publishes its actual
 post-filter waveform over a loopback-only telemetry channel, while the final
-Clean Mic meter measures its isolated VAC endpoint. ChatGPT In and Comms Send
+Clean Mic meter measures its isolated VAC endpoint. AI Mic and Comms Mic
 have their own post-mix meters, without contaminating that microphone signal.
 Main Output uses the monitor mix. External applications' capture, mute, filters,
 and recording status are not represented as nodes or inferred from bus activity.

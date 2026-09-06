@@ -35,14 +35,14 @@ const connection = (source, target) => ({
 	sourceHandle: "out",
 	targetHandle: "in"
 });
-test("direct and indirect participant self-return blocked", () => {
-	for (const [source, target] of [
-		["comms", "comms_send"],
-		["chatgpt", "chatgpt_in"]
+test("direct and indirect participant self-return blocked with clear display names", () => {
+	for (const [source, target, label] of [
+		["comms", "comms_send", "Comms Audio → Comms Mic"],
+		["chatgpt", "chatgpt_in", "AI Audio → AI Mic"]
 	]) {
-		assert.match(
+		assert.equal(
 			validateConnection(topology, patches, connection(source, target)),
-			/self-return/
+			`Blocked self-return: ${label}.`
 		);
 		assert.match(
 			validateConnection(

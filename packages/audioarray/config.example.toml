@@ -2,12 +2,12 @@
 # opposite device directions. AudioArray deliberately refuses ambiguous matches.
 [cables]
 game = "AudioArray Game (Virtual Audio Cable)"
-comms = "AudioArray Comms In (Virtual Audio Cable)"
+comms = "AudioArray Comms Audio (Virtual Audio Cable)"
 # Keep the internal key stable so saved routes and app assignments survive renames.
 music = "AudioArray Media (Virtual Audio Cable)"
-chatgpt = "AudioArray ChatGPT Out (Virtual Audio Cable)"
-chatgpt_in = "AudioArray ChatGPT In (Virtual Audio Cable)"
-comms_send = "AudioArray Comms Send (Virtual Audio Cable)"
+chatgpt = "AudioArray AI Audio (Virtual Audio Cable)"
+chatgpt_in = "AudioArray AI Mic (Virtual Audio Cable)"
+comms_send = "AudioArray Comms Mic (Virtual Audio Cable)"
 clean_mic = "AudioArray Clean Mic (Virtual Audio Cable)"
 
 [monitor]
@@ -64,7 +64,7 @@ post_filter_beta = 0.0
 [patchbay]
 # These unity-gain links behave like plugging cables into a small hardware
 # patch panel. Clean Mic is filtered physical speech only, never a mixed sink.
-# ChatGPT In hears Clean Mic + Comms. Comms Send hears Clean Mic + ChatGPT Out.
+# AI Mic hears Clean Mic + Comms Audio. Comms Mic hears Clean Mic + AI Audio.
 # Neither conversation receives its own playback. Saved choices remain
 # authoritative; setup-conversation is an explicit one-time migration command.
 connections = [

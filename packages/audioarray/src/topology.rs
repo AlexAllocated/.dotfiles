@@ -136,7 +136,7 @@ pub fn project(
 		),
 		(
 			"comms",
-			"Comms In",
+			"Comms Audio",
 			"comms",
 			"Received voice · VAC 02",
 			None,
@@ -157,21 +157,21 @@ pub fn project(
 		),
 		(
 			"chatgpt",
-			"ChatGPT Out",
+			"AI Audio",
 			"chatgpt",
 			"AI playback only · VAC 05",
 			None,
 		),
 		(
 			"chatgpt_in",
-			"ChatGPT In",
+			"AI Mic",
 			"chatgpt-in",
 			"AI microphone mix · VAC 06",
 			None,
 		),
 		(
 			"comms_send",
-			"Comms Send",
+			"Comms Mic",
 			"comms-send",
 			"Outgoing voice mix · VAC 07",
 			None,
@@ -298,15 +298,17 @@ mod tests {
 		let patches = crate::PatchbayConfig::default().connections;
 		let topology = project(&graph, &patches, None);
 		assert_eq!(topology.nodes.len(), 11);
-		assert_eq!(
-			topology
-				.nodes
-				.iter()
-				.find(|n| n.id == "music")
-				.unwrap()
-				.title,
-			"Media"
-		);
+		for (id, title, meter) in [
+			("music", "Media", "music"),
+			("comms", "Comms Audio", "comms"),
+			("comms_send", "Comms Mic", "comms-send"),
+			("chatgpt", "AI Audio", "chatgpt"),
+			("chatgpt_in", "AI Mic", "chatgpt-in"),
+		] {
+			let node = topology.nodes.iter().find(|n| n.id == id).unwrap();
+			assert_eq!(node.title, title);
+			assert_eq!(node.meter.as_deref(), Some(meter));
+		}
 		assert!(topology.nodes.iter().all(|n| n.kind != "external"));
 		assert_eq!(topology.edges.len(), patches.len() + 3);
 		assert_eq!(

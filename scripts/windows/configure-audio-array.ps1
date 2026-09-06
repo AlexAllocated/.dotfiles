@@ -256,7 +256,7 @@ function Get-VacEndpoints {
             continue
          }
          $currentName = [string]$properties.$friendlyNameProperty
-         if ($currentName -notmatch '^Line [1-7]$' -and $currentName -notmatch '^AudioArray (Game|Comms(?: In| Send)?|Music|Media|ChatGPT(?: Out| In)?|Discord Send|Clean Mic)$') {
+         if ($currentName -notmatch '^Line [1-7]$' -and $currentName -notmatch '^AudioArray (Game|Comms(?: In| Send| Audio| Mic)?|Music|Media|AI (?:Audio|Mic)|ChatGPT(?: Out| In)?|Discord Send|Clean Mic)$') {
             continue
          }
          $backingPath = [string]$properties.$backingPathProperty
@@ -299,12 +299,12 @@ function Get-SoundVolumeViewPath {
 function Assert-AudioArrayEndpointNames {
    $expected = @{
       1 = "AudioArray Game"
-      2 = "AudioArray Comms In"
+      2 = "AudioArray Comms Audio"
       3 = "AudioArray Media"
       4 = "AudioArray Clean Mic"
-      5 = "AudioArray ChatGPT Out"
-      6 = "AudioArray ChatGPT In"
-      7 = "AudioArray Comms Send"
+      5 = "AudioArray AI Audio"
+      6 = "AudioArray AI Mic"
+      7 = "AudioArray Comms Mic"
    }
    $endpoints = @(Get-VacEndpoints)
    $incorrect = foreach ($direction in @("Render", "Capture")) {
@@ -446,7 +446,7 @@ function Set-AudioArrayUnityGain {
          -Wait | Out-Null
       return @(Import-Csv -LiteralPath $exportPath | Where-Object {
          $_."Device Name" -eq "Virtual Audio Cable" -and (
-            ($_.Type -eq "Device" -and $_.Name -match '^AudioArray (Game|Comms(?: In| Send)?|Music|Media|ChatGPT(?: Out| In)?|Discord Send|Clean Mic)$') -or
+            ($_.Type -eq "Device" -and $_.Name -match '^AudioArray (Game|Comms(?: In| Send| Audio| Mic)?|Music|Media|AI (?:Audio|Mic)|ChatGPT(?: Out| In)?|Discord Send|Clean Mic)$') -or
             $_.Type -eq "Subunit"
          )
       })

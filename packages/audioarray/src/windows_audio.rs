@@ -850,7 +850,7 @@ pub(crate) fn levels(config: &Config, seconds: u32) -> Result<()> {
 			resolve_named_device(&host, Direction::Input, &config.cables.game)?,
 		),
 		(
-			"Comms",
+			"Comms Audio",
 			resolve_named_device(&host, Direction::Input, &config.cables.comms)?,
 		),
 		(
@@ -858,15 +858,15 @@ pub(crate) fn levels(config: &Config, seconds: u32) -> Result<()> {
 			resolve_named_device(&host, Direction::Input, &config.cables.music)?,
 		),
 		(
-			"ChatGPT",
+			"AI Audio",
 			resolve_named_device(&host, Direction::Input, &config.cables.chatgpt)?,
 		),
 		(
-			"ChatGPT In",
+			"AI Mic",
 			resolve_named_device(&host, Direction::Input, &config.cables.chatgpt_in)?,
 		),
 		(
-			"Comms Send",
+			"Comms Mic",
 			resolve_named_device(&host, Direction::Input, &config.cables.comms_send)?,
 		),
 		(
@@ -1004,7 +1004,7 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 			BusSummary {
 				id: "comms-send",
 				name: config.cables.comms_send.clone(),
-				purpose: "Filtered mic + ChatGPT Out; no communications self-return",
+				purpose: "Filtered mic + AI Audio; no communications self-return",
 				spatial: None,
 			},
 		],
@@ -1713,31 +1713,35 @@ fn wait_before_graph_retry(
 fn validate_cables(host: &cpal::Host, config: &Config) -> Result<()> {
 	for (label, selector, direction) in [
 		("Game", config.cables.game.as_str(), Direction::Input),
-		("Comms", config.cables.comms.as_str(), Direction::Input),
-		("Media", config.cables.music.as_str(), Direction::Input),
-		("ChatGPT", config.cables.chatgpt.as_str(), Direction::Input),
 		(
-			"ChatGPT Out render",
+			"Comms Audio",
+			config.cables.comms.as_str(),
+			Direction::Input,
+		),
+		("Media", config.cables.music.as_str(), Direction::Input),
+		("AI Audio", config.cables.chatgpt.as_str(), Direction::Input),
+		(
+			"AI Audio render",
 			config.cables.chatgpt.as_str(),
 			Direction::Output,
 		),
 		(
-			"ChatGPT In",
+			"AI Mic",
 			config.cables.chatgpt_in.as_str(),
 			Direction::Input,
 		),
 		(
-			"ChatGPT In render",
+			"AI Mic render",
 			config.cables.chatgpt_in.as_str(),
 			Direction::Output,
 		),
 		(
-			"Comms Send",
+			"Comms Mic",
 			config.cables.comms_send.as_str(),
 			Direction::Input,
 		),
 		(
-			"Comms Send render",
+			"Comms Mic render",
 			config.cables.comms_send.as_str(),
 			Direction::Output,
 		),
@@ -2102,11 +2106,11 @@ fn patch_source_selector<'a>(config: &'a Config, source: &str) -> Result<&'a str
 fn patch_label(source: &str) -> &'static str {
 	match source {
 		"game" => "Patch Game",
-		"comms" => "Patch Comms",
+		"comms" => "Patch Comms Audio",
 		"music" => "Patch Media",
-		"chatgpt" => "Patch ChatGPT Out",
-		"chatgpt_in" => "Patch ChatGPT In",
-		"comms_send" => "Patch Comms Send",
+		"chatgpt" => "Patch AI Audio",
+		"chatgpt_in" => "Patch AI Mic",
+		"comms_send" => "Patch Comms Mic",
 		"clean_mic" => "Patch Clean Mic",
 		_ => "Patch Unknown",
 	}

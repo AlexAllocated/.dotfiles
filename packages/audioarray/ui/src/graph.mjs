@@ -40,7 +40,7 @@ export function validateConnection(topology, patches, connection, replacing) {
 		["chatgpt", "chatgpt_in"]
 	])
 		if (reaches(next, from, to))
-			return `Blocked self-return: ${from === "comms" ? "Comms In → Comms Send" : "ChatGPT Out → ChatGPT In"}.`;
+			return `Blocked self-return: ${from === "comms" ? "Comms Audio → Comms Mic" : "AI Audio → AI Mic"}.`;
 	return null;
 }
 export function trace(topology, id) {

@@ -548,7 +548,7 @@ if (
                -DeviceId $endpoints.clean_mic `
                -Mixers 7
             AuxAudioDevice2 = New-ObsAudioDevice `
-               -Name "AudioArray Comms In" `
+               -Name "AudioArray Comms Audio" `
                -Uuid "04855d18-2817-4fa7-9e91-dfb4eb02c6b0" `
                -DeviceId $endpoints.comms `
                -Mixers 11
