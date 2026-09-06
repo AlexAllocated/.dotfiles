@@ -21,6 +21,27 @@ const { chromium } = requireRuntime("playwright");
 		});
 		const errors = [];
 		page.on("pageerror", e => errors.push(String(e)));
+		const assertWindowFit = async () => {
+			const dimensions = await page.evaluate(() => ({
+				pageWidth: document.documentElement.scrollWidth,
+				pageHeight: document.documentElement.scrollHeight,
+				width: innerWidth,
+				height: innerHeight,
+				footerBottom: document.querySelector("footer").getBoundingClientRect().bottom,
+				canvasHeight: document.querySelector(".canvas").clientHeight,
+				inspectorHeight: document.querySelector(".inspector").clientHeight
+			}));
+			assert(
+				dimensions.pageWidth <= dimensions.width && dimensions.pageHeight <= dimensions.height,
+				`Outer window overflow: ${JSON.stringify(dimensions)}`
+			);
+			assert(
+				dimensions.footerBottom <= dimensions.height &&
+					dimensions.canvasHeight > 60 &&
+					dimensions.inspectorHeight > 60,
+				`Workspace controls clipped: ${JSON.stringify(dimensions)}`
+			);
+		};
 		// Match the packaged WebView policy, including the locally bundled ELK worker.
 		await page.route("**/*", async route => {
 			if (route.request().resourceType() !== "document") return route.continue();
@@ -262,6 +283,7 @@ const { chromium } = requireRuntime("playwright");
 				);
 			}
 		await page.screenshot({ path: path.join(output, "desktop.png"), fullPage: true });
+		await assertWindowFit();
 		const styling = await page.evaluate(() => {
 			const canvas = document.querySelector(".canvas");
 			const handle = document.querySelector(".react-flow__handle");
@@ -278,7 +300,7 @@ const { chromium } = requireRuntime("playwright");
 		assert.equal(styling.background, "rgb(0, 0, 0)");
 		assert.match(styling.font, /Antonio/);
 		assert(
-			styling.width >= 1250 && styling.height >= 750,
+			styling.width >= 1250 && styling.height >= 730,
 			"LCARS framing shrank the usable desktop canvas"
 		);
 		assert(
@@ -368,10 +390,12 @@ const { chromium } = requireRuntime("playwright");
 		await page.setViewportSize({ width: 1480, height: 920 });
 		await page.getByRole("button", { name: "Fit graph", exact: true }).click();
 		await page.screenshot({ path: path.join(output, "window.png"), fullPage: true });
+		await assertWindowFit();
 		await page.setViewportSize({ width: 1024, height: 1366 });
 		await page.getByRole("button", { name: "Fit graph", exact: true }).tap();
 		await page.waitForTimeout(500);
 		await page.screenshot({ path: path.join(output, "ipad.png"), fullPage: true });
+		await assertWindowFit();
 		await page.getByRole("button", { name: "Focus node", exact: true }).click();
 		await page.waitForTimeout(200);
 		await page.screenshot({ path: path.join(output, "ipad-focus.png"), fullPage: true });
@@ -383,6 +407,7 @@ const { chromium } = requireRuntime("playwright");
 		await page.setViewportSize({ width: 650, height: 1000 });
 		await page.waitForTimeout(300);
 		await page.screenshot({ path: path.join(output, "narrow.png"), fullPage: true });
+		await assertWindowFit();
 		assert(
 			await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
 			"Narrow page overflow"
@@ -396,6 +421,13 @@ const { chromium } = requireRuntime("playwright");
 			"Registry label escaped its narrow LCARS frame"
 		);
 		assert.equal(errors.length, 0, errors.join("\n"));
+		await page.setViewportSize({ width: 600, height: 480 });
+		await page.waitForTimeout(300);
+		await assertWindowFit();
+		// The inspector must remain usable even at the native window's minimum size.
+		await page.getByRole("button", { name: "Connect", exact: true }).scrollIntoViewIfNeeded();
+		await assertWindowFit();
+		await page.screenshot({ path: path.join(output, "minimum.png"), fullPage: true });
 		console.log(
 			JSON.stringify({
 				result: "PASS",

@@ -197,6 +197,8 @@ controls without changing audio and traces its paths; clicking empty canvas clea
 the trace. The initial overview shows all branches. Dragging a node changes only layout.
 Automatic layout uses the current nodes, ports, and edges; saved positions take
 precedence until Arrange explicitly recomputes them. Fit graph only changes the viewport.
+The window shell fits the viewport; the graph takes the remaining space and the
+inspector scrolls internally, including in the narrow stacked layout.
 
 Those selectors do not create a second device-selection system. They briefly
 apply the chosen physical endpoint through Windows' normal default-device
