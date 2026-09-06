@@ -68,8 +68,8 @@ apply_windows_packages() {
 
 apply_windows_integration() {
 	local source_root="${1:-$REPO_ROOT}"
-	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot obs_configurator obs_wallpaper obs_production_mode obs_production_launcher audioarray_configurator audioarray_endpoint_configurator audioarray_source audioarray_workspace docker_configurator always_on slack_presence slack_presence_launcher vdd_settings sunshine_session sunshine_configurator nvidia_frame_limiter wallpaper_configurator lg_display wallpaper_ultrawide wallpaper_ipad script_windows nvidia_video_effects nvidia_audio_effects
-	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows obs_production_mode_windows obs_production_launcher_windows nvidia_frame_limiter_windows audioarray_configurator_windows audioarray_source_windows docker_configurator_windows nvidia_video_effects_windows nvidia_audio_effects_windows
+	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot obs_configurator obs_wallpaper obs_production_mode obs_production_launcher amps_configurator amps_endpoint_configurator amps_source amps_workspace docker_configurator always_on slack_presence slack_presence_launcher vdd_settings sunshine_session sunshine_configurator nvidia_frame_limiter wallpaper_configurator lg_display wallpaper_ultrawide wallpaper_ipad script_windows nvidia_video_effects nvidia_audio_effects
+	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows obs_production_mode_windows obs_production_launcher_windows nvidia_frame_limiter_windows amps_configurator_windows amps_source_windows docker_configurator_windows nvidia_video_effects_windows nvidia_audio_effects_windows
 	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
 	local ssh_forwarder_target ssh_forwarder_target_windows quest_hotspot_target quest_hotspot_target_windows always_on_target always_on_target_windows slack_presence_target slack_presence_target_windows slack_presence_launcher_target
 	local vdd_settings_target sunshine_configurator_target sunshine_configurator_target_windows nvidia_frame_limiter_target wallpaper_configurator_target wallpaper_configurator_target_windows lg_display_target lg_display_target_windows wallpaper_directory wallpaper_directory_windows minecraft_vr minecraft_desktop minecraft_graphics powerwash_configurator powerwash_launcher powerwash_configurator_target powerwash_configurator_target_windows flat2vr_configurator flat2vr_configurator_target flat2vr_configurator_target_windows
@@ -91,10 +91,10 @@ apply_windows_integration() {
 	nvidia_video_effects="$source_root/scripts/windows/configure-nvidia-video-effects.ps1"
 	nvidia_audio_effects="$source_root/scripts/windows/configure-nvidia-audio-effects.ps1"
 	obs_wallpaper="$source_root/assets/wallpapers/pixel-meadow-hive-2560x1440.png"
-	audioarray_configurator="$source_root/scripts/windows/configure-audio-array.ps1"
-	audioarray_endpoint_configurator="$source_root/scripts/windows/configure-audioarray-endpoints.ps1"
-	audioarray_source="$source_root/packages/audioarray"
-	audioarray_workspace="$HOME/code/AudioArray"
+	amps_configurator="$source_root/scripts/windows/configure-amps.ps1"
+	amps_endpoint_configurator="$source_root/scripts/windows/configure-amps-endpoints.ps1"
+	amps_source="$source_root/packages/amps"
+	amps_workspace="$HOME/code/AMPS"
 	wallpaper_configurator="$source_root/scripts/windows/configure-wallpapers.ps1"
 	lg_display="$source_root/scripts/windows/configure-lg-display.ps1"
 	wallpaper_ultrawide="$source_root/assets/wallpapers/pixel-meadow-hive-3440x1440.png"
@@ -113,7 +113,7 @@ apply_windows_integration() {
 	powerwash_configurator="$source_root/scripts/windows/configure-powerwash-simulator-2.ps1"
 	powerwash_launcher="$source_root/scripts/windows/PowerWashLauncher.cs"
 	flat2vr_configurator="$source_root/scripts/windows/configure-flat2vr-mods.ps1"
-	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$obs_configurator" "$obs_production_mode" "$obs_production_launcher" "$nvidia_video_effects" "$nvidia_audio_effects" "$obs_wallpaper" "$audioarray_configurator" "$audioarray_endpoint_configurator" "$audioarray_source/Cargo.toml" "$wallpaper_configurator" "$lg_display" "$wallpaper_ultrawide" "$wallpaper_ipad" "$docker_configurator" "$always_on" "$slack_presence" "$slack_presence_launcher" "$vdd_settings" "$sunshine_session" "$sunshine_configurator" "$nvidia_frame_limiter" "$minecraft_vr" "$minecraft_desktop" "$minecraft_graphics" "$powerwash_configurator" "$powerwash_launcher" "$flat2vr_configurator"; do
+	for required in "$script" "$font_installer" "$configurator" "$desktop_config" "$ssh_forwarder" "$quest_hotspot" "$obs_configurator" "$obs_production_mode" "$obs_production_launcher" "$nvidia_video_effects" "$nvidia_audio_effects" "$obs_wallpaper" "$amps_configurator" "$amps_endpoint_configurator" "$amps_source/Cargo.toml" "$wallpaper_configurator" "$lg_display" "$wallpaper_ultrawide" "$wallpaper_ipad" "$docker_configurator" "$always_on" "$slack_presence" "$slack_presence_launcher" "$vdd_settings" "$sunshine_session" "$sunshine_configurator" "$nvidia_frame_limiter" "$minecraft_vr" "$minecraft_desktop" "$minecraft_graphics" "$powerwash_configurator" "$powerwash_launcher" "$flat2vr_configurator"; do
 		[[ -f "$required" ]] || {
 			printf 'Windows integration file not found: %s\n' "$required" >&2
 			return 1
@@ -128,23 +128,34 @@ apply_windows_integration() {
 	font_installer_windows="$(wslpath -w "$font_installer")"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$font_installer_windows" \
 		-FontDirectory "$font_directory_windows"
-	mkdir -p "$(dirname "$audioarray_workspace")"
-	if [[ -L "$audioarray_workspace" ]]; then
-		if [[ "$(readlink "$audioarray_workspace")" != "$audioarray_source" ]]; then
-			ln -sfn "$audioarray_source" "$audioarray_workspace"
+	mkdir -p "$(dirname "$amps_workspace")"
+	if [[ -L "$amps_workspace" ]]; then
+		if [[ "$(readlink "$amps_workspace")" != "$amps_source" ]]; then
+			ln -sfn "$amps_source" "$amps_workspace"
 		fi
-	elif [[ -e "$audioarray_workspace" ]]; then
-		printf 'Refusing to replace existing AudioArray workspace: %s\n' "$audioarray_workspace" >&2
+	elif [[ -e "$amps_workspace" ]]; then
+		printf 'Refusing to replace existing AMPS workspace: %s\n' "$amps_workspace" >&2
 		return 1
 	else
-		ln -s "$audioarray_source" "$audioarray_workspace"
+		ln -s "$amps_source" "$amps_workspace"
+	fi
+	# Preserve the old development shortcut without replacing a real checkout.
+	if [[ -L "$HOME/code/AudioArray" ]]; then
+		case "$(readlink "$HOME/code/AudioArray")" in
+			"$source_root/packages/audioarray" | "$amps_source" | "$amps_workspace")
+				ln -sfn "$amps_workspace" "$HOME/code/AudioArray"
+				;;
+			*) printf 'Leaving custom AudioArray workspace alias untouched.\n' ;;
+		esac
+	elif [[ ! -e "$HOME/code/AudioArray" ]]; then
+		ln -s "$amps_workspace" "$HOME/code/AudioArray"
 	fi
 	nvidia_audio_effects_windows="$(wslpath -w "$nvidia_audio_effects")"
 	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$nvidia_audio_effects_windows"
-	audioarray_configurator_windows="$(wslpath -w "$audioarray_configurator")"
-	audioarray_source_windows="$(wslpath -w "$audioarray_source")"
-	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$audioarray_configurator_windows" \
-		-SourceDirectory "$audioarray_source_windows"
+	amps_configurator_windows="$(wslpath -w "$amps_configurator")"
+	amps_source_windows="$(wslpath -w "$amps_source")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$amps_configurator_windows" \
+		-SourceDirectory "$amps_source_windows"
 	obs_configurator_windows="$(wslpath -w "$obs_configurator")"
 	obs_wallpaper_windows="$(wslpath -w "$obs_wallpaper")"
 	obs_production_mode_windows="$(wslpath -w "$obs_production_mode")"

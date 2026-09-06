@@ -61,38 +61,38 @@ current dashboard URL into the `Bumblebee Overlay` browser source, and leave
 the public reconciler responsible only for the plugin, backdrop, profile, and
 encoder contract.
 
-## AudioArray streaming graph
+## AMPS streaming graph
 
-The Windows integration builds the private Rust `AudioArray` utility, installs
-its tracked graph configuration into `%APPDATA%\AudioArray`, and runs it at
+The Windows integration builds the private Rust `AMPS` utility, installs
+its tracked graph configuration into `%APPDATA%\AMPS`, and runs it at
 interactive logon. Game, Comms, and Music use VAC Lines 1-3; Game is the normal
 Windows output and Comms is its communications output. The selected physical
 Windows microphone is processed by DeepFilterNet3 and published as Clean Mic
 on Line 4, which is the normal and communications input. Selecting a physical
-input or output updates the machine-local hardware endpoint and AudioArray then
+input or output updates the machine-local hardware endpoint and AMPS then
 restores the virtual Windows defaults. Unassigned applications therefore land
 on Game instead of bypassing the graph.
 
-VAC volume processing stays disabled. AudioArray treats the normal Windows
+VAC volume processing stays disabled. AMPS treats the normal Windows
 volume/mute state on Game as an event-driven master control for the selected
 physical output and mirrors Windows-visible changes in either direction. This
 final-sink volume never changes the VAC buses captured by OBS.
 
 Windows 11 exposes one playback endpoint while switching Bluetooth headsets
-between high-quality A2DP and hands-free HFP internally. AudioArray keeps its
+between high-quality A2DP and hands-free HFP internally. AMPS keeps its
 monitor attached to that unified endpoint while the selected headset microphone
 is open. It keeps the chosen master state authoritative during graph rebuilds
 and restores it after the transport transition, while separately repairing a
 muted or zero-level physical microphone. Choosing another microphone lets
-Windows return the headphones to A2DP without changing AudioArray's remembered
+Windows return the headphones to A2DP without changing AMPS's remembered
 output preference.
 
 The installed Sunshine release temporarily makes its capture endpoint the
-Windows default. AudioArray observes that actual endpoint transition, yields
+Windows default. AMPS observes that actual endpoint transition, yields
 only the render roles, and sends the configured monitor mix (Game, Comms Audio, Media,
 and AI Audio by default) to Steam Streaming Speakers. At disconnect it restores
-AudioArray Game and
-AudioArray Comms Audio as the normal and communications defaults and selects the
+AMPS Game and
+AMPS Comms Audio as the normal and communications defaults and selects the
 first usable device from its recency-ordered physical input/output histories.
 Temporary Steam and Oculus
 endpoints are never persisted as physical hardware selections.

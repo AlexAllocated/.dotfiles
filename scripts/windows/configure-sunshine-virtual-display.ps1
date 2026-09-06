@@ -46,7 +46,7 @@ if (-not (Test-Path -LiteralPath $audioInfoPath -PathType Leaf)) {
 }
 $audioInventory = (& $audioInfoPath 2>&1 | Out-String)
 if ($audioInventory -notmatch "(?m)^Device name\s*:\s*$([regex]::Escape($StreamingMixName))\s*$") {
-	throw "AudioArray's streaming-mix endpoint is unavailable to Sunshine: $StreamingMixName"
+	throw "AMPS's streaming-mix endpoint is unavailable to Sunshine: $StreamingMixName"
 }
 if (-not (Test-Path -LiteralPath $FrameLimitScriptPath -PathType Leaf)) {
 	throw "Sunshine's NVIDIA frame-limit hook is unavailable: $FrameLimitScriptPath"
@@ -69,7 +69,7 @@ $settings = [ordered]@{
 	dd_hdr_option = "auto"
 	dd_config_revert_on_disconnect = "enabled"
 	# Sunshine makes this sink the Windows default only while a client is
-	# connected. AudioArray observes that real endpoint transition directly.
+	# connected. AMPS observes that real endpoint transition directly.
 	virtual_sink = $StreamingMixName
 	install_steam_audio_drivers = "disabled"
 	global_prep_cmd = $globalPrepCommand
@@ -141,7 +141,7 @@ function Invoke-ElevatedApply {
 }
 
 if ($Mode -eq "Ensure" -and $configurationIsCurrent) {
-	Write-Host "Sunshine's VDD, AudioArray, and adaptive NVIDIA frame-limit settings are current."
+	Write-Host "Sunshine's VDD, AMPS, and adaptive NVIDIA frame-limit settings are current."
 	exit 0
 }
 if (-not $isAdministrator) {
@@ -174,5 +174,5 @@ Restart-Service -Name $ServiceName -Force
 
 Write-Host "Sunshine now targets $outputName (VDD by MTT)."
 Write-Host "Resolution, refresh rate, and HDR now follow the Moonlight client request."
-Write-Host "AudioArray now follows Sunshine's real $StreamingMixName default-device transitions."
+Write-Host "AMPS now follows Sunshine's real $StreamingMixName default-device transitions."
 Write-Host "The NVIDIA driver now limits local play to 158 FPS and reserves three frames of headroom on Moonlight."

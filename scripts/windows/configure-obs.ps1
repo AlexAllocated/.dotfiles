@@ -34,8 +34,8 @@ $integrationRoot = Join-Path $env:LOCALAPPDATA "dotfiles"
 $productionModeScriptTarget = Join-Path $integrationRoot "obs-production-mode.lua"
 $productionFrameLauncherTarget = Join-Path $integrationRoot "obs-production-frame-limit.vbs"
 $frameLimiterTarget = Join-Path $integrationRoot "set-nvidia-frame-limit.ps1"
-$audioArrayExecutable = Join-Path $env:LOCALAPPDATA "AudioArray\bin\audioarray.exe"
-$audioArrayConfig = Join-Path $env:APPDATA "AudioArray\config.toml"
+$ampsExecutable = Join-Path $env:LOCALAPPDATA "AMPS\bin\amps.exe"
+$ampsConfig = Join-Path $env:APPDATA "AMPS\config.toml"
 $obsExecutable = Join-Path $env:ProgramFiles "obs-studio\bin\64bit\obs64.exe"
 
 function Test-FileEqual {
@@ -291,7 +291,7 @@ foreach ($profileValue in $profileValues) {
 
 $streamEncoder = [ordered]@{
    # A 12-thread ceiling leaves 20 logical processors for the game, OBS
-   # composition support, AudioArray, and Windows on Tracer's 16C/32T CPU.
+   # composition support, AMPS, and Windows on Tracer's 16C/32T CPU.
    bf = 2
    bitrate = 8000
    buffer_size = 8000
@@ -391,6 +391,17 @@ function Set-ObsJsonProperty {
    )
 
    $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force
+}
+
+function Add-MissingObsAudioDevices {
+   param([object]$SceneCollection, [System.Collections.IDictionary]$Devices)
+   foreach ($entry in $Devices.GetEnumerator()) {
+      # Existing sources are OBS-owned. Renaming a Windows endpoint never
+      # requires replacing its GUID binding, custom label, filters, or levels.
+      if (-not $SceneCollection.PSObject.Properties[$entry.Key]) {
+         $SceneCollection | Add-Member -MemberType NoteProperty -Name $entry.Key -Value $entry.Value
+      }
+   }
 }
 
 function Set-CleanRecordingAudioTracks {
@@ -518,11 +529,11 @@ if (-not (Get-Process obs64 -ErrorAction SilentlyContinue)) {
 }
 
 if (
-   (Test-Path -LiteralPath $audioArrayExecutable -PathType Leaf) -and
-   (Test-Path -LiteralPath $audioArrayConfig -PathType Leaf) -and
+   (Test-Path -LiteralPath $ampsExecutable -PathType Leaf) -and
+   (Test-Path -LiteralPath $ampsConfig -PathType Leaf) -and
    (Test-Path -LiteralPath $sceneCollection -PathType Leaf)
 ) {
-   $endpointLines = & $audioArrayExecutable --config $audioArrayConfig endpoints 2>$null
+   $endpointLines = & $ampsExecutable --config $ampsConfig endpoints 2>$null
    if ($LASTEXITCODE -eq 0) {
       $endpoints = @{}
       foreach ($line in $endpointLines) {
@@ -534,38 +545,36 @@ if (
       $requiredEndpoints = @("game", "comms", "music", "clean_mic")
       $missingEndpoints = @($requiredEndpoints | Where-Object { -not $endpoints.ContainsKey($_) })
       if ($missingEndpoints.Count -gt 0) {
-         throw "AudioArray did not resolve OBS endpoints: $($missingEndpoints -join ', ')."
+         throw "AMPS did not resolve OBS endpoints: $($missingEndpoints -join ', ')."
       }
 
       if (Get-Process obs64 -ErrorAction SilentlyContinue) {
-         Write-Warning "OBS is running; deferring AudioArray source injection until the next apply after OBS closes."
+         Write-Warning "OBS is running; deferring AMPS source injection until the next apply after OBS closes."
       } else {
          $scene = Get-Content -LiteralPath $sceneCollection -Raw | ConvertFrom-Json
          $audioDevices = @{
             AuxAudioDevice1 = New-ObsAudioDevice `
-               -Name "AudioArray Clean Mic" `
+               -Name "AMPS Clean Mic" `
                -Uuid "394efb51-33e8-4de9-bfca-004b74c27323" `
                -DeviceId $endpoints.clean_mic `
                -Mixers 7
             AuxAudioDevice2 = New-ObsAudioDevice `
-               -Name "AudioArray Comms Audio" `
+               -Name "AMPS Comms Audio" `
                -Uuid "04855d18-2817-4fa7-9e91-dfb4eb02c6b0" `
                -DeviceId $endpoints.comms `
                -Mixers 11
             AuxAudioDevice3 = New-ObsAudioDevice `
-               -Name "AudioArray Game" `
+               -Name "AMPS Game" `
                -Uuid "803f7f80-a130-47a2-805b-59fb2e653270" `
                -DeviceId $endpoints.game `
                -Mixers 19
             AuxAudioDevice4 = New-ObsAudioDevice `
-               -Name "AudioArray Media" `
+               -Name "AMPS Media" `
                -Uuid "a51eb26b-e112-48d1-9d0f-995603b3ce96" `
                -DeviceId $endpoints.music `
                -Mixers 33
          }
-         foreach ($entry in $audioDevices.GetEnumerator()) {
-            $scene | Add-Member -MemberType NoteProperty -Name $entry.Key -Value $entry.Value -Force
-         }
+         Add-MissingObsAudioDevices -SceneCollection $scene -Devices $audioDevices
          foreach ($desktopDevice in @("DesktopAudioDevice1", "DesktopAudioDevice2")) {
             if ($scene.PSObject.Properties.Name -contains $desktopDevice) {
                $scene.PSObject.Properties.Remove($desktopDevice)
@@ -584,11 +593,11 @@ if (
          }
       }
    } else {
-      Write-Warning "AudioArray VAC endpoints are not ready; leaving the OBS scene collection unchanged."
+      Write-Warning "AMPS VAC endpoints are not ready; leaving the OBS scene collection unchanged."
    }
 }
 
-# The production limiter is independent of AudioArray endpoint discovery. Keep
+# The production limiter is independent of AMPS endpoint discovery. Keep
 # it loaded even during a future first boot or temporary audio-driver outage.
 if (
    (Test-Path -LiteralPath $sceneCollection -PathType Leaf) -and
@@ -602,4 +611,4 @@ if (
       -Content ($scene | ConvertTo-Json -Depth 100)
 }
 
-Write-Host "OBS 1080p x264 stream, 1440p NVENC clean recording, lifetime GPU headroom, six-track AudioArray contract, and meadow asset are current."
+Write-Host "OBS 1080p x264 stream, 1440p NVENC clean recording, lifetime GPU headroom, six-track AMPS contract, and meadow asset are current."

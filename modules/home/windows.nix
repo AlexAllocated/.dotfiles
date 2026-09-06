@@ -26,8 +26,14 @@ in
       sourceRoot + "/scripts/windows/obs-production-frame-limit.vbs";
     ".local/share/dotfiles/windows/configure-nvidia-video-effects.ps1".source =
       sourceRoot + "/scripts/windows/configure-nvidia-video-effects.ps1";
-    ".local/share/dotfiles/windows/configure-audio-array.ps1".source =
-      sourceRoot + "/scripts/windows/configure-audio-array.ps1";
+    ".local/share/dotfiles/windows/configure-amps.ps1".source =
+      sourceRoot + "/scripts/windows/configure-amps.ps1";
+    ".local/share/dotfiles/windows/configure-amps-endpoints.ps1".source =
+      sourceRoot + "/scripts/windows/configure-amps-endpoints.ps1";
+    ".local/share/dotfiles/windows/amps-migration.ps1".source =
+      sourceRoot + "/scripts/windows/amps-migration.ps1";
+    ".local/share/dotfiles/windows/amps-launch-context.ps1".source =
+      sourceRoot + "/scripts/windows/amps-launch-context.ps1";
     ".local/share/dotfiles/windows/configure-wallpapers.ps1".source =
       sourceRoot + "/scripts/windows/configure-wallpapers.ps1";
     ".local/share/dotfiles/windows/configure-lg-display.ps1".source =

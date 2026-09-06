@@ -167,7 +167,7 @@ function Set-SteamVrPerformanceDefaults {
 	# an explicit 100% target so stereo Minecraft has a predictable frame budget.
 	Set-JsonProperty -Object $settings.steamvr -Name "supersampleManualOverride" -Value $true
 	Set-JsonProperty -Object $settings.steamvr -Name "supersampleScale" -Value 1.0
-	$temporary = "$steamVrPath.audioarray.tmp"
+	$temporary = "$steamVrPath.amps.tmp"
 	[IO.File]::WriteAllText(
 		$temporary,
 		(($settings | ConvertTo-Json -Depth 20) + "`n"),
