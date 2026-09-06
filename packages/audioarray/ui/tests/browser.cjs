@@ -76,6 +76,7 @@ const { chromium } = requireRuntime("playwright");
 				};
 				regenerate();
 				window.__TEST_REQUESTS__ = [];
+				window.__TEST_METERS__ = {};
 				window.__AUDIOARRAY_TEST__ = {
 					invoke: async (cmd, args) => {
 						if (cmd === "routing_snapshot") return structuredClone(fixture);
@@ -91,14 +92,20 @@ const { chromium } = requireRuntime("playwright");
 								"processed-mic",
 								"physical-mic",
 								"monitor"
-							].map(id => ({
-								id,
-								peak: id.includes("mic") ? 0 : 0.3,
-								dbfs: id.includes("mic") ? -90 : -12,
-								waveform: Array.from({ length: 192 }, (_, i) =>
-									id.includes("mic") ? 0 : Math.sin(i * 0.4) * 0.15
+							]
+								.map(id =>
+									Object.hasOwn(window.__TEST_METERS__, id) ?
+										window.__TEST_METERS__[id]
+									:	{
+											id,
+											peak: id.includes("mic") ? 0 : 0.3,
+											dbfs: id.includes("mic") ? -90 : -12,
+											waveform: Array.from({ length: 192 }, (_, i) =>
+												id.includes("mic") ? 0 : Math.sin(i * 0.4) * 0.15
+											)
+										}
 								)
-							}));
+								.filter(Boolean);
 						if (cmd === "edit_routing") {
 							const r = args.request;
 							window.__TEST_REQUESTS__.push(r);
@@ -161,6 +168,84 @@ const { chromium } = requireRuntime("playwright");
 		await page.waitForFunction(() => document.querySelectorAll(".react-flow__edge").length > 10);
 		await page.waitForTimeout(1800);
 		assert.equal(errors.length, 0, errors.join("\n"));
+		// Only AudioArray-owned nodes/routes are drawn; no external-app placeholders.
+		assert.equal(
+			await page
+				.locator('[data-id="obs"], [data-id="ai_capture"], [data-id="comms_capture"]')
+				.count(),
+			0
+		);
+		assert.equal(await page.locator('.react-flow__edge[data-id^="policy:"]').count(), 0);
+		for (const id of ["chatgpt_in", "comms_send"]) {
+			assert.equal(
+				await page
+					.locator(`.react-flow__node[data-id="${id}"] .react-flow__handle.source`)
+					.count(),
+				0
+			);
+		}
+		// Each retained wire displays its own source bus, not the downstream mix.
+		const musicRoute = page.locator('[data-id="patch:music:monitor"] .wave');
+		await page.waitForFunction(
+			() => !!document.querySelector('[data-id="patch:music:monitor"] .wave')?.getAttribute("d")
+		);
+		assert.equal(await page.locator(".wire.dimmed").count(), 0, "Overview hid a branch");
+		assert.equal(
+			await page.locator('[data-id="fixed:noise_filter:clean_mic"] .wave').getAttribute("d"),
+			""
+		);
+		const musicTrace = await musicRoute.getAttribute("d");
+		await page.evaluate(() => {
+			window.__TEST_METERS__.monitor = { id: "monitor", peak: 0, dbfs: -90, waveform: [0, 0] };
+		});
+		await page.waitForTimeout(150);
+		assert.equal(
+			await musicRoute.getAttribute("d"),
+			musicTrace,
+			"Listening-mix silence changed the source waveform"
+		);
+		await page.evaluate(() => {
+			window.__TEST_METERS__.music = {
+				id: "music",
+				peak: 0.3,
+				dbfs: -12,
+				waveform: [0.3, -0.3, 0.1]
+			};
+		});
+		await page.waitForFunction(previous => {
+			const current = document
+				.querySelector('[data-id="patch:music:monitor"] .wave')
+				?.getAttribute("d");
+			return !!current && current !== previous;
+		}, musicTrace);
+		await page.evaluate(() => {
+			delete window.__TEST_METERS__.monitor;
+			window.__TEST_METERS__.music = { id: "music", peak: 0, dbfs: -90, waveform: [0, 0] };
+		});
+		await page.waitForFunction(
+			() =>
+				document.querySelector('[data-id="patch:music:monitor"] .wave')?.getAttribute("d") ===
+				""
+		);
+		assert(
+			await page.locator('[data-id="fixed:monitor:main_output"] .wave').getAttribute("d"),
+			"Monitor fixture should still be active"
+		);
+		await page.evaluate(() => {
+			window.__TEST_METERS__.music = null;
+		});
+		await page.waitForTimeout(150);
+		assert.equal(
+			await musicRoute.getAttribute("d"),
+			"",
+			"Missing source telemetry invented activity"
+		);
+		await page.evaluate(() => {
+			delete window.__TEST_METERS__.music;
+		});
+		await page.waitForFunction(
+			() => !!document.querySelector('[data-id="patch:music:monitor"] .wave')?.getAttribute("d")
+		);
 		const bounds = await page.locator(".react-flow__node").evaluateAll(nodes =>
 			nodes.map(n => {
 				const r = n.getBoundingClientRect();

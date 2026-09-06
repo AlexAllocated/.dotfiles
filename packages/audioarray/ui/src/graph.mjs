@@ -28,7 +28,7 @@ export function validateConnection(topology, patches, connection, replacing) {
 		!source?.outputs.some(p => p.id === connection.sourceHandle && p.editable) ||
 		!target?.inputs.some(p => p.id === connection.targetHandle && p.editable)
 	)
-		return "This is a fixed pipeline or external policy, not an editable audio connection.";
+		return "This port is part of a fixed pipeline, not an editable audio connection.";
 	const remaining = patches.filter(p => !replacing || key(p.source, p.destination) !== replacing);
 	if (connection.source === connection.target) return "A bus cannot feed itself.";
 	if (remaining.some(p => p.source === source.id && p.destination === target.id))

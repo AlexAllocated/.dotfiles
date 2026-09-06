@@ -8,8 +8,9 @@ React Flow/ELK canvas, and supported editing are implemented; see the
 
 The detailed design below retains longer-term targets, not a claim that every
 future gate is complete. Current boundaries: undo history is session-local;
-device selection retains the existing Windows coordinator; OBS/app connections
-are explicitly unverified external policies; no arbitrary DSP insertion or Linux
+device selection retains the existing Windows coordinator; since September 6,
+OBS/app placeholder nodes and illustrative edges are excluded so the canvas shows
+only AudioArray-owned routes, devices, and processing; no arbitrary DSP insertion or Linux
 audio backend has been added. Automated native and isolated browser tests cover
 the first three phases. Native hotplug/Bluetooth/VR and game/stream soak testing
 are separate follow-up verification, not prerequisites for another permission

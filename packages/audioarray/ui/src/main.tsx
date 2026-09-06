@@ -73,7 +73,7 @@ const SignalNode = memo(function SignalNode({ data, selected }: any) {
 			}
 		>
 			<header className="node-drag">
-				<small>{n.kind === "external" ? "EXTERNAL POLICY" : n.kind.toUpperCase()}</small>
+				<small>{n.kind.toUpperCase()}</small>
 				<h3>{n.title}</h3>
 			</header>
 			<p>{n.detail}</p>
@@ -196,12 +196,11 @@ const SignalEdge = memo(function SignalEdge(props: any) {
 			subscribers.delete(render);
 		};
 	}, [data.edge.meter, data.online, data.reducedMotion]);
-	const policy = data.edge.kind === "policy";
 	const color =
 		colors[data.edge.source] ??
 		(data.edge.source === "noise_filter" ? colors.clean_mic : "#828cad");
 	return (
-		<g className={`wire ${data.traced ? "" : "dimmed"} ${policy ? "policy" : ""}`}>
+		<g className={`wire ${data.traced ? "" : "dimmed"}`}>
 			<BaseEdge
 				id={id}
 				path={path}
@@ -210,10 +209,7 @@ const SignalEdge = memo(function SignalEdge(props: any) {
 				style={{
 					stroke: color,
 					strokeWidth: props.selected ? 3 : 1.8,
-					strokeDasharray:
-						policy ? "6 6"
-						: data.online ? undefined
-						: "3 5"
+					strokeDasharray: data.online ? undefined : "3 5"
 				}}
 			/>
 			<path
@@ -240,7 +236,7 @@ const nodeTypes = { signal: SignalNode },
 function Console() {
 	const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
 		[nodes, setNodes] = useState<any[]>([]),
-		[selection, setSelection] = useState<string | null>("monitor"),
+		[selection, setSelection] = useState<string | null>(null),
 		[edgeSelection, setEdgeSelection] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false),
 		[message, setMessage] = useState("Connecting to engine…"),
@@ -724,7 +720,6 @@ function Console() {
 						<div className="canvas-legend">
 							<span>● Editable PCM</span>
 							<span>◇ Fixed pipeline</span>
-							<span>┄ External policy (not verified live)</span>
 							<span>→ Signal direction</span>
 						</div>
 					</main>
@@ -775,8 +770,8 @@ function Console() {
 										Disconnect route
 									</button>
 								:	<p className="notice">
-										This connection describes a fixed pipeline or an external
-										application's policy. It cannot be rewired here.
+										This connection is part of AudioArray's fixed processing or device
+										pipeline. It cannot be rewired here.
 									</p>
 								}
 							</section>

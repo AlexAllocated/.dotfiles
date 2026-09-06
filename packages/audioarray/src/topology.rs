@@ -1,4 +1,4 @@
-//! Platform-neutral canvas projection. Fixed/policy edges are not patch commands.
+//! Platform-neutral canvas projection of AudioArray-owned routes and processing.
 use crate::{GraphSnapshot, PatchConnection};
 use serde::Serialize;
 
@@ -106,15 +106,6 @@ pub fn project(
 			true,
 			false,
 		),
-		(
-			"obs",
-			"OBS Studio",
-			"external",
-			"Configured isolated stems · externally managed; session not verified",
-			None,
-			true,
-			false,
-		),
 	] {
 		nodes.push(Node {
 			id: id.into(),
@@ -216,8 +207,10 @@ pub fn project(
 			inputs,
 			outputs: if source {
 				vec![port("out", "Signal out", "output", true)]
+			} else if id == "monitor" {
+				vec![port("out", "To device", "output", false)]
 			} else {
-				vec![port("out", "To consumer", "output", false)]
+				vec![]
 			},
 			effect,
 		});
@@ -259,52 +252,6 @@ pub fn project(
 		Some("monitor"),
 		"Master output",
 	));
-	for id in ["game", "comms", "music", "clean_mic"] {
-		edges.push(edge(
-			id,
-			"obs",
-			"policy",
-			None,
-			"Configured OBS stem; external consumer",
-		));
-	}
-	for (id, title, details) in [
-		(
-			"ai_capture",
-			"ChatGPT / Codex Input",
-			"Application capture policy · no AI self-return",
-		),
-		(
-			"comms_capture",
-			"Voice App Input",
-			"Comms Send selection · no received-voice return",
-		),
-	] {
-		nodes.push(Node {
-			id: id.into(),
-			title: title.into(),
-			kind: "external",
-			detail: details.into(),
-			meter: None,
-			inputs: vec![port("in", "Capture policy", "input", false)],
-			outputs: vec![],
-			effect: None,
-		});
-	}
-	edges.push(edge(
-		"chatgpt_in",
-		"ai_capture",
-		"policy",
-		None,
-		"App input preference; explicit selection may override",
-	));
-	edges.push(edge(
-		"comms_send",
-		"comms_capture",
-		"policy",
-		None,
-		"App input preference; explicit selection may override",
-	));
 	if let Some(active) = runtime.filter(|r| r.online && r.applied_revision.is_some()) {
 		for node in &mut nodes {
 			if node.id == "physical_mic" {
@@ -316,4 +263,68 @@ pub fn project(
 		}
 	}
 	Topology { nodes, edges }
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn canvas_contains_only_owned_routes_devices_and_processing() {
+		let graph = GraphSnapshot {
+			platform: "test",
+			engine_online: false,
+			routing_ready: false,
+			sample_rate: 48000,
+			suppression: String::new(),
+			suppression_engine: String::new(),
+			suppression_enabled: false,
+			suppression_intensity: 0,
+			suppression_attenuation_limit_db: 0.0,
+			main_input: None,
+			main_output: None,
+			input_devices: vec![],
+			output_devices: vec![],
+			session_override: None,
+			session_input_override: None,
+			buses: vec![],
+			patch_sources: crate::patch_sources(),
+			patch_destinations: crate::patch_destinations(),
+			patches: vec![],
+			routes: vec![],
+			monitor_latency_ms: 0,
+			microphone_latency_ms: 0,
+		};
+		let patches = crate::PatchbayConfig::default().connections;
+		let topology = project(&graph, &patches, None);
+		assert_eq!(topology.nodes.len(), 11);
+		assert!(topology.nodes.iter().all(|n| n.kind != "external"));
+		assert_eq!(topology.edges.len(), patches.len() + 3);
+		assert_eq!(
+			topology.edges.iter().filter(|e| e.kind == "patch").count(),
+			patches.len()
+		);
+		for e in &topology.edges {
+			assert!(matches!(e.kind, "patch" | "fixed"));
+			let source = topology.nodes.iter().find(|n| n.id == e.source).unwrap();
+			let target = topology.nodes.iter().find(|n| n.id == e.target).unwrap();
+			assert!(source.outputs.iter().any(|p| p.id == e.source_handle));
+			assert!(target.inputs.iter().any(|p| p.id == e.target_handle));
+			assert_eq!(e.meter, source.meter);
+		}
+		for id in ["chatgpt_in", "comms_send"] {
+			let node = topology.nodes.iter().find(|n| n.id == id).unwrap();
+			assert!(
+				node.outputs.is_empty(),
+				"No illustrative external-consumer port"
+			);
+			assert!(node.inputs.iter().any(|p| p.editable));
+		}
+		let monitor = topology.nodes.iter().find(|n| n.id == "monitor").unwrap();
+		assert!(monitor.inputs.iter().any(|p| p.editable));
+		assert!(topology
+			.edges
+			.iter()
+			.any(|e| e.source == "monitor" && e.target == "main_output"));
+	}
 }

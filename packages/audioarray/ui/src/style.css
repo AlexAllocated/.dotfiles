@@ -489,17 +489,8 @@ output {
 	text-shadow: 0 1px 2px #000;
 	font: 9px system-ui;
 }
-.signal-node.external {
-	border-style: dashed;
-}
 .wire.dimmed {
 	opacity: 0.17;
-}
-.wire.policy {
-	opacity: 0.65;
-}
-.wire.policy.dimmed {
-	opacity: 0.12;
 }
 .wave {
 	filter: drop-shadow(0 0 2px currentColor);

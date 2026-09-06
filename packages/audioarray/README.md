@@ -184,12 +184,19 @@ The former static SVG and separate patch matrix are removed. It provides:
 - live meters, main device selectors, and temporary Quest/Moonlight override indicators;
 - NVIDIA RTX or DeepFilterNet3 selection, intensity, bypass, and temporary Clean Mic monitoring.
 
-Solid editable PCM routes, fixed mic/device plumbing, and dashed external-app
-policies have different meanings. The dashed OBS/application links describe
-configuration, not verified active sessions, and cannot be edited here. DTS and
+The canvas shows only AudioArray's actual buses, devices, processing, and routes.
+OBS, ChatGPT/Codex capture, and voice-app placeholder nodes and illustrative wires
+are deliberately excluded: those programs independently capture the VAC endpoints.
+Their existing audio configuration is not changed by what the canvas draws.
+Listening Mix remains the real patch destination that combines selected buses for
+the physical Main Output, independently of external applications' captures.
+Editable PCM routes and fixed mic/device plumbing have distinct ports. DTS and
 Atmos stay locked to their Windows endpoints. The microphone processor can be
 adjusted but is not an arbitrary movable DSP insert. Selecting a node reveals
-controls without changing audio; dragging it changes only layout.
+controls without changing audio and traces its paths; clicking empty canvas clears
+the trace. The initial overview shows all branches. Dragging a node changes only layout.
+Automatic layout uses the current nodes, ports, and edges; saved positions take
+precedence until Arrange explicitly recomputes them. Fit graph only changes the viewport.
 
 Those selectors do not create a second device-selection system. They briefly
 apply the chosen physical endpoint through Windows' normal default-device
@@ -307,8 +314,9 @@ remain independent: the hidden suppression worker publishes its actual
 post-filter waveform over a loopback-only telemetry channel, while the final
 Clean Mic meter measures its isolated VAC endpoint. ChatGPT In and Comms Send
 have their own post-mix meters, without contaminating that microphone signal.
-Main Output uses the monitor mix; unverified external policy wires have no
-invented activity. Waveform
+Main Output uses the monitor mix. External applications' capture, mute, filters,
+and recording status are not represented as nodes or inferred from bus activity.
+Silent or missing source telemetry never produces invented activity. Waveform
 samples use a fixed spatial pitch across every route,
 so short and long wires show the same oscillation density instead of squeezing
 or stretching the captured signal to fit their individual lengths.
