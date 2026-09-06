@@ -250,7 +250,7 @@ $profileValues = @(
    @("AdvOut", "RecType", "Standard"),
    @("AdvOut", "RecEncoder", "obs_nvenc_hevc_tex"),
    # Track 1 is the live stream mix. Record tracks 2-6: publish-ready mix
-   # without music, Clean Mic, Comms, Game, and Music respectively.
+   # without media, Clean Mic, Comms, Game, and Media respectively.
    @("AdvOut", "RecTracks", "62"),
    @("AdvOut", "RecFormat2", "mkv"),
    @("AdvOut", "RecFilePath", "C:\\Users\\$env:USERNAME\\Videos\\OBS"),
@@ -262,11 +262,11 @@ $profileValues = @(
    @("AdvOut", "Track5Bitrate", "320"),
    @("AdvOut", "Track6Bitrate", "320"),
    @("AdvOut", "Track1Name", "Stream Mix"),
-   @("AdvOut", "Track2Name", "Publish Mix - No Music"),
+   @("AdvOut", "Track2Name", "Publish Mix - No Media"),
    @("AdvOut", "Track3Name", "Clean Mic"),
    @("AdvOut", "Track4Name", "Comms"),
    @("AdvOut", "Track5Name", "Game"),
-   @("AdvOut", "Track6Name", "Music"),
+   @("AdvOut", "Track6Name", "Media"),
    @("Audio", "SampleRate", "48000"),
    @("Audio", "ChannelSetup", "Stereo"),
    @("Video", "BaseCX", "2560"),
@@ -414,7 +414,7 @@ function Set-CleanRecordingAudioTracks {
    Set-ObsJsonProperty -Object $settings -Name "multitrack_audio" -Value $true
 
    # Branch Output track 1 is an edit-friendly no-music mix. Tracks 2-5 are
-   # isolated Clean Mic, Comms, Game, and Music stems sourced from OBS master
+   # isolated Clean Mic, Comms, Game, and Media stems sourced from OBS master
    # tracks 3-6. The live stream independently uses OBS master track 1.
    $masterTracks = @(2, 3, 4, 5, 6)
    for ($index = 1; $index -le 6; $index++) {
@@ -558,7 +558,7 @@ if (
                -DeviceId $endpoints.game `
                -Mixers 19
             AuxAudioDevice4 = New-ObsAudioDevice `
-               -Name "AudioArray Music" `
+               -Name "AudioArray Media" `
                -Uuid "a51eb26b-e112-48d1-9d0f-995603b3ce96" `
                -DeviceId $endpoints.music `
                -Mixers 33

@@ -350,7 +350,7 @@ const { chromium } = requireRuntime("playwright");
 		await page.getByRole("button", { name: "Redo", exact: true }).click();
 		await page.waitForFunction(() => window.__TEST_REQUESTS__.length === 3);
 		await page.locator('.react-flow__node[data-id="comms_send"]').click();
-		await page.getByRole("button", { name: "Music unity", exact: true }).click();
+		await page.getByRole("button", { name: "Media unity", exact: true }).click();
 		await page.getByRole("button", { name: "Disconnect route", exact: true }).focus();
 		await page.keyboard.press("Enter");
 		await page.waitForFunction(

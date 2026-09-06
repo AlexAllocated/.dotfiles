@@ -215,7 +215,7 @@ $backingPathProperty = "{233164c8-1b2c-4c7d-bc68-b671687a2567},1"
 $names = @{
    1 = "AudioArray Game"
    2 = "AudioArray Comms In"
-   3 = "AudioArray Music"
+   3 = "AudioArray Media"
    4 = "AudioArray Clean Mic"
    5 = "AudioArray ChatGPT Out"
    6 = "AudioArray ChatGPT In"
@@ -236,7 +236,7 @@ foreach ($direction in @("Render", "Capture")) {
          continue
       }
       $currentName = [string]$properties.$friendlyNameProperty
-      if ($currentName -notmatch '^Line [1-7]$' -and $currentName -notin $names.Values -and $currentName -notin @("AudioArray ChatGPT", "AudioArray Comms", "AudioArray Discord Send")) {
+      if ($currentName -notmatch '^Line [1-7]$' -and $currentName -notin $names.Values -and $currentName -notin @("AudioArray Music", "AudioArray ChatGPT", "AudioArray Comms", "AudioArray Discord Send")) {
          continue
       }
       $backingPath = [string]$properties.$backingPathProperty

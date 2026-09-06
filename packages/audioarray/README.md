@@ -8,7 +8,7 @@ hardware patch panel:
 
 - **Game**: the Windows default for games and otherwise-unassigned applications.
 - **Comms In**: received communications from Discord, in-game chat, or other voice apps.
-- **Music**: Spotify and other music players.
+- **Media**: music, shows, movies, and other media playback.
 - **ChatGPT Out**: only ChatGPT/Codex playback.
 - **ChatGPT In**: filtered microphone + Discord incoming, sent to ChatGPT/Codex.
 - **Comms Send**: filtered microphone + ChatGPT Out, sent to any communications app.
@@ -19,11 +19,17 @@ of the driver's generic `Line N` labels:
 
 - **AudioArray Game**: normal/default playback and OBS's isolated game capture.
 - **AudioArray Comms In** (VAC 2): received communications and OBS's isolated chat capture.
-- **AudioArray Music**: music playback and OBS's isolated music capture.
+- **AudioArray Media**: media playback and OBS's isolated media capture.
 - **AudioArray ChatGPT Out** (VAC 5): AI playback only.
 - **AudioArray ChatGPT In** (VAC 6): the AI's recording input.
 - **AudioArray Comms Send** (VAC 7): outgoing communications mix for Discord, in-game chat, or other apps.
 - **AudioArray Clean Mic** (VAC 4): the pure suppressed microphone, including OBS capture.
+
+Media retains the internal `music` routing/meter key and the same VAC 3 endpoint
+IDs. The display-name migration accepts the previous AudioArray Music name and
+renames the existing endpoints in place, preserving saved routes, app selections,
+and OBS bindings. Existing custom OBS source labels may still say Music; newly
+provisioned OBS sources and track labels use Media.
 
 AudioArray makes Game the normal Windows output, Comms the Windows
 communications output, and Clean Mic the normal and communications input.
@@ -66,7 +72,7 @@ Windows audio and the VAC device. It never reboots Windows automatically.
 Subsequent runs leave a healthy seven-cable driver untouched.
 
 DTS Headphone:X is attached to the AudioArray Game render endpoint and Dolby
-Atmos for Headphones is attached to the AudioArray Music render endpoint. The
+Atmos for Headphones is attached to the AudioArray Media render endpoint. The
 spatial renderers therefore become part of those two bus signals before
 AudioArray monitors them or OBS records their isolated stems. DTS Sound Unbound,
 Dolby Access, and SoundVolumeView are declared Windows dependencies; the latter
@@ -84,7 +90,7 @@ live Game render slider and its linked VAC 1 render pin instead of repeatedly
 
 VAC playback applications write into each cable's render endpoint. AudioArray
 captures the matching recording endpoint. Its persistent patch bay sends Game,
-Comms, Music, and ChatGPT Out to Main Output by default. Clean Mic feeds both
+Comms, Media, and ChatGPT Out to Main Output by default. Clean Mic feeds both
 ChatGPT In and Comms Send; Comms also feeds ChatGPT In, while ChatGPT Out
 also feeds Comms Send. Clean Mic is source-only; both send mixes are
 destination-only. No bus can contaminate the filtered microphone or return
@@ -124,9 +130,9 @@ flowchart LR
    commsOut --> commsRender[AudioArray Comms In<br/>VAC render]
    commsRender --> commsCapture[AudioArray Comms In<br/>VAC capture]
 
-   spotify[Spotify / music apps] --> musicRender[AudioArray Music<br/>VAC render]
+   spotify[Music / shows / movies] --> musicRender[AudioArray Media<br/>VAC render]
    musicRender --> atmos[Dolby Atmos for Headphones]
-   atmos --> musicCapture[AudioArray Music<br/>VAC capture]
+   atmos --> musicCapture[AudioArray Media<br/>VAC capture]
 
    voiceAi[ChatGPT / Codex playback] --> chatgptRender[AudioArray ChatGPT Out<br/>VAC render]
    chatgptRender --> chatgptCapture[AudioArray ChatGPT Out<br/>VAC capture]
@@ -146,7 +152,7 @@ flowchart LR
    musicCapture --> patchbay
    chatgptCapture --> patchbay
    patchbay --> monitor[AudioArray monitor mix]
-   patchbay -. optional Game/Music send .-> commsSend
+   patchbay -. optional Game/Media send .-> commsSend
    monitor --> localOutput[Selected physical output]
    monitor -. session override .-> moonlight[Steam Streaming Speakers]
    monitor -. session override .-> quest[Quest Link headphones]
@@ -157,7 +163,7 @@ flowchart LR
    micCapture --> obs
    obs --> stream[Track 1: Stream Mix<br/>all four buses]
    obs --> publish[Track 2: Publish Mix<br/>no music]
-   obs --> stems[Tracks 3-6: isolated<br/>Mic / Comms / Game / Music]
+   obs --> stems[Tracks 3-6: isolated<br/>Mic / Comms / Game / Media]
 ```
 
 ## Intrepid operations console
@@ -208,10 +214,10 @@ Windows Settings. Either interface therefore produces the same durable result.
 
 Dragging an output port to an input, or using the inspector's Connect ports
 menus, adds that route without replacing other connections. Game,
-Comms, Music, ChatGPT Out, and Clean Mic are sources. Game, Comms, Music,
-ChatGPT In, Comms Send, and Main Output are destinations. Game and Music can
+Comms, Media, ChatGPT Out, and Clean Mic are sources. Game, Comms, Media,
+ChatGPT In, Comms Send, and Main Output are destinations. Game and Media can
 feed Comms Send while retaining their original OBS stems.
-Disconnecting Game, Comms, or Music from Main Output silences only that local
+Disconnecting Game, Comms, or Media from Main Output silences only that local
 monitor path. AudioArray rejects self-patches, duplicates, and direct or
 indirect feedback loops, including Comms returning to Comms Send or ChatGPT
 Out returning to ChatGPT In through another bus. Clean Mic cannot be a patch
@@ -227,7 +233,7 @@ left click restores the console; the Start-menu shortcut does the same through
 single-instance activation.
 
 In an application's device picker, choose **AudioArray Game** for ordinary
-sound, **AudioArray Comms In** for received chat, **AudioArray Music** for music,
+sound, **AudioArray Comms In** for received chat, **AudioArray Media** for media,
 **AudioArray ChatGPT Out** for AI playback, and **AudioArray Clean Mic** for
 pure microphone capture. Discord input uses **AudioArray Comms Send**;
 ChatGPT/Codex input uses **AudioArray ChatGPT In**. The Windows per-app policies
@@ -256,7 +262,7 @@ audioarray example-config
 ```
 
 Quest Link is modeled as a temporary adapter around the same graph rather than
-as another bus. Its headphones receive the complete Game/Comms/Music monitor
+as another bus. Its headphones receive the complete Game/Comms/Media monitor
 mix and its microphone temporarily replaces the raw local mic before the
 selected noise processor. Applications continue to see the stable AudioArray
 buses and Clean Mic endpoints. When the Quest session ends, AudioArray restores
@@ -267,7 +273,7 @@ The operations console can select NVIDIA AFX, DeepFilterNet3, or bypass
 suppression entirely. Intensity is a 0–100% NVIDIA ratio; on
 DeepFilterNet3 it maps to a 0–40 dB maximum attenuation range, so the tracked
 20 dB default appears as 50%. Changes are hot-reloaded by the supervised Clean
-Mic processor while the Game, Comms, and Music streams remain live.
+Mic processor while the Game, Comms, and Media streams remain live.
 Intensity changes update DeepFilterNet3 in place. NVIDIA AFX is recreated so
 the newly requested ratio is guaranteed to reach its loaded model; this rebuild
 is isolated to the Clean Mic worker and does not interrupt playback buses.

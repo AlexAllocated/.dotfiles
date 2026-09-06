@@ -854,7 +854,7 @@ pub(crate) fn levels(config: &Config, seconds: u32) -> Result<()> {
 			resolve_named_device(&host, Direction::Input, &config.cables.comms)?,
 		),
 		(
-			"Music",
+			"Media",
 			resolve_named_device(&host, Direction::Input, &config.cables.music)?,
 		),
 		(
@@ -980,7 +980,7 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 			BusSummary {
 				id: "music",
 				name: config.cables.music.clone(),
-				purpose: "Music applications",
+				purpose: "Music, shows, and movies",
 				spatial: Some("Dolby Atmos for Headphones"),
 			},
 			BusSummary {
@@ -1714,7 +1714,7 @@ fn validate_cables(host: &cpal::Host, config: &Config) -> Result<()> {
 	for (label, selector, direction) in [
 		("Game", config.cables.game.as_str(), Direction::Input),
 		("Comms", config.cables.comms.as_str(), Direction::Input),
-		("Music", config.cables.music.as_str(), Direction::Input),
+		("Media", config.cables.music.as_str(), Direction::Input),
 		("ChatGPT", config.cables.chatgpt.as_str(), Direction::Input),
 		(
 			"ChatGPT Out render",
@@ -2103,7 +2103,7 @@ fn patch_label(source: &str) -> &'static str {
 	match source {
 		"game" => "Patch Game",
 		"comms" => "Patch Comms",
-		"music" => "Patch Music",
+		"music" => "Patch Media",
 		"chatgpt" => "Patch ChatGPT Out",
 		"chatgpt_in" => "Patch ChatGPT In",
 		"comms_send" => "Patch Comms Send",

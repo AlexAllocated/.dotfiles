@@ -450,14 +450,14 @@ impl Config {
 const PATCH_SOURCES: [(&str, &str); 5] = [
 	("game", "Game"),
 	("comms", "Comms In"),
-	("music", "Music"),
+	("music", "Media"),
 	("chatgpt", "ChatGPT Out"),
 	("clean_mic", "Clean Mic"),
 ];
 const PATCH_DESTINATIONS: [(&str, &str); 6] = [
 	("game", "Game"),
 	("comms", "Comms In"),
-	("music", "Music"),
+	("music", "Media"),
 	("chatgpt_in", "ChatGPT In"),
 	("comms_send", "Comms Send"),
 	("monitor", "Main Output"),
@@ -867,6 +867,28 @@ mod tests {
 		PatchConnection, PatchbayConfig, SuppressionBackend, SuppressionTransition, DEFAULT_CONFIG,
 		MAX_SUPPRESSION_ATTENUATION_DB,
 	};
+
+	#[test]
+	fn media_display_name_preserves_the_saved_music_routing_key() {
+		let config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+		assert_eq!(
+			config.cables.music,
+			"AudioArray Media (Virtual Audio Cable)"
+		);
+		for ports in [patch_sources(), patch_destinations()] {
+			assert_eq!(
+				ports.iter().find(|p| p.id == "music").unwrap().name,
+				"Media"
+			);
+			assert!(!ports.iter().any(|p| p.id == "media"));
+		}
+		assert!(config
+			.patchbay
+			.connections
+			.iter()
+			.any(|p| p.source == "music" && p.destination == "monitor"));
+		config.validate().unwrap();
+	}
 
 	#[test]
 	fn bundled_config_defines_the_chatgpt_peer_bus() {

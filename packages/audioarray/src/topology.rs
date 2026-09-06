@@ -143,7 +143,7 @@ pub fn project(
 		),
 		(
 			"music",
-			"Music",
+			"Media",
 			"music",
 			"Media playback · VAC 03",
 			Some("Dolby Atmos · Windows endpoint effect"),
@@ -298,6 +298,15 @@ mod tests {
 		let patches = crate::PatchbayConfig::default().connections;
 		let topology = project(&graph, &patches, None);
 		assert_eq!(topology.nodes.len(), 11);
+		assert_eq!(
+			topology
+				.nodes
+				.iter()
+				.find(|n| n.id == "music")
+				.unwrap()
+				.title,
+			"Media"
+		);
 		assert!(topology.nodes.iter().all(|n| n.kind != "external"));
 		assert_eq!(topology.edges.len(), patches.len() + 3);
 		assert_eq!(

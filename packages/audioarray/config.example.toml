@@ -3,7 +3,8 @@
 [cables]
 game = "AudioArray Game (Virtual Audio Cable)"
 comms = "AudioArray Comms In (Virtual Audio Cable)"
-music = "AudioArray Music (Virtual Audio Cable)"
+# Keep the internal key stable so saved routes and app assignments survive renames.
+music = "AudioArray Media (Virtual Audio Cable)"
 chatgpt = "AudioArray ChatGPT Out (Virtual Audio Cable)"
 chatgpt_in = "AudioArray ChatGPT In (Virtual Audio Cable)"
 comms_send = "AudioArray Comms Send (Virtual Audio Cable)"
@@ -80,7 +81,7 @@ connections = [
 # These are persisted Windows per-app endpoint preferences. AudioArray applies
 # them whenever it sees the process, so reinstalls and process replacement do
 # not silently bypass the graph. Unmatched applications inherit the Windows
-# default Game bus. Only applications that belong on Comms or Music require an
+# default Game bus. Only applications that belong on Comms or Media require an
 # explicit output route.
 [[routes]]
 process = "Discord.exe"
