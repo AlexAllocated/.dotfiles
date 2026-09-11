@@ -1,10 +1,14 @@
-{ config, ... }:
+{ config, lib, ... }:
 let
   cfg = config.dotfiles;
   sourceRoot = if cfg.mutableSource != null then cfg.mutableSource else cfg.source;
 in
 {
   imports = [ ./core.nix ];
+
+  config.home.sessionVariables = lib.mkIf cfg.isWsl {
+    BUMBLEBEE_OP_BIN = "/mnt/c/Users/${config.home.username}/AppData/Local/Microsoft/WinGet/Links/op.exe";
+  };
 
   config.home.file = {
     ".local/share/dotfiles/windows/NvimWSL.cs".source = sourceRoot + "/scripts/windows/NvimWSL.cs";
