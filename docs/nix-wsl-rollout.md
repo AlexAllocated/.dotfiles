@@ -279,6 +279,19 @@ successfully from both clients and is explicitly approved for cleanup.
 
 ## 1Password model
 
+The Windows app and CLI are both declared in `platforms/windows/winget.json`
+(`AgileBits.1Password` and `AgileBits.1Password.CLI`). Native PowerShell and
+Codex Desktop use `op.exe`; a separate WSL CLI installation is not required
+for native Windows callers. Verify installation with `Get-Command op.exe`
+and `op.exe --version`.
+
+For vault access, unlock the Windows app and enable **Settings > Developer >
+Integrate with 1Password CLI**, then run `op.exe signin` and approve any
+Windows Hello prompt. Verify authentication with `op.exe whoami`. CLI
+integration is separate from the SSH agent setting below; having an installed
+CLI or a working SSH agent does not establish a vault session. Keep sign-in
+interactive rather than running it during shell startup or package reconciliation.
+
 The Windows 1Password app owns SSH authentication for WSL. In 1Password, turn on
 **Settings > Developer > Use the SSH Agent** and keep 1Password running in the
 notification area. The native Windows OpenSSH Authentication Agent service must
