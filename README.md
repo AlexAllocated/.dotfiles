@@ -145,9 +145,25 @@ exec zsh -l
 
 The tracked `platforms/macos-managed/Brewfile` declares host software and
 `platforms/macos/Brewfile` declares shared GUI apps. Homebrew owns global tools,
-runtimes, Neovide, WezTerm, 1Password, and the Codex desktop app; Bun owns
-npm-registry CLIs such as Codex. Mise is available for project-local runtime
+runtimes, Neovide, WezTerm, 1Password, and Claude Code. Claude Code is the only
+AI tool installed by the company profile; `platforms/macos-personal/Brewfile`
+restricts Codex desktop to personal macOS, and company Neovim excludes AI extras (Copilot and Sidekick). Its plugin
+pins are tracked separately in `nvim/lazy-lock.macos-managed.json`. Managed
+updates do not fetch Codex releases. Mise is available for project-local runtime
 versions but does not own global tools.
+
+Run `claude auth status` to verify your company account; use `claude auth login`
+if sign-in is needed. Authentication stays machine-local. Before uninstalling an
+existing Codex installation, archive its conversations with:
+
+```sh
+python3 scripts/codex/archive.py --source ~/.codex --destination ~/Archives/codex-history
+```
+
+The archive contains original logs, readable transcripts, a searchable index,
+memories, and verified database snapshots. Credentials and runtime caches are
+excluded. Add its README path to `~/.claude/CLAUDE.md` for discovery by Claude.
+Re-run the export after closing Codex to capture the final conversation events.
 
 Applying this profile removes services, containers, and host runtime files left
 by the retired macOS Docker workshop. Its home and builder volumes are preserved
