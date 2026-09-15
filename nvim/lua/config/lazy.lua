@@ -1,3 +1,5 @@
+local managed_macos = require("config.profile").managed_macos
+
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
 	local lazyrepo = "https://github.com/folke/lazy.nvim.git"
@@ -24,7 +26,7 @@ local function resolve_lockfile()
 	if root == nil or root == "" then
 		root = vim.fs.joinpath(vim.fn.expand("~"), ".dotfiles")
 	end
-	local tracked = vim.fs.joinpath(root, "nvim", "lazy-lock.json")
+	local tracked = vim.fs.joinpath(root, "nvim", managed_macos and "lazy-lock.macos-managed.json" or "lazy-lock.json")
 	if vim.fn.filewritable(tracked) == 1 then
 		return tracked
 	end
@@ -79,6 +81,17 @@ local function resolve_lazyvim_json()
 end
 
 vim.g.lazyvim_json = resolve_lazyvim_json()
+if managed_macos then
+	-- Keep company machines free of AI extras, including Copilot-backed Sidekick.
+	local config = vim.json.decode(table.concat(vim.fn.readfile(vim.g.lazyvim_json), "\n"))
+	config.extras = vim.tbl_filter(function(extra)
+		return not vim.startswith(extra, "lazyvim.plugins.extras.ai.")
+	end, config.extras)
+	local target = vim.fs.joinpath(vim.fn.stdpath("state"), "lazyvim.macos-managed.json")
+	vim.fn.mkdir(vim.fs.dirname(target), "p")
+	vim.fn.writefile({ vim.json.encode(config) }, target)
+	vim.g.lazyvim_json = target
+end
 
 require("lazy").setup({
 	lockfile = resolve_lockfile(),
