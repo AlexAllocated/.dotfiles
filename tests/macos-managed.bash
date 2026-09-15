@@ -33,4 +33,19 @@ detect_profile() { printf 'macos\n'; }
 [[ "$(neovim_lock_relative)" == nvim/lazy-lock.json ]]
 [[ "$(prepare_update_candidate /unused /unused)" == 'codex release requested' ]]
 
+filtered="$(
+	DOTFILES_REPO_ROOT="$REPO_ROOT" lua - <<'LUA'
+package.path = os.getenv("DOTFILES_REPO_ROOT") .. "/nvim/lua/?.lua;" .. package.path
+local kept = require("config.extras").filter({
+	"lazyvim.plugins.extras.ai.copilot",
+	"lazyvim.plugins.extras.ai.sidekick",
+	"lazyvim.plugins.extras.lang.json",
+	"lazyvim.plugins.extras.lang.nix",
+	"lazyvim.plugins.extras.lang.rust",
+})
+print(table.concat(kept, " "))
+LUA
+)"
+[[ "$filtered" == 'lazyvim.plugins.extras.lang.json lazyvim.plugins.extras.lang.rust' ]]
+
 printf 'Company and personal macOS package/update paths passed\n'

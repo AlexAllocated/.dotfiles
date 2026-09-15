@@ -118,6 +118,7 @@
               bash "scripts/nixos/$script.sh" --help >/dev/null
             done
             bash tests/dotctl.bash
+            bash tests/macos-managed.bash
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
             python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py

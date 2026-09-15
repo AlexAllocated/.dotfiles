@@ -82,11 +82,10 @@ end
 
 vim.g.lazyvim_json = resolve_lazyvim_json()
 if managed_macos then
-	-- Keep company machines free of AI extras, including Copilot-backed Sidekick.
+	-- Keep company machines free of AI extras, including Copilot-backed Sidekick,
+	-- and of extras whose language servers cannot build without Nix.
 	local config = vim.json.decode(table.concat(vim.fn.readfile(vim.g.lazyvim_json), "\n"))
-	config.extras = vim.tbl_filter(function(extra)
-		return not vim.startswith(extra, "lazyvim.plugins.extras.ai.")
-	end, config.extras)
+	config.extras = require("config.extras").filter(config.extras)
 	local target = vim.fs.joinpath(vim.fn.stdpath("state"), "lazyvim.macos-managed.json")
 	vim.fn.mkdir(vim.fs.dirname(target), "p")
 	vim.fn.writefile({ vim.json.encode(config) }, target)
