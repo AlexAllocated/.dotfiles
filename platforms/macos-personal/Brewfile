@@ -1,0 +1,2 @@
+# Personal Macs only; excluded from the company profile.
+cask "codex-app"

@@ -296,6 +296,7 @@ ensure_macos_desktop_apps() {
 	ensure_homebrew
 	migrate_macos_cask_ownership
 	install_brewfile "$brewfile"
+	install_brewfile "$source_root/platforms/macos-personal/Brewfile"
 	load_homebrew_shellenv
 }
 
@@ -317,20 +318,6 @@ ensure_macos_packages() {
 		update_macos_wezterm_nightly
 	fi
 	load_homebrew_shellenv
-}
-
-ensure_bun_codex() {
-	local update="${1:-0}"
-	local bun_bin global_bin
-	bun_bin="$(command -v bun)"
-	global_bin="$("$bun_bin" pm bin -g 2>/dev/null || printf '%s/.bun/bin\n' "$HOME")"
-	if [[ "$update" == "1" || ! -x "$global_bin/codex" ]]; then
-		printf 'Installing @openai/codex@latest with Bun...\n'
-		"$bun_bin" add --global @openai/codex@latest
-	fi
-	mkdir -p "$HOME/.local/bin"
-	ln -sfn "$global_bin/codex" "$HOME/.local/bin/codex"
-	"$global_bin/codex" --version >/dev/null
 }
 
 onepassword_agent_socket() {
@@ -495,7 +482,6 @@ apply_macos_managed() {
 	write_mise_config
 	ensure_macos_packages "$update"
 	ensure_macos_lan_mouse
-	ensure_bun_codex "$update"
 	link_1password_agent
 	prime_neovim
 	printf 'macos-managed is ready. Open a new terminal or run: exec zsh -l\n'

@@ -44,10 +44,18 @@ stage_repo() {
 		"$REPO_ROOT/" "$destination/"
 }
 
+neovim_lock_relative() {
+	if [[ "$(detect_profile)" == "macos-managed" ]]; then
+		printf 'nvim/lazy-lock.macos-managed.json\n'
+	else
+		printf 'nvim/lazy-lock.json\n'
+	fi
+}
+
 update_neovim_candidate() {
 	local candidate="$1"
 	local runtime="$2/nvim"
-	[[ -f "$candidate/nvim/lazy-lock.json" ]] || return 0
+	[[ -f "$candidate/$(neovim_lock_relative)" ]] || return 0
 	if ! command_exists nvim; then
 		printf 'Neovim is unavailable; leaving its lockfile unchanged.\n'
 		return 0
@@ -57,7 +65,7 @@ update_neovim_candidate() {
 	printf 'Refreshing Neovim plugin pins in an isolated runtime...\n'
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
 		DOTFILES_NVIM_PIN_UPDATE=1 \
-		DOTFILES_NVIM_LOCKFILE="$candidate/nvim/lazy-lock.json" \
+		DOTFILES_NVIM_LOCKFILE="$candidate/$(neovim_lock_relative)" \
 		XDG_CONFIG_HOME="$runtime/config" \
 		XDG_DATA_HOME="$runtime/data" \
 		XDG_STATE_HOME="$runtime/state" \
@@ -140,7 +148,7 @@ validate_update_candidate() {
 accept_candidate_locks() {
 	local candidate="$1"
 	local path
-	for path in flake.lock nvim/lazy-lock.json pins/codex.json; do
+	for path in flake.lock "$(neovim_lock_relative)" pins/codex.json; do
 		if [[ -f "$candidate/$path" ]]; then
 			cp "$candidate/$path" "$REPO_ROOT/$path"
 		fi
@@ -149,8 +157,8 @@ accept_candidate_locks() {
 
 accept_candidate_neovim_lock() {
 	local candidate="$1"
-	if [[ -f "$candidate/nvim/lazy-lock.json" ]]; then
-		cp "$candidate/nvim/lazy-lock.json" "$REPO_ROOT/nvim/lazy-lock.json"
+	if [[ -f "$candidate/$(neovim_lock_relative)" ]]; then
+		cp "$candidate/$(neovim_lock_relative)" "$REPO_ROOT/$(neovim_lock_relative)"
 	fi
 }
 
@@ -162,7 +170,7 @@ sync_live_neovim_runtime() (
 	ln -s "$REPO_ROOT/nvim" "$config_home/nvim"
 	printf 'Applying accepted Neovim pins to the active runtime...\n'
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
-		DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/nvim/lazy-lock.json" \
+		DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/$(neovim_lock_relative)" \
 		XDG_CONFIG_HOME="$config_home" \
 		GIT_CONFIG_COUNT=1 \
 		GIT_CONFIG_KEY_0=advice.detachedHead \
@@ -178,7 +186,9 @@ prepare_update_candidate() {
 	local candidate="$1"
 	local work="$2"
 	stage_repo "$candidate"
-	update_codex_candidate "$candidate" "$work"
+	if [[ "$(detect_profile)" != "macos-managed" ]]; then
+		update_codex_candidate "$candidate" "$work"
+	fi
 	if command_exists nix; then
 		printf 'Refreshing flake inputs in a staging checkout...\n'
 		nix flake update --flake "path:$candidate"
