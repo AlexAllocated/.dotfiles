@@ -19,6 +19,9 @@ toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[dev-dependencies]
+crossbeam-queue = "0.3"
+
 [target.'cfg(windows)'.dependencies]
 cpal = "0.16"
 crossbeam-queue = "0.3"

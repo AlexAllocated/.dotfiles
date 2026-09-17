@@ -18,7 +18,7 @@ use serde::Serialize;
 use tauri::{
 	menu::{Menu, MenuItem},
 	tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-	Manager, RunEvent, WindowEvent,
+	Emitter, Manager, RunEvent, WindowEvent,
 };
 
 #[cfg(windows)]
@@ -29,23 +29,24 @@ use windows::core::w;
 
 #[cfg(windows)]
 use windows::Win32::{
-	Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE},
+	Foundation::{
+		CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, WAIT_FAILED, WAIT_OBJECT_0,
+	},
 	System::{
 		JobObjects::{
 			AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
 			SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
 			JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 		},
-		Threading::CreateMutexW,
+		Threading::{CreateEventW, CreateMutexW, SetEvent, WaitForSingleObject},
 	},
-	UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE},
 };
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[cfg(windows)]
-struct InstanceGuard(HANDLE);
+struct InstanceGuard(HANDLE, HANDLE);
 
 #[cfg(windows)]
 impl InstanceGuard {
@@ -54,20 +55,27 @@ impl InstanceGuard {
 			// Stable across the AudioArray rename: never run both supervisors.
 			let mutex = CreateMutexW(None, false, w!("Local\\HiveTech.AudioArray"))
 				.map_err(|error| std::io::Error::other(error.to_string()))?;
-			if GetLastError() != ERROR_ALREADY_EXISTS {
-				return Ok(Some(Self(mutex)));
+			let primary = GetLastError() != ERROR_ALREADY_EXISTS;
+			let show = CreateEventW(
+				None,
+				false,
+				false,
+				w!("Local\\HiveTech.AudioArray.ShowWindow"),
+			)
+			.map_err(|error| {
+				let _ = CloseHandle(mutex);
+				std::io::Error::other(error.to_string())
+			})?;
+			if primary {
+				return Ok(Some(Self(mutex, show)));
 			}
 
 			let _ = CloseHandle(mutex);
-			for _ in 0..20 {
-				let window = FindWindowW(None, w!("AMPS / LCARS 47-A"));
-				if window.0 != 0 {
-					let _ = ShowWindow(window, SW_RESTORE);
-					let _ = SetForegroundWindow(window);
-					break;
-				}
-				thread::sleep(Duration::from_millis(100));
-			}
+			// Never reveal a hidden Tao/Tauri window with raw ShowWindow: that
+			// bypasses the framework's visibility state used by close-to-tray.
+			let signalled = SetEvent(show);
+			let _ = CloseHandle(show);
+			signalled.map_err(|error| std::io::Error::other(error.to_string()))?;
 			Ok(None)
 		}
 	}
@@ -78,6 +86,7 @@ impl Drop for InstanceGuard {
 	fn drop(&mut self) {
 		unsafe {
 			let _ = CloseHandle(self.0);
+			let _ = CloseHandle(self.1);
 		}
 	}
 }
@@ -124,6 +133,7 @@ impl Drop for EngineJob {
 struct EngineControl {
 	stop: AtomicBool,
 	restart: AtomicBool,
+	stopped: AtomicBool,
 }
 
 impl EngineControl {
@@ -131,7 +141,14 @@ impl EngineControl {
 		Self {
 			stop: AtomicBool::new(false),
 			restart: AtomicBool::new(false),
+			stopped: AtomicBool::new(false),
 		}
+	}
+}
+struct SupervisorFinished(Arc<EngineControl>);
+impl Drop for SupervisorFinished {
+	fn drop(&mut self) {
+		self.0.stopped.store(true, Ordering::Release);
 	}
 }
 
@@ -140,7 +157,7 @@ struct UiState {
 	meters: Arc<RwLock<Vec<MeterReading>>>,
 	engine: Arc<EngineControl>,
 	clean_mic_monitor: Mutex<Option<amps::CleanMicMonitor>>,
-	phone: Arc<amps::phone::Service>,
+	phone: Arc<amps::phone::Client>,
 }
 
 fn load_config(state: &UiState) -> Result<amps::Config, String> {
@@ -215,8 +232,16 @@ fn meter_snapshot(state: tauri::State<'_, UiState>) -> Result<Vec<MeterReading>,
 }
 
 #[tauri::command]
-fn select_main_output(endpoint_id: String) -> Result<(), String> {
-	amps::select_main_output(&endpoint_id).map_err(|error| error.to_string())
+async fn select_main_output(
+	endpoint_id: String,
+	state: tauri::State<'_, UiState>,
+) -> Result<(), String> {
+	let config = load_config(&state)?;
+	tauri::async_runtime::spawn_blocking(move || {
+		amps::select_main_output(&config, &endpoint_id).map_err(|error| error.to_string())
+	})
+	.await
+	.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -258,6 +283,22 @@ fn show_main(app: &tauri::AppHandle) {
 	}
 }
 
+#[cfg(windows)]
+fn listen_for_show(event: isize, app: tauri::AppHandle, control: Arc<EngineControl>) {
+	thread::spawn(move || {
+		while !control.stop.load(Ordering::Acquire) {
+			let result = unsafe { WaitForSingleObject(HANDLE(event), 1000) };
+			if result == WAIT_FAILED {
+				break;
+			}
+			if result == WAIT_OBJECT_0 {
+				let target = app.clone();
+				let _ = app.run_on_main_thread(move || show_main(&target));
+			}
+		}
+	});
+}
+
 fn engine_log_path() -> PathBuf {
 	std::env::var_os("LOCALAPPDATA")
 		.map(PathBuf::from)
@@ -294,6 +335,7 @@ fn supervise_engine(config_path: PathBuf, control: Arc<EngineControl>) {
 	thread::Builder::new()
 		.name("amps-engine-supervisor".into())
 		.spawn(move || {
+			let _finished = SupervisorFinished(control.clone());
 			let log_path = engine_log_path();
 			if let Some(parent) = log_path.parent() {
 				let _ = std::fs::create_dir_all(parent);
@@ -337,8 +379,10 @@ fn supervise_engine(config_path: PathBuf, control: Arc<EngineControl>) {
 					if control.stop.load(Ordering::Acquire)
 						|| control.restart.swap(false, Ordering::AcqRel)
 					{
+						amps::phone::quiesce(&config_path);
 						let _ = child.kill();
 						let _ = child.wait();
+						amps::phone::disable_native_listen(&config_path);
 						break;
 					}
 					match child.try_wait() {
@@ -378,7 +422,7 @@ fn main() {
 	let config_path =
 		amps::default_config_path().expect("AMPS could not determine its configuration path");
 	let engine = Arc::new(EngineControl::new());
-	let phone = Arc::new(amps::phone::Service::start(&config_path));
+	let phone = Arc::new(amps::phone::Client::new(&config_path));
 	let meter_phone = phone.clone();
 	let meter_engine = engine.clone();
 
@@ -392,16 +436,7 @@ fn main() {
 			let mut next_rebuild = Instant::now();
 			while !meter_engine.stop.load(Ordering::Acquire) {
 				if Instant::now() >= next_rebuild {
-					let mut phone_output = None;
 					if let Ok(config) = amps::Config::load(&meter_config_path) {
-						if meter_phone.snapshot().wanted {
-							if let Ok(graph) = amps::graph_snapshot(&config) {
-								phone_output = amps::phone::applied_output(
-									&graph,
-									amps::control::status(&meter_config_path).ok().as_ref(),
-								);
-							}
-						}
 						let rebuild = probe.as_ref().is_none_or(|current: &amps::MeterProbe| {
 							!current.is_current(&config).unwrap_or(false)
 						});
@@ -412,7 +447,6 @@ fn main() {
 							probe = amps::MeterProbe::new(&config).ok();
 						}
 					}
-					meter_phone.output(phone_output);
 					next_rebuild = Instant::now() + Duration::from_secs(2);
 				}
 				if let Some(probe) = &mut probe {
@@ -429,7 +463,6 @@ fn main() {
 		.expect("AMPS could not start its meter service");
 
 	let shutdown = engine.clone();
-	let shutdown_phone = phone.clone();
 	let setup_engine = engine.clone();
 	let setup_config_path = config_path.clone();
 	let app = tauri::Builder::default()
@@ -459,32 +492,43 @@ fn main() {
 					if matches!(
 						event,
 						TrayIconEvent::Click {
+							button: MouseButton::Right,
+							button_state: MouseButtonState::Up,
+							..
+						}
+					) {
+						let _ = tray.app_handle().emit("amps-ui-feedback", "search");
+					}
+					if matches!(
+						event,
+						TrayIconEvent::Click {
 							button: MouseButton::Left,
 							button_state: MouseButtonState::Up,
 							..
 						}
 					) {
+						let _ = tray.app_handle().emit("amps-ui-feedback", "intrepid-key");
 						show_main(tray.app_handle());
 					}
 				})
 				.build(app)?;
-			if !start_hidden {
-				show_main(app.handle());
-			}
 			Ok(())
 		})
 		.on_menu_event(|app, event| match event.id().as_ref() {
-			"show" => show_main(app),
+			"show" => {
+				let _ = app.emit("amps-ui-feedback", "intrepid-key");
+				show_main(app);
+			}
 			"restart" => {
+				let _ = app.emit("amps-ui-feedback", "confirm");
 				let state = app.state::<UiState>();
 				stop_clean_mic_monitor(&state);
-				state.phone.restart();
 				state.engine.restart.store(true, Ordering::Release);
 			}
 			"exit" => {
+				let _ = app.emit("amps-ui-feedback", "key-02");
 				let state = app.state::<UiState>();
 				stop_clean_mic_monitor(&state);
-				state.engine.stop.store(true, Ordering::Release);
 				app.exit(0);
 			}
 			_ => {}
@@ -492,8 +536,13 @@ fn main() {
 		.on_window_event(|window, event| {
 			if let WindowEvent::CloseRequested { api, .. } = event {
 				api.prevent_close();
-				stop_clean_mic_monitor(&window.state::<UiState>());
+				let _ = window.emit("amps-ui-feedback", "key-02");
 				let _ = window.hide();
+				// Device teardown must not block the native window event loop.
+				let app = window.app_handle().clone();
+				tauri::async_runtime::spawn_blocking(move || {
+					stop_clean_mic_monitor(&app.state::<UiState>())
+				});
 			}
 		})
 		.invoke_handler(tauri::generate_handler![
@@ -508,10 +557,25 @@ fn main() {
 		])
 		.build(tauri::generate_context!())
 		.expect("error while building AMPS interface");
-	app.run(move |_app, event| {
+	app.run(move |app, event| {
+		if matches!(event, RunEvent::Ready) {
+			#[cfg(windows)]
+			listen_for_show(_instance.1 .0, app.clone(), shutdown.clone());
+			if !start_hidden {
+				show_main(app);
+			}
+		}
 		if matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
+			if !shutdown.stop.load(Ordering::Acquire) {
+				let state = app.state::<UiState>();
+				shutdown.stop.store(true, Ordering::Release);
+				let until = Instant::now() + Duration::from_secs(3);
+				while !shutdown.stopped.load(Ordering::Acquire) && Instant::now() < until {
+					thread::sleep(Duration::from_millis(20));
+				}
+				amps::phone::disable_native_listen(&state.config_path);
+			}
 			shutdown.stop.store(true, Ordering::Release);
-			shutdown_phone.stop();
 		}
 	});
 }

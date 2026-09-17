@@ -45,7 +45,7 @@ enum Command {
 	Doctor,
 	/// List the audio endpoints visible to AMPS.
 	Devices,
-	/// Select a temporary Windows playback endpoint for the complete bus mix.
+	/// Select AMPS's listening output without changing physical Windows defaults.
 	SelectOutput {
 		#[arg(value_name = "ENDPOINT")]
 		endpoint: String,
@@ -152,7 +152,7 @@ fn main() -> Result<()> {
 				amps::run(config, config_path, stop)
 			}
 			Command::Doctor => amps::doctor(&config),
-			Command::SelectOutput { endpoint } => amps::select_main_output(&endpoint),
+			Command::SelectOutput { endpoint } => amps::select_main_output(&config, &endpoint),
 			Command::SelectInput { endpoint } => amps::select_main_input(&endpoint),
 			Command::Endpoints => amps::print_cable_endpoints(&config),
 			Command::Benchmark { seconds } => amps::benchmark(&config, seconds),

@@ -27,11 +27,15 @@ import ELK from "elkjs/lib/elk-api.js";
 import workerUrl from "elkjs/lib/elk-worker.min.js?url";
 import "@xyflow/react/dist/style.css";
 import "./style.css";
+import { createFeedback, installInteractionFeedback } from "./feedback.mjs";
+import { selectDevice } from "./device-selection.mjs";
 import {
 	colors,
 	key,
+	edgeRoute,
+	connectionRoute,
 	validateConnection,
-	trace,
+	focusTrace,
 	waveformPoints,
 	loadLayout,
 	reconcilePositions
@@ -40,7 +44,15 @@ import type { GraphNode, GraphEdge, Snapshot, Meter } from "./model";
 
 declare global {
 	interface Window {
-		__TAURI__?: { core: { invoke: (cmd: string, args?: any) => Promise<any> } };
+		__TAURI__?: {
+			core: { invoke: (cmd: string, args?: any) => Promise<any> };
+			event?: {
+				listen: (
+					name: string,
+					callback: (event: { payload: string }) => void
+				) => Promise<() => void>;
+			};
+		};
 		__AMPS_TEST__?: { invoke: (cmd: string, args?: any) => Promise<any> };
 	}
 }
@@ -78,7 +90,7 @@ const SignalNode = memo(function SignalNode({ data, selected }: any) {
 	}, [n.id, n.inputs.length, n.outputs.length, updateHandles]);
 	return (
 		<article
-			className={`signal-node ${selected ? "chosen" : ""} ${n.kind}`}
+			className={`signal-node ${selected ? "chosen" : ""} ${data.dimmed ? "dimmed" : ""} ${n.kind}`}
 			style={
 				{
 					"--signal": colors[n.id] ?? (n.kind === "processor" ? "#ffbb33" : "#828cad"),
@@ -269,12 +281,35 @@ function Console() {
 	const [noise, setNoise] = useState({ enabled: true, intensity: 50, engine: "nvidia_afx" }),
 		[noiseDirty, setNoiseDirty] = useState(false),
 		[devicePending, setDevicePending] = useState<string | null>(null);
+	const [confirmation, setConfirmation] = useState<{ edit: any; message: string } | null>(null);
+	const [feedback] = useState(() => createFeedback({ muted }));
+	const consoleRoot = useRef<HTMLDivElement>(null);
+	const sound = useCallback((name: string) => feedback.play(name), [feedback]);
+	useEffect(() => {
+		const remove = installInteractionFeedback(consoleRoot.current, feedback);
+		let disposed = false;
+		let unlisten: (() => void) | undefined;
+		void window.__TAURI__?.event
+			?.listen("amps-ui-feedback", event => sound(event.payload))
+			.then(off => {
+				if (disposed) off();
+				else unlisten = off;
+			})
+			.catch(() => {});
+		return () => {
+			disposed = true;
+			remove();
+			unlisten?.();
+			feedback.stop();
+		};
+	}, [feedback, sound]);
 	const flow = useReactFlow(),
 		reconnecting = useRef<GraphEdge | null>(null),
 		snapshotRef = useRef<Snapshot | null>(null),
 		busyRef = useRef(false),
 		positions = useRef(loadLayout(localStorage)?.positions ?? {}),
-		lastTopology = useRef("");
+		lastTopology = useRef(""),
+		layoutGeneration = useRef(0);
 	const refresh = useCallback(async () => {
 		if (!invoke) return;
 		const next: Snapshot = await invoke("routing_snapshot");
@@ -286,28 +321,20 @@ function Console() {
 		action: string;
 		deviceId?: string;
 		autoConnect?: boolean;
-		bufferMs?: number;
 	}) => {
 		if (!invoke || phonePending) return;
 		setPhonePending(true);
 		try {
 			await invoke("phone_control", { request });
 			await refresh();
+			sound("confirm");
 		} catch (e) {
 			setError(String(e));
+			sound("denied");
 		} finally {
 			setPhonePending(false);
 		}
 	};
-	const sound = useCallback(
-		(name: string) => {
-			if (muted) return;
-			const audio = new Audio(`./audio/${name}.mp3`);
-			audio.volume = 0.2;
-			void audio.play().catch(() => {});
-		},
-		[muted]
-	);
 	useEffect(() => {
 		const listener = () =>
 			setReducedMotion(matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -381,6 +408,7 @@ function Console() {
 	const online = !!snapshot?.runtime?.online && snapshot.runtime.appliedRevision !== null;
 	const layout = useCallback(
 		async (topology: Snapshot["topology"], reset = false) => {
+			const generation = ++layoutGeneration.current;
 			const children = topology.nodes.map(n => ({
 				id: n.id,
 				width: 260,
@@ -419,6 +447,7 @@ function Console() {
 					targets: [`${e.target}:${e.targetHandle}:in`]
 				}))
 			});
+			if (generation !== layoutGeneration.current) return;
 			positions.current = reconcilePositions(result.children, reset ? {} : positions.current);
 			setNodes(
 				topology.nodes.map(n => {
@@ -451,10 +480,10 @@ function Console() {
 			void layout(snapshot.topology).catch(e => setError(`Layout: ${e}`));
 		} else {
 			setNodes(current =>
-				current.map(n => ({
-					...n,
-					data: { ...n.data, node: snapshot.topology.nodes.find(x => x.id === n.id), busy }
-				}))
+				current.flatMap(n => {
+					const node = snapshot.topology.nodes.find(x => x.id === n.id);
+					return node ? [{ ...n, data: { ...n.data, node, busy } }] : [];
+				})
 			);
 		}
 	}, [snapshot, layout, busy]);
@@ -501,30 +530,41 @@ function Console() {
 				s.topology,
 				s.runtime?.patches ?? s.graph.patches,
 				connection,
-				replacing ? key(replacing.source, replacing.target) : undefined
+				replacing ? key(replacing.source, edgeRoute(replacing).destination) : undefined
 			);
 			if (issue) {
 				setError(issue);
 				sound("denied");
 				return;
 			}
-			void transact(
+			const edit =
 				replacing ?
 					{
 						kind: "replace",
-						old: { source: replacing.source, destination: replacing.target },
-						new: { source: connection.source, destination: connection.target }
+						old: edgeRoute(replacing),
+						new: connectionRoute(connection, replacing)
 					}
-				:	{ kind: "connect", source: connection.source, destination: connection.target }
-			);
+				:	{ kind: "connect", ...connectionRoute(connection) };
+			void transact(edit);
 		},
 		[transact, sound]
 	);
 	const selected = snapshot?.topology.nodes.find(n => n.id === selection),
 		selectedEdge = snapshot?.topology.edges.find(e => e.id === edgeSelection);
 	const highlighted = useMemo(
-		() => (snapshot ? trace(snapshot.topology, selection) : new Set()),
-		[snapshot?.topology, selection]
+		() => focusTrace(snapshot?.topology ?? { nodes: [], edges: [] }, selection, edgeSelection),
+		[snapshot?.topology, selection, edgeSelection]
+	);
+	const displayedNodes = useMemo(
+		() =>
+			nodes.map(n => ({
+				...n,
+				data: {
+					...n.data,
+					dimmed: highlighted.nodeIds !== null && !highlighted.nodeIds.has(n.id)
+				}
+			})),
+		[nodes, highlighted]
 	);
 	const edges = useMemo(
 		() =>
@@ -544,7 +584,7 @@ function Console() {
 				data: {
 					edge: e,
 					lane: (index + 1) / (all.length + 1),
-					traced: edgeSelection ? e.id === edgeSelection : highlighted.has(e.id),
+					traced: highlighted.edgeIds.has(e.id),
 					online,
 					reducedMotion
 				},
@@ -556,8 +596,7 @@ function Console() {
 		if (selectedEdge?.kind === "patch")
 			void transact({
 				kind: "disconnect",
-				source: selectedEdge.source,
-				destination: selectedEdge.target
+				...edgeRoute(selectedEdge)
 			});
 	}, [selectedEdge, transact]);
 	useEffect(() => {
@@ -578,32 +617,39 @@ function Console() {
 		return () => window.removeEventListener("keydown", keyboard);
 	}, [transact, selectedEdge, remove]);
 	const device = async (direction: "input" | "output", id: string) => {
+		if (devicePending || !invoke) return;
+		const options = direction === "input" ? inputOptions : outputOptions;
+		const desired = options.find(d => d.id === id);
+		if (!desired) return;
 		setDevicePending(direction);
 		setError("");
 		try {
-			await invoke(direction === "input" ? "select_main_input" : "select_main_output", {
-				endpointId: id
-			});
-			setMessage("Device preference sent; waiting for active binding…");
-			await refresh();
+			setMessage(`Switching Main ${direction} to ${desired.name}…`);
+			await selectDevice({ direction, id, name: desired.name, invoke, refresh });
+			setMessage(`Main ${direction}: ${desired.name}`);
 			sound("confirm");
 		} catch (e) {
 			setError(String(e));
+			sound("denied");
 		} finally {
 			setDevicePending(null);
 		}
 	};
 	const inputOptions = snapshot?.graph.inputDevices ?? [],
 		outputOptions = snapshot?.graph.outputDevices ?? [];
+	const addedDevices = snapshot?.runtime?.devices ?? snapshot?.graph.devices ?? [];
 	const deviceValue = (direction: string) => {
 		const options = direction === "input" ? inputOptions : outputOptions,
 			actual =
 				direction === "input" ? snapshot?.runtime?.inputName : snapshot?.runtime?.outputName;
-		return options.find(p => p.name === actual)?.id ?? "";
+		return options.find(p => p.name === actual)?.id ?? (actual ? "__active_device__" : "");
 	};
 	return (
 		<MeterContext.Provider value={tick}>
-			<div className="console">
+			<div
+				className="console"
+				ref={consoleRoot}
+			>
 				<header className="masthead">
 					<div className="registry">
 						<strong>47</strong>
@@ -670,9 +716,12 @@ function Console() {
 					</button>
 					<button
 						aria-pressed={muted}
+						data-feedback="manual"
 						onClick={() => {
+							feedback.setMuted(!muted);
 							setMuted(!muted);
 							localStorage.setItem("audioarray:lcars-audio-muted", !muted ? "1" : "0");
+							if (muted) sound("intrepid-key");
 						}}
 					>
 						Sounds {muted ? "off" : "on"}
@@ -687,12 +736,14 @@ function Console() {
 						aria-label="Audio routing canvas"
 					>
 						<ReactFlow
-							nodes={nodes}
+							nodes={displayedNodes}
 							edges={edges}
 							nodeTypes={nodeTypes}
 							edgeTypes={edgeTypes}
 							onNodesChange={changes => setNodes(n => applyNodeChanges(changes, n))}
+							onNodeDragStart={() => feedback.beginMotion()}
 							onNodeDragStop={(_e, n) => {
+								feedback.endMotion();
 								positions.current[n.id] = n.position;
 								localStorage.setItem(
 									"audioarray:layout:v1",
@@ -713,11 +764,21 @@ function Console() {
 								setEdgeSelection(null);
 							}}
 							onConnect={c => connect(c)}
+							onConnectStart={() => feedback.beginMotion()}
+							onConnectEnd={(_event, state) => {
+								feedback.endMotion();
+								sound(state.isValid ? "key-02" : "denied");
+							}}
+							onMove={event => {
+								if (event) feedback.motion();
+							}}
 							onReconnect={(e, c) => connect(c, e.data.edge as GraphEdge)}
 							onReconnectStart={(_event, edge) => {
+								feedback.beginMotion();
 								reconnecting.current = edge.data.edge as GraphEdge;
 							}}
 							onReconnectEnd={() => {
+								feedback.endMotion();
 								reconnecting.current = null;
 							}}
 							isValidConnection={c =>
@@ -729,7 +790,10 @@ function Console() {
 									snapshot.runtime?.patches ?? [],
 									c,
 									reconnecting.current ?
-										key(reconnecting.current.source, reconnecting.current.target)
+										key(
+											reconnecting.current.source,
+											edgeRoute(reconnecting.current).destination
+										)
 									:	undefined
 								)
 							}
@@ -825,6 +889,14 @@ function Console() {
 										>
 											Waiting for active device…
 										</option>
+										{deviceValue("output") === "__active_device__" && (
+											<option
+												value="__active_device__"
+												disabled
+											>
+												{snapshot?.runtime?.outputName} (active)
+											</option>
+										)}
 										{outputOptions.map(d => (
 											<option
 												value={d.id}
@@ -852,6 +924,14 @@ function Console() {
 										>
 											Waiting for active device…
 										</option>
+										{deviceValue("input") === "__active_device__" && (
+											<option
+												value="__active_device__"
+												disabled
+											>
+												{snapshot?.runtime?.inputName} (active)
+											</option>
+										)}
 										{inputOptions.map(d => (
 											<option
 												value={d.id}
@@ -867,19 +947,137 @@ function Console() {
 								</p>
 								{snapshot?.graph.sessionOverride && (
 									<p className="notice">
-										Session override: {snapshot.graph.sessionOverride}
+										Session device: {snapshot.graph.sessionOverride}
+										{snapshot.runtime?.outputName !== snapshot.graph.sessionOverride &&
+											" · AMPS is using your chosen listening output"}
 									</p>
 								)}
 								<p className="hint">
-									Windows device selection uses the same history. Master volume affects
-									listening, not OBS stems.
+									Windows device selection uses the same history. During Moonlight, use
+									these selectors to change AMPS without resetting stream audio. Master
+									volume affects listening, not OBS stems.
 								</p>
 							</section>
 						)}
+						<section>
+							<h3>Physical graph devices</h3>
+							{confirmation && (
+								<div
+									role="alertdialog"
+									aria-label="Confirm routing change"
+									className="notice"
+								>
+									<p>{confirmation.message}</p>
+									<button onClick={() => setConfirmation(null)}>Cancel change</button>
+									<button
+										disabled={busy || !online}
+										onClick={() => {
+											const edit = confirmation.edit;
+											setConfirmation(null);
+											void transact(edit);
+										}}
+									>
+										Confirm change
+									</button>
+								</div>
+							)}
+							<p className="hint">
+								Add a pinned input or output without replacing the Main roles. New devices
+								start with no wires. Pinning the current Main device and wiring it twice can
+								double the audio.
+							</p>
+							{(["input", "output"] as const).map(direction => (
+								<label key={direction}>
+									Add {direction}
+									<select
+										aria-label={`Add physical ${direction}`}
+										value=""
+										disabled={!online || busy}
+										onChange={e => {
+											const endpoint = (
+												direction === "input" ? inputOptions : outputOptions).find(
+												d => d.id === e.target.value
+											);
+											if (endpoint)
+												void transact({
+													kind: "add_device",
+													device: {
+														id: `device-${crypto.randomUUID()}`,
+														name: endpoint.name,
+														direction,
+														endpointId: endpoint.id
+													}
+												});
+										}}
+									>
+										<option value="">Select device to add…</option>
+										{(direction === "input" ? inputOptions : outputOptions)
+											.filter(d => !addedDevices.some(b => b.endpointId === d.id))
+											.map(d => (
+												<option
+													key={d.id}
+													value={d.id}
+												>
+													{d.name}
+												</option>
+											))}
+									</select>
+								</label>
+							))}
+							{addedDevices
+								.filter(d => !selection || selection === d.id)
+								.map(d => (
+									<div key={d.id}>
+										<p>
+											{d.name} · pinned {d.direction}
+										</p>
+										<button
+											disabled={!online || !!devicePending}
+											onClick={() => void device(d.direction, d.endpointId)}
+										>
+											Use as Main {d.direction}
+										</button>
+										<button
+											disabled={!online || busy}
+											onClick={() => {
+												const routes = (snapshot?.runtime?.patches ?? []).filter(
+													p => p.source === d.id || p.destination === d.id
+												);
+												const edit = { kind: "remove_device", id: d.id };
+												if (routes.length)
+													setConfirmation({
+														edit,
+														message: `Remove ${d.name} and its ${routes.length} connected wire(s)? Other routes are preserved. You can undo this.`
+													});
+												else void transact(edit);
+											}}
+										>
+											Remove device
+											{(
+												(snapshot?.runtime?.patches ?? []).some(
+													p => p.source === d.id || p.destination === d.id
+												)
+											) ?
+												" and its wires…"
+											:	""}
+										</button>
+									</div>
+								))}
+							{Object.entries(snapshot?.runtime?.unavailableRoutes ?? {}).map(
+								([route, error]) => (
+									<p
+										className="notice"
+										key={route}
+									>
+										{route}: {error}
+									</p>
+								)
+							)}
+						</section>
 						{snapshot?.phone?.supported &&
 							(!selection || ["phone", "main_output"].includes(selection)) && (
 								<section>
-									<h3>Private phone audio</h3>
+									<h3>Phone audio</h3>
 									<label>
 										Paired phone
 										<select
@@ -923,9 +1121,17 @@ function Console() {
 										{phonePending ?
 											"Working…"
 										: snapshot.phone.wanted ?
-											"Disconnect phone"
-										:	"Connect phone"}
+											"Disable receiver"
+										:	"Enable receiver"}
 									</button>
+									{snapshot.phone.wanted && (
+										<button
+											disabled={phonePending}
+											onClick={() => void phoneControl({ action: "reconnect" })}
+										>
+											Restart receiver
+										</button>
+									)}
 									<button
 										disabled={phonePending}
 										onClick={() => void phoneControl({ action: "refresh" })}
@@ -944,46 +1150,21 @@ function Console() {
 												})
 											}
 										/>
-										Reconnect when AMPS starts
+										Enable receiver when AMPS starts (phone initiates connection)
 									</label>
 									<p className="binding">
 										{snapshot.phone.phase}
 										{snapshot.phone.output ? ` → ${snapshot.phone.output.name}` : ""}
 									</p>
-									<label>
-										Phone buffer
-										<select
-											aria-label="Phone buffer"
-											disabled={phonePending}
-											value={snapshot.phone.settings.bufferMs ?? 200}
-											onChange={e =>
-												void phoneControl({
-													action: "settings",
-													bufferMs: Number(e.target.value)
-												})
-											}
-										>
-											{[50, 100, 150, 200, 250, 300, 400, 500].map(ms => (
-												<option
-													key={ms}
-													value={ms}
-												>
-													{ms} ms
-												</option>
-											))}
-										</select>
-									</label>
-									<p className="hint">
-										More buffer tolerates larger timing gaps but delays phone audio.
-										Changing it briefly refills only the phone queue.
-									</p>
+
 									{snapshot.phone.error && (
 										<p className="notice">{snapshot.phone.error}</p>
 									)}
 									<p className="hint">
-										Follows active Main Output, including VR. Bypasses all VAC buses, OBS
-										stems, and voice sends. Calls and notifications remain subject to your
-										phone's audio routing and silent-mode settings.
+										Private by default via the Phone Audio → Main Output wire, including
+										VR. Extra wires can deliberately send phone audio to other devices or
+										buses. Notifications remain subject to your phone's audio routing and
+										silent-mode settings.
 									</p>
 								</section>
 							)}
@@ -1044,8 +1225,10 @@ function Console() {
 										try {
 											await invoke("set_clean_mic_monitor", { enabled: !monitoring });
 											setMonitoring(!monitoring);
+											sound("confirm");
 										} catch (e) {
 											setError(String(e));
+											sound("denied");
 										}
 									}}
 								>

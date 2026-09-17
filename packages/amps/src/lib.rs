@@ -11,6 +11,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 pub mod control;
+pub mod devices;
 pub mod phone;
 pub mod topology;
 
@@ -29,6 +30,8 @@ pub const MAX_SUPPRESSION_ATTENUATION_DB: f32 = 40.0;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
 	pub cables: CableConfig,
+	#[serde(default)]
+	pub devices: Vec<devices::Binding>,
 	#[serde(default)]
 	pub monitor: MonitorConfig,
 	#[serde(default)]
@@ -205,6 +208,7 @@ struct RuntimeControls {
 	revision: u64,
 	noise_suppression: Option<NoiseSuppressionControls>,
 	patchbay: Option<PatchbayControls>,
+	devices: Option<Vec<devices::Binding>>,
 }
 
 impl Default for RuntimeControls {
@@ -214,6 +218,7 @@ impl Default for RuntimeControls {
 			revision: 0,
 			noise_suppression: None,
 			patchbay: None,
+			devices: None,
 		}
 	}
 }
@@ -292,6 +297,7 @@ pub struct GraphSnapshot {
 	pub main_output: Option<EndpointSummary>,
 	pub input_devices: Vec<EndpointSummary>,
 	pub output_devices: Vec<EndpointSummary>,
+	pub devices: Vec<devices::Binding>,
 	pub session_override: Option<String>,
 	pub session_input_override: Option<String>,
 	pub buses: Vec<BusSummary>,
@@ -303,13 +309,19 @@ pub struct GraphSnapshot {
 	pub microphone_latency_ms: u32,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeterReading {
-	pub id: &'static str,
+	pub id: String,
 	pub peak: f32,
+	#[serde(deserialize_with = "deserialize_dbfs")]
 	pub dbfs: f32,
 	pub waveform: Vec<f32>,
+}
+fn deserialize_dbfs<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> std::result::Result<f32, D::Error> {
+	Ok(Option::<f32>::deserialize(deserializer)?.unwrap_or(f32::NEG_INFINITY))
 }
 
 impl Config {
@@ -319,13 +331,18 @@ impl Config {
 		let mut config: Self = toml::from_str(&text)
 			.with_context(|| format!("could not parse AMPS config {}", path.display()))?;
 		let controls_path = runtime_controls_path(path);
+		let mut legacy_graph = true;
 		if controls_path.is_file() {
 			let controls_text = fs::read_to_string(&controls_path)
 				.with_context(|| format!("could not read AMPS controls {}", controls_path.display()))?;
 			let controls: RuntimeControls = toml::from_str(&controls_text).with_context(|| {
 				format!("could not parse AMPS controls {}", controls_path.display())
 			})?;
-			control::check_schema(controls.schema_version)?;
+			control::check_controls_schema(controls.schema_version)?;
+			legacy_graph = controls.schema_version == 1;
+			if let Some(devices) = controls.devices {
+				config.devices = devices;
+			}
 			if let Some(suppression) = controls.noise_suppression {
 				if suppression.intensity > 100 {
 					bail!("noise suppression intensity must be between 0 and 100");
@@ -340,6 +357,20 @@ impl Config {
 			if let Some(patchbay) = controls.patchbay {
 				config.patchbay.connections = patchbay.connections;
 			}
+		}
+		// The legacy phone path was fixed and private outside the saved patch list.
+		// Project it into the editable graph without rewriting imported state.
+		if legacy_graph
+			&& !config
+				.patchbay
+				.connections
+				.iter()
+				.any(|p| p.source == "phone")
+		{
+			config.patchbay.connections.push(PatchConnection {
+				source: "phone".into(),
+				destination: "main_output".into(),
+			});
 		}
 		config.validate()?;
 		Ok(config)
@@ -408,7 +439,7 @@ impl Config {
 		{
 			bail!("post_filter_beta must be between 0 and 1");
 		}
-		validate_patch_connections(&self.patchbay.connections)?;
+		validate_device_connections(&self.patchbay.connections, &self.devices)?;
 		for route in &self.routes {
 			if route.process.trim().is_empty() || !route.process.to_ascii_lowercase().ends_with(".exe")
 			{
@@ -441,14 +472,16 @@ impl Config {
 	}
 }
 
-const PATCH_SOURCES: [(&str, &str); 5] = [
+const PATCH_SOURCES: [(&str, &str); 6] = [
+	("phone", "Phone Audio"),
 	("game", "Game"),
 	("comms", "Comms Audio"),
 	("music", "Media"),
 	("chatgpt", "AI Audio"),
 	("clean_mic", "Clean Mic"),
 ];
-const PATCH_DESTINATIONS: [(&str, &str); 6] = [
+const PATCH_DESTINATIONS: [(&str, &str); 7] = [
+	("main_output", "Main Output device"),
 	("game", "Game"),
 	("comms", "Comms Audio"),
 	("music", "Media"),
@@ -474,8 +507,28 @@ pub fn patch_destinations() -> Vec<PatchPortSummary> {
 }
 
 pub fn validate_patch_connections(connections: &[PatchConnection]) -> Result<()> {
-	let source_ids = PATCH_SOURCES.map(|(id, _)| id);
-	let destination_ids = PATCH_DESTINATIONS.map(|(id, _)| id);
+	validate_device_connections(connections, &[])
+}
+
+pub fn validate_device_connections(
+	connections: &[PatchConnection],
+	devices: &[devices::Binding],
+) -> Result<()> {
+	devices::validate(devices)?;
+	if connections.len() > 128 {
+		bail!("Too many audio routes");
+	}
+	let mut source_ids = PATCH_SOURCES.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+	let mut destination_ids = PATCH_DESTINATIONS
+		.iter()
+		.map(|(id, _)| *id)
+		.collect::<Vec<_>>();
+	for d in devices {
+		match d.direction {
+			devices::Direction::Input => source_ids.push(&d.id),
+			devices::Direction::Output => destination_ids.push(&d.id),
+		}
+	}
 	let mut seen = BTreeSet::new();
 	let mut adjacency = vec![Vec::new(); source_ids.len()];
 	for connection in connections {
@@ -599,7 +652,10 @@ pub fn setup_conversation(config_path: &Path) -> Result<()> {
 pub fn migrate_control_names(config_path: &Path) -> Result<()> {
 	let controls = load_runtime_controls(config_path)?;
 	if let Some(patchbay) = &controls.patchbay {
-		validate_patch_connections(&patchbay.connections)?;
+		validate_device_connections(
+			&patchbay.connections,
+			controls.devices.as_deref().unwrap_or(&[]),
+		)?;
 	}
 	write_runtime_controls(config_path, &controls)
 }
@@ -657,8 +713,9 @@ pub fn save_suppression_controls(
 }
 
 pub fn save_patch_connections(config_path: &Path, connections: Vec<PatchConnection>) -> Result<()> {
-	validate_patch_connections(&connections)?;
 	let mut controls = load_runtime_controls(config_path)?;
+	validate_device_connections(&connections, controls.devices.as_deref().unwrap_or(&[]))?;
+	controls.schema_version = 2;
 	controls.patchbay = Some(PatchbayControls { connections });
 	write_runtime_controls(config_path, &controls)
 }
@@ -672,7 +729,7 @@ fn load_runtime_controls(config_path: &Path) -> Result<RuntimeControls> {
 		.with_context(|| format!("could not read AMPS controls {}", path.display()))?;
 	let controls: RuntimeControls = toml::from_str(&text)
 		.with_context(|| format!("could not parse AMPS controls {}", path.display()))?;
-	control::check_schema(controls.schema_version)?;
+	control::check_controls_schema(controls.schema_version)?;
 	Ok(controls)
 }
 
@@ -742,9 +799,8 @@ pub fn levels(config: &Config, seconds: u32) -> Result<()> {
 }
 
 #[cfg(windows)]
-pub fn select_main_output(endpoint: &str) -> Result<()> {
-	app_routing::select_output(endpoint)?;
-	windows_audio::remember_selected_physical_output(endpoint)
+pub fn select_main_output(config: &Config, endpoint: &str) -> Result<()> {
+	windows_audio::select_main_output(config, endpoint)
 }
 
 #[cfg(windows)]
@@ -796,7 +852,7 @@ impl MeterProbe {
 }
 
 #[cfg(not(windows))]
-pub fn select_main_output(_endpoint: &str) -> Result<()> {
+pub fn select_main_output(_config: &Config, _endpoint: &str) -> Result<()> {
 	bail!("AMPS's Linux endpoint backend has not been connected yet")
 }
 

@@ -39,6 +39,12 @@ pub(crate) fn check_schema(version: u32) -> Result<()> {
 	}
 	Ok(())
 }
+pub(crate) fn check_controls_schema(version: u32) -> Result<()> {
+	if !matches!(version, 1 | 2) {
+		bail!("Unsupported audio controls schema {version}; refusing to overwrite it");
+	}
+	Ok(())
+}
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
 	let parent = path.parent().context("Missing parent directory")?;
 	fs::create_dir_all(parent)?;
@@ -97,6 +103,12 @@ impl EngineLock {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Edit {
+	AddDevice {
+		device: crate::devices::Binding,
+	},
+	RemoveDevice {
+		id: String,
+	},
 	Connect {
 		source: String,
 		destination: String,
@@ -150,6 +162,10 @@ pub struct Status {
 	pub pending: Option<String>,
 	pub input_name: String,
 	pub output_name: String,
+	#[serde(default)]
+	pub devices: Vec<crate::devices::Binding>,
+	#[serde(default)]
+	pub unavailable_routes: std::collections::BTreeMap<String, String>,
 }
 pub fn status(config: &Path) -> Result<Status> {
 	let mut value: Status = read_json(&directory(config).join("status.json"))?;
@@ -248,6 +264,8 @@ impl Server {
 			pending: None,
 			input_name: effective.microphone.input.clone(),
 			output_name: effective.monitor.output.clone(),
+			devices: effective.devices.clone(),
+			unavailable_routes: Default::default(),
 		};
 		let value = Self {
 			path: path.into(),
@@ -305,8 +323,22 @@ impl Server {
 	}
 	fn candidate(&self, edit: &Edit) -> Result<RuntimeControls> {
 		let mut controls = self.controls.clone();
+		controls.schema_version = 2;
+		let mut devices = self.config.devices.clone();
 		let mut edges = self.config.patchbay.connections.clone();
 		match edit {
+			Edit::AddDevice { device } => {
+				devices.push(device.clone());
+				controls.schema_version = 2;
+			}
+			Edit::RemoveDevice { id } => {
+				if !devices.iter().any(|d| &d.id == id) {
+					bail!("Device no longer exists");
+				}
+				devices.retain(|d| &d.id != id);
+				edges.retain(|e| &e.source != id && &e.destination != id);
+				controls.schema_version = 2;
+			}
 			Edit::Connect {
 				source,
 				destination,
@@ -362,12 +394,18 @@ impl Server {
 					.context("Nothing to redo in this engine session")
 			}
 		}
-		crate::validate_patch_connections(&edges)?;
+		crate::validate_device_connections(&edges, &devices)?;
+		if !devices.is_empty() || controls.devices.is_some() {
+			controls.devices = Some(devices);
+		}
 		controls.patchbay = Some(PatchbayControls { connections: edges });
 		Ok(controls)
 	}
 	fn effective(&self, controls: &RuntimeControls) -> Config {
 		let mut config = self.config.clone();
+		if let Some(devices) = &controls.devices {
+			config.devices = devices.clone();
+		}
 		if let Some(patch) = &controls.patchbay {
 			config.patchbay.connections = patch.connections.clone();
 		}
@@ -431,6 +469,8 @@ impl Server {
 		// Materialize missing legacy defaults only in the transaction/history,
 		// never by overwriting the imported file during startup.
 		let mut previous = self.controls.clone();
+		previous.schema_version = 2;
+		previous.devices = Some(self.config.devices.clone());
 		previous.patchbay = Some(PatchbayControls {
 			connections: self.config.patchbay.connections.clone(),
 		});
@@ -494,6 +534,7 @@ impl Server {
 		self.status.applied_revision = Some(self.controls.revision);
 		self.status.patches = self.config.patchbay.connections.clone();
 		self.status.suppression = self.config.noise_suppression.clone();
+		self.status.devices = self.config.devices.clone();
 		self.status.can_undo = !self.undo.is_empty();
 		self.status.can_redo = !self.redo.is_empty();
 		let _ = fs::remove_file(self.root.join("prepared.json"));
@@ -592,7 +633,7 @@ mod tests {
 		let before = b.active.clone();
 		let req = request(&s, music());
 		assert!(s.execute(&req, &mut b).unwrap().applied);
-		assert_eq!(b.active.len(), 9);
+		assert_eq!(b.active.len(), before.len() + 1);
 		assert_eq!(
 			Config::load(&s.path).unwrap().patchbay.connections,
 			b.active
@@ -602,7 +643,7 @@ mod tests {
 		assert_eq!(b.active, before);
 		let redo = request(&s, Edit::Redo);
 		assert!(s.execute(&redo, &mut b).unwrap().applied);
-		assert_eq!(b.active.len(), 9);
+		assert_eq!(b.active.len(), before.len() + 1);
 	}
 	#[test]
 	fn stale_and_duplicate_requests_do_not_apply_twice() {
@@ -615,6 +656,86 @@ mod tests {
 		stale.id = token();
 		assert!(!s.execute(&stale, &mut b).unwrap().applied);
 		assert_eq!(b.staged, 1);
+	}
+	#[test]
+	fn device_removal_is_scoped_and_undo_restores_wires_and_binding() {
+		let (_dir, mut s, mut b) = fixture();
+		let before = b.active.clone();
+		let device = crate::devices::Binding {
+			id: "device-speakers".into(),
+			name: "Speakers".into(),
+			direction: crate::devices::Direction::Output,
+			endpoint_id: "fixture-speakers".into(),
+		};
+		let req = request(
+			&s,
+			Edit::AddDevice {
+				device: device.clone(),
+			},
+		);
+		assert!(s.execute(&req, &mut b).unwrap().applied);
+		assert_eq!(b.active, before); // Adding hardware does not open a mic or create a wire.
+		let req = request(
+			&s,
+			Edit::Connect {
+				source: "phone".into(),
+				destination: device.id.clone(),
+			},
+		);
+		assert!(s.execute(&req, &mut b).unwrap().applied);
+		let req = request(
+			&s,
+			Edit::RemoveDevice {
+				id: device.id.clone(),
+			},
+		);
+		assert!(s.execute(&req, &mut b).unwrap().applied);
+		assert_eq!(b.active, before);
+		assert!(s.config.devices.is_empty());
+		let req = request(&s, Edit::Undo);
+		assert!(s.execute(&req, &mut b).unwrap().applied);
+		assert_eq!(s.config.devices, vec![device]);
+		assert_eq!(b.active.len(), before.len() + 1);
+		let restored = Config::load(&s.path).unwrap();
+		assert_eq!(restored.devices, s.config.devices);
+		assert_eq!(restored.patchbay.connections, b.active);
+	}
+	#[test]
+	fn legacy_phone_link_migrates_once_and_removed_link_stays_removed() {
+		let (_dir, mut s, mut b) = fixture();
+		assert!(!runtime_controls_path(&s.path).exists());
+		assert_eq!(b.active.iter().filter(|p| p.source == "phone").count(), 1);
+		assert!(b
+			.active
+			.iter()
+			.any(|p| p.source == "phone" && p.destination == "main_output"));
+		let req = request(
+			&s,
+			Edit::Disconnect {
+				source: "phone".into(),
+				destination: "main_output".into(),
+			},
+		);
+		assert!(s.execute(&req, &mut b).unwrap().applied);
+		assert_eq!(load_runtime_controls(&s.path).unwrap().schema_version, 2);
+		assert!(!Config::load(&s.path)
+			.unwrap()
+			.patchbay
+			.connections
+			.iter()
+			.any(|p| p.source == "phone"));
+		let req = request(&s, Edit::Undo);
+		assert!(s.execute(&req, &mut b).unwrap().applied);
+		assert_eq!(
+			Config::load(&s.path)
+				.unwrap()
+				.patchbay
+				.connections
+				.iter()
+				.filter(|p| p.source == "phone")
+				.count(),
+			1
+		);
 	}
 	#[test]
 	fn failed_activation_rolls_back_without_persisting() {
@@ -725,7 +846,7 @@ mod tests {
 		.unwrap();
 		drop(s);
 		let restored = Server::new(&path, Config::load(&path).unwrap()).unwrap();
-		assert_eq!(restored.status.patches.len(), 8);
+		assert_eq!(restored.status.patches.len(), 9);
 		assert!(!directory(&path).join("prepared.json").exists());
 		drop(dir);
 	}

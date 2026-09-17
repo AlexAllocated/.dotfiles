@@ -410,6 +410,10 @@ output {
 	outline: 3px solid #fff7;
 	outline-offset: 4px;
 }
+.signal-node.dimmed {
+	opacity: 0.32;
+	filter: saturate(0.15);
+}
 .node-drag {
 	cursor: grab;
 	background: #000;
