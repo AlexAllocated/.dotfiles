@@ -122,6 +122,21 @@ try {
    $temporaryPackages = Get-Content -LiteralPath $temporaryManifest -Raw | ConvertFrom-Json
    $manifestChanged = $false
 
+   # A deliberately activated, verified fork must not be replaced by WinGet.
+   $sunshineForkState = Join-Path $env:LOCALAPPDATA 'dotfiles\sunshine-fork\active.json'
+   if (Test-Path -LiteralPath $sunshineForkState) {
+      $fork = Get-Content -LiteralPath $sunshineForkState -Raw | ConvertFrom-Json
+      $installedHash = (Get-FileHash (Join-Path $env:ProgramFiles 'Sunshine\sunshine.exe')).Hash
+      if ($fork.schema -ne 1 -or $installedHash -ne $fork.binaryHash) {
+         throw 'Sunshine fork activation record does not match the installed binary; refusing an unattended replacement.'
+      }
+      foreach ($source in $temporaryPackages.Sources) {
+         $source.Packages = @($source.Packages | Where-Object { $_.PackageIdentifier -ne 'LizardByte.Sunshine' })
+      }
+      $manifestChanged = $true
+      Write-Host 'Keeping the verified, explicitly activated Sunshine fork.'
+   }
+
    # Synapse 4 registers its installed application under a generic ARP entry
    # rather than the WinGet bootstrapper ID. Once the real app is present,
    # remove the bootstrapper from the temporary import so every apply does not

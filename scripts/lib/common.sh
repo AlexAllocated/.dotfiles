@@ -257,9 +257,16 @@ apply_windows_integration() {
 			"$flat2vr_configurator_target_windows" -Mode Ensure
 	fi
 
-	mkdir -p "$HOME/.codex/sqlite"
+	local windows_codex_home codex_config_home
+	windows_codex_home="$(powershell.exe -NoLogo -NoProfile -Command \
+		'[Environment]::GetEnvironmentVariable("CODEX_HOME", "User")' | tr -d '\r')"
+	if [[ -n "$windows_codex_home" ]]; then
+		codex_config_home="$(wslpath -u "$windows_codex_home")"
+	else
+		codex_config_home="$windows_home_linux/.codex"
+	fi
 	python3 "$configurator" \
-		--config "$windows_home_linux/.codex/config.toml" \
+		--config "$codex_config_home/config.toml" \
 		--desktop-config "$desktop_config" \
 		--linux-home "$HOME" \
 		--neovim-script "$local_appdata\\NvimWSL\\open-in-nvim.ps1" \

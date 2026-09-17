@@ -67,6 +67,9 @@
 					"PackageIdentifier": "OBSProject.OBSStudio"
 				},
 				{
+					"PackageIdentifier": "BlenderFoundation.Blender"
+				},
+				{
 					"PackageIdentifier": "Rustlang.Rustup"
 				},
 				{

@@ -37,7 +37,7 @@ Commands:
   update [profile]            Refresh pins transactionally without applying them.
   check                       Run repository checks for every supported system.
   doctor                      Diagnose the active environment.
-  codex-share <command>       Diagnose or migrate the Windows/WSL shared Codex home.
+  codex-share <command>       Inspect legacy shared Codex storage (migration retired).
 
 Profiles:
   tracer

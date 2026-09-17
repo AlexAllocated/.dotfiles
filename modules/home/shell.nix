@@ -193,9 +193,6 @@ in
               export APPDATA="$WINHOME/AppData/Roaming"
               export DESKTOP="$WINHOME/Desktop"
               export DOWNLOADS="$WINHOME/Downloads"
-              if [[ -d "$WINHOME/.codex" ]]; then
-                export CODEX_HOME="$WINHOME/.codex"
-              fi
             fi
 
             if [[ -d "/mnt/g" ]]; then

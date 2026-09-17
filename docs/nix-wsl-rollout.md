@@ -238,44 +238,16 @@ The Ubuntu-WSL profile deploys the Windows-native Neovide config into Roaming
 AppData. That config enables Neovide's supported WSL transport, so launching
 Neovide from Windows runs the `nvim` managed by Ubuntu Home Manager.
 
-## Shared Codex conversations
+## Codex conversation ownership
 
-The Ubuntu-WSL profile uses one logical Codex home for the Windows Codex
-GUI and the WSL CLI:
+The Windows app owns its conversations. WSL is available for commands and
+repositories, with separate storage if the Linux CLI is explicitly used:
 
-- `CODEX_HOME=$WINHOME/.codex` keeps GUI settings, auth, plugins,
-  conversation rollouts, history, rules, and memories in the Windows home.
-- `CODEX_SQLITE_HOME=$HOME/.codex/sqlite` keeps the live SQLite indexes on
-  WSL ext4, where SQLite locking and WAL behavior are reliable.
-
-Do not symlink a live SQLite database across the WSL/Windows boundary. Also use
-one active writer at a time: finish or stop the CLI before opening the GUI for
-work, and close the GUI before starting a writing CLI session.
-
-When importing a pre-existing WSL Codex home, close the Codex GUI and every
-Codex CLI. From a plain WSL terminal, run:
-
-```sh
-~/.dotfiles/scripts/dotctl codex-share preflight
-~/.dotfiles/scripts/dotctl codex-share migrate
-```
-
-The migration refuses to start while either client is running. It preserves the
-Windows settings, imports the WSL conversation payloads and supporting history,
-memories, goals, and rules, rewrites the thread index to the shared Windows
-paths, and retains complete timestamped Windows and WSL rollback homes. Validate
-the shared layout afterward with:
-
-```sh
-dotctl codex-share doctor
-```
-
-The Windows GUI already launches its backend inside WSL when
-`desktop.runCodexInWindowsSubsystemForLinux` is enabled. The environment above
-also makes ordinary Ubuntu Codex CLI sessions use the same home and index.
-
-Rollback archives must remain in place until the shared layout has been used
-successfully from both clients and is explicitly approved for cleanup.
+- Codex Desktop and the native Windows CLI own the Windows conversation store.
+- The optional Linux CLI uses private `~/.codex` and `~/.codex/sqlite` storage.
+- Do not export `CODEX_HOME=$WINHOME/.codex`, synchronize transcripts, or recreate
+  conversation-directory junctions. The former `codex-share migrate` command is retired.
+- See [Codex storage ownership](codex-windows-wsl-history.md) for the current layout.
 
 ## 1Password model
 

@@ -9,7 +9,7 @@ let
   cfg = config.dotfiles;
   toolsets = import ../../lib/toolsets.nix { inherit lib pkgs toolPkgs; };
   codexPackage = import ../../packages/codex.nix { inherit lib pkgs; };
-  wslCodexHome = "/mnt/c/Users/${config.home.username}/.codex";
+  wslCodexHome = "${config.home.homeDirectory}/.codex";
   desktopCodex = pkgs.writeShellApplication {
     name = "codex";
     runtimeInputs = [ pkgs.systemd ];
@@ -36,8 +36,8 @@ let
     '';
   };
   wslCodex = pkgs.writeShellScriptBin "codex" ''
-    export CODEX_HOME="''${CODEX_HOME:-${wslCodexHome}}"
-    export CODEX_SQLITE_HOME="''${CODEX_SQLITE_HOME:-${config.home.homeDirectory}/.codex/sqlite}"
+    export CODEX_HOME="${wslCodexHome}"
+    export CODEX_SQLITE_HOME="${config.home.homeDirectory}/.codex/sqlite"
     exec ${codexPackage}/bin/codex "$@"
   '';
 in
@@ -63,14 +63,14 @@ in
 
     home.sessionVariables = lib.mkMerge [
       (lib.optionalAttrs (cfg.isWsl || cfg.profile == "nixos-desktop") {
-        # Keep SQLite on the native Linux filesystem. WSL shares config/auth with
-        # Windows; the native desktop imports a private migration copy at install.
+        # The optional Linux CLI keeps private Linux state. Windows Desktop owns
+        # its own configuration, authentication, SQLite, and transcripts.
         CODEX_SQLITE_HOME = "${config.home.homeDirectory}/.codex/sqlite";
       })
       (lib.optionalAttrs cfg.isWsl {
         # SSH logins do not inherit Windows' appended PATH, so discovery via
         # powershell.exe is not reliable there. The first-class WSL profile
-        # deliberately uses the same account name on both sides.
+        # keeps its own home and never opens the Windows conversation store.
         CODEX_HOME = wslCodexHome;
       })
     ];
