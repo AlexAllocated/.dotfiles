@@ -77,9 +77,23 @@ $settings = [ordered]@{
 
 $obsoleteSettings = @(
 	"audio_sink"
+	"external_audio"
 	"dd_manual_resolution"
 	"dd_manual_refresh_rate"
 )
+
+$forkStatePath = Join-Path $env:LOCALAPPDATA 'dotfiles\sunshine-fork\active.json'
+if (Test-Path -LiteralPath $forkStatePath) {
+	$fork = Get-Content -LiteralPath $forkStatePath -Raw | ConvertFrom-Json
+	$installedHash = (Get-FileHash (Join-Path $env:ProgramFiles 'Sunshine\sunshine.exe')).Hash
+	if ($fork.schema -ne 1 -or -not $fork.audioSink -or $installedHash -ne $fork.binaryHash) {
+		throw 'The managed Sunshine fork differs from its activation record. Repair it before reconciling audio.'
+	}
+	$settings.Remove('virtual_sink')
+	$settings.external_audio = 'enabled'
+	$settings.audio_sink = $fork.audioSink
+	$obsoleteSettings = @('virtual_sink', 'dd_manual_resolution', 'dd_manual_refresh_rate')
+}
 
 $lines = if (Test-Path -LiteralPath $ConfigurationPath) {
 	@(Get-Content -LiteralPath $ConfigurationPath)
@@ -174,5 +188,5 @@ Restart-Service -Name $ServiceName -Force
 
 Write-Host "Sunshine now targets $outputName (VDD by MTT)."
 Write-Host "Resolution, refresh rate, and HDR now follow the Moonlight client request."
-Write-Host "AMPS now follows Sunshine's real $StreamingMixName default-device transitions."
+Write-Host "Sunshine audio and display policy reconciled. External audio management: $($settings.external_audio -eq 'enabled')."
 Write-Host "The NVIDIA driver now limits local play to 158 FPS and reserves three frames of headroom on Moonlight."

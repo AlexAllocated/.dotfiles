@@ -1,0 +1,11 @@
+{
+	"repository": "AlexAllocated/Sunshine",
+	"upstreamRevision": "c53f97ecdd1643f9628b61f7fe5e107f3919a3c0",
+	"sourceBranch": "codex/windows-external-audio",
+  "sourceRevision": "ee9144461d9cb2e1fa00122b763044731f1daacc",
+	"buildBranch": "codex/windows-external-audio-build",
+	"buildRevision": "a07bf4c56eda88f9fe88470788b59d543786e4f4",
+	"buildRun": 34179336505,
+	"artifact": "build-Windows-AMD64",
+	"activation": "manual-after-validation"
+}
