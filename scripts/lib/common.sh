@@ -168,9 +168,9 @@ apply_windows_integration() {
 		-ProductionModeScriptPath "$obs_production_mode_windows" \
 		-ProductionFrameLauncherPath "$obs_production_launcher_windows" \
 		-FrameLimiterPath "$nvidia_frame_limiter_windows"
-	docker_configurator_windows="$(wslpath -w "$docker_configurator")"
-	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$docker_configurator_windows" \
-		-DistroName "$WSL_DISTRO_NAME"
+	local system_restore_configurator_windows
+	system_restore_configurator_windows="$(wslpath -w "$source_root/scripts/windows/configure-system-restore.ps1")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$system_restore_configurator_windows" -Disable
 
 	windows_home="$(powershell.exe -NoLogo -NoProfile -Command "\$env:USERPROFILE" | tr -d '\r')"
 	local_appdata="$(powershell.exe -NoLogo -NoProfile -Command "\$env:LOCALAPPDATA" | tr -d '\r')"
