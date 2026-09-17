@@ -315,6 +315,10 @@
         ];
       };
 
+      nixosConfigurations.tracer-remote-rescue = self.nixosConfigurations.tracer-rescue.extendModules {
+        modules = [ ./modules/nixos/tracer-remote-rescue.nix ];
+      };
+
       homeConfigurations = {
         linux = linuxHomeConfiguration;
         ubuntu-wsl = ubuntuWslHomeConfiguration;
@@ -353,6 +357,8 @@
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
           chev-installer-iso = self.nixosConfigurations.chev-installer.config.system.build.isoImage;
           tracer-rescue-iso = self.nixosConfigurations.tracer-rescue.config.system.build.isoImage;
+          tracer-remote-rescue-iso =
+            self.nixosConfigurations.tracer-remote-rescue.config.system.build.isoImage;
           tracer-rescue-media = pkgs.writeShellApplication {
             name = "prepare-tracer-rescue";
             runtimeInputs = with pkgs; [
