@@ -2,6 +2,7 @@ param(
 	[ValidateSet("Ensure", "Apply")]
 	[string]$Mode = "Ensure",
 	[string]$ConfigurationPath = "$env:ProgramFiles\Sunshine\config\sunshine.conf",
+	[string]$ApplicationsPath = "",
 	[string]$OutputStatePath = "$env:LOCALAPPDATA\dotfiles\virtual-display\sunshine-output-name.txt",
 	[string]$ServiceName = "SunshineService",
 	[string]$StreamingMixName = "Speakers (Steam Streaming Speakers)",
@@ -10,6 +11,35 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+function Get-SunshineSignInApplicationsJson {
+	param([string]$Json)
+	$document = $Json | ConvertFrom-Json
+	if ($null -eq $document.apps) { throw "Sunshine's application list is missing." }
+	$matching = @($document.apps | Where-Object name -EQ 'Windows Sign-In')
+	if ($matching.Count -gt 1) { throw "Sunshine has duplicate Windows Sign-In applications." }
+	if ($matching.Count -eq 1) {
+		$app = $matching[0]
+		if ($app.cmd -or $app.'prep-cmd' -or $app.detached) {
+			throw "The existing Windows Sign-In application runs commands; refusing to overwrite it."
+		}
+		$app | Add-Member -MemberType NoteProperty -Name 'exclude-global-prep-cmd' -Value $true -Force
+	} else {
+		$document.apps = @($document.apps) + @([pscustomobject][ordered]@{
+			name = 'Windows Sign-In'
+			'image-path' = 'desktop.png'
+			'exclude-global-prep-cmd' = $true
+		})
+	}
+	return ConvertTo-Json -InputObject $document -Depth 100
+}
+
+if (-not $ApplicationsPath) {
+	$ApplicationsPath = Join-Path (Split-Path -Parent $ConfigurationPath) 'apps.json'
+}
+$applicationsJson = Get-Content -LiteralPath $ApplicationsPath -Raw
+$currentApplications = ConvertTo-Json -InputObject ($applicationsJson | ConvertFrom-Json) -Depth 100
+$desiredApplications = Get-SunshineSignInApplicationsJson -Json $applicationsJson
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -63,7 +93,7 @@ $globalPrepCommand = ConvertTo-Json -InputObject @(
 ) -Compress
 $settings = [ordered]@{
 	output_name = $outputName
-	dd_configuration_option = "ensure_only_display"
+	dd_configuration_option = "ensure_primary"
 	dd_resolution_option = "auto"
 	dd_refresh_rate_option = "auto"
 	dd_hdr_option = "auto"
@@ -133,7 +163,7 @@ foreach ($key in $settings.Keys) {
 
 $currentConfiguration = ($lines -join "`n").TrimEnd()
 $desiredConfiguration = (@($updatedLines) -join "`n").TrimEnd()
-$configurationIsCurrent = $currentConfiguration -ceq $desiredConfiguration
+$configurationIsCurrent = ($currentConfiguration -ceq $desiredConfiguration) -and ($currentApplications -ceq $desiredApplications)
 
 function Invoke-ElevatedApply {
 	$arguments = @(
@@ -146,6 +176,7 @@ function Invoke-ElevatedApply {
 	$process = Start-Process `
 		-FilePath $PowerShell `
 		-Verb RunAs `
+		-WindowStyle Hidden `
 		-Wait `
 		-PassThru `
 		-ArgumentList $arguments
@@ -169,8 +200,9 @@ if (-not $isAdministrator) {
 
 $backupDirectory = Join-Path $env:LOCALAPPDATA "dotfiles\backups"
 New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+Copy-Item -LiteralPath $ApplicationsPath -Destination (Join-Path $backupDirectory "sunshine-apps.json-$stamp")
 if (Test-Path -LiteralPath $ConfigurationPath) {
-	$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 	Copy-Item `
 		-LiteralPath $ConfigurationPath `
 		-Destination (Join-Path $backupDirectory "sunshine.conf-$stamp")
@@ -181,12 +213,15 @@ if (Test-Path -LiteralPath $ConfigurationPath) {
 	$updatedLines,
 	[Text.UTF8Encoding]::new($false)
 )
+[IO.File]::WriteAllText($ApplicationsPath, $desiredApplications, [Text.UTF8Encoding]::new($false))
 
 & $FrameLimitScriptPath -Mode Local
 Restart-Service -Name $ServiceName -Force
 (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(15))
 
 Write-Host "Sunshine now targets $outputName (VDD by MTT)."
+Write-Host "The VDD becomes primary while streaming; physical displays remain active."
+Write-Host "Windows Sign-In provides desktop access without commands that require a signed-in user."
 Write-Host "Resolution, refresh rate, and HDR now follow the Moonlight client request."
 Write-Host "Sunshine audio and display policy reconciled. External audio management: $($settings.external_audio -eq 'enabled')."
 Write-Host "The NVIDIA driver now limits local play to 158 FPS and reserves three frames of headroom on Moonlight."
