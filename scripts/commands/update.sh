@@ -132,8 +132,10 @@ update_codex_candidate() {
 validate_update_candidate() {
 	local candidate="$1"
 	if command_exists nix; then
+		printf 'Running native Nix checks before accepting updated pins...\n'
+		nix flake check "path:$candidate" || return $?
 		printf 'Evaluating every supported Nix system before accepting updated pins...\n'
-		nix flake check --all-systems --no-build "path:$candidate"
+		nix flake check --all-systems --no-build "path:$candidate" || return $?
 	fi
 }
 
@@ -230,17 +232,21 @@ normalize_intent_to_add_entries() {
 
 fetch_and_rebase_upstream() {
 	local result_var="$1"
-	local remote remote_branch upstream
+	local remote remote_branch upstream ancestry_status
 	printf -v "$result_var" '0'
 	if ! upstream="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
 		return 0
 	fi
 	remote="${upstream%%/*}"
 	remote_branch="${upstream#*/}"
-	git -C "$REPO_ROOT" fetch "$remote" "$remote_branch"
-	if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
+	git -C "$REPO_ROOT" fetch "$remote" "$remote_branch" || return $?
+	if git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
+		return 0
+	else
+		ancestry_status=$?
+		((ancestry_status == 1)) || return "$ancestry_status"
 		printf 'Rebasing onto the latest %s...\n' "$upstream"
-		git -C "$REPO_ROOT" rebase "$upstream"
+		git -C "$REPO_ROOT" rebase "$upstream" || return $?
 		printf -v "$result_var" '1'
 	fi
 }
@@ -272,7 +278,7 @@ sync_before_update() {
 	fi
 	if ! fetch_and_rebase_upstream rebased; then
 		if [[ -n "$stash_ref" ]]; then
-			if [[ ! -d "$(git -C "$REPO_ROOT" rev-parse --git-path rebase-merge)" && ! -d "$(git -C "$REPO_ROOT" rev-parse --git-path rebase-apply)" ]]; then
+			if [[ ! -d "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-path rebase-merge)" && ! -d "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-path rebase-apply)" ]]; then
 				restore_updoot_stash "$stash_ref" || true
 			else
 				printf 'Local changes remain saved in %s while the rebase is resolved.\n' "$stash_ref" >&2

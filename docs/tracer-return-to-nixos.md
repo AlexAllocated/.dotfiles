@@ -50,6 +50,12 @@ removing WSL, old migration archives or restore points. Repositories are recover
 from their pushed migration branches, not full source-tree archives. Local
 Bumblebee databases and Docker volumes are disposable.
 
+The installer accepts at least 2.4 decimal TB of contiguous free space for this
+split. It must not resize Windows itself. The installed boot-order service keeps
+Linux first while retaining existing Windows and USB fallback entries. Keep the
+LUKS recovery key off the internal disk and verify TPM unlock before the first
+unattended boot; changes to Secure Boot policy can require that recovery key.
+
 The Windows package manifest no longer installs Docker Desktop, and normal WSL
 reconciliation no longer starts it. `configure-docker-desktop.ps1` remains an
 explicit, opt-in helper. `configure-system-restore.ps1 -Disable` applies the

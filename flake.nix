@@ -118,6 +118,7 @@
               bash "scripts/nixos/$script.sh" --help >/dev/null
             done
             bash tests/dotctl.bash
+            lua tests/neovim-bootstrap.lua
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
             python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py
@@ -349,6 +350,10 @@
         })
         // {
           bigblue-font = pkgs.nerd-fonts.bigblue-terminal;
+          chatgpt-desktop = import ./packages/chatgpt-desktop.nix {
+            inherit (nixpkgs) lib;
+            inherit pkgs;
+          };
           codex = import ./packages/codex.nix {
             inherit (nixpkgs) lib;
             inherit pkgs;
@@ -516,6 +521,44 @@
           profile-api = mkDarwinProfileCheck pkgs pkgs.stdenv.hostPlatform.system;
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          vesktop-autostart =
+            let
+              home = self.nixosConfigurations.tracer.config.home-manager.users.alx;
+              activation = pkgs.writeText "vesktop-autostart-activation" (
+                nixpkgs.lib.replaceStrings
+                  [ "${home.xdg.configHome}/autostart/vesktop.desktop" ]
+                  [ ''"$TEST_CONFIG_HOME/autostart/vesktop.desktop"'' ]
+                  home.home.activation.vesktopAutostart.data
+              );
+            in
+            pkgs.runCommand "vesktop-autostart" { nativeBuildInputs = [ pkgs.bash ]; } ''
+              export TEST_CONFIG_HOME="$TMPDIR/config"
+              file="$TEST_CONFIG_HOME/autostart/vesktop.desktop"
+              run() { "$@"; }
+              source ${activation}
+              test -f "$file" && test ! -L "$file" && test -w "$file"
+              grep -Fx 'X-GNOME-Autostart-enabled=true' "$file"
+              cp "$file" "$TMPDIR/expected.desktop"
+              before=$(stat -c '%i:%y' "$file")
+              source ${activation}
+              test "$before" = "$(stat -c '%i:%y' "$file")"
+              printf '\nX-Vesktop-Setup=true\n' >> "$file"
+              source ${activation}
+              cmp "$file" "$TMPDIR/expected.desktop"
+              rm "$file"
+              chmod 0444 "$TMPDIR/expected.desktop"
+              ln -s "$TMPDIR/expected.desktop" "$file"
+              source ${activation}
+              test ! -L "$file" && test -w "$file"
+              cmp "$file" "$TMPDIR/expected.desktop"
+              printf '\nX-Vesktop-Setup=true\n' >> "$file"
+              test "$(stat -c %a "$TMPDIR/expected.desktop")" = 444
+              export TEST_CONFIG_HOME="$TMPDIR/dry-run"
+              run() { :; }
+              source ${activation}
+              test ! -e "$TEST_CONFIG_HOME"
+              touch "$out"
+            '';
           firefox-wayland-wrapper =
             let
               workstation = self.nixosConfigurations.chev-desktop.config;

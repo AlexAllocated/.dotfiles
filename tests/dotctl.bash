@@ -52,6 +52,79 @@ detected_ubuntu_wsl="$({
 })"
 assert_equal "ubuntu-wsl" "$detected_ubuntu_wsl"
 
+(
+	require_command() { :; }
+	sudo() { return 42; }
+	verify_native_nixos_activation() {
+		printf 'Unexpected activation verification\n' >&2
+		exit 99
+	}
+	status=0
+	apply_profile tracer || status=$?
+	assert_equal 42 "$status"
+)
+
+for failure in fetch rebase merge-base; do
+	(
+		git() {
+			shift 2
+			if [[ "$1" == "$failure" ]]; then return 42; fi
+			case "$1" in
+				rev-parse) printf 'origin/main\n' ;;
+				fetch) return 0 ;;
+				merge-base) return 1 ;;
+				*)
+					printf 'Unexpected Git command: %s\n' "$*" >&2
+					exit 99
+					;;
+			esac
+		}
+		rebased=0
+		status=0
+		fetch_and_rebase_upstream rebased || status=$?
+		assert_equal 42 "$status"
+		assert_equal 0 "$rebased"
+	)
+done
+
+(
+	command_exists() { return 0; }
+	nix_calls=0
+	nix() {
+		nix_calls=$((nix_calls + 1))
+		case "$nix_calls" in
+			1) assert_equal 'flake check path:/tmp/candidate' "$*" ;;
+			2) assert_equal 'flake check --all-systems --no-build path:/tmp/candidate' "$*" ;;
+			*) exit 99 ;;
+		esac
+	}
+	validate_update_candidate /tmp/candidate
+	assert_equal 2 "$nix_calls"
+	nix() { return 42; }
+	status=0
+	validate_update_candidate /tmp/candidate || status=$?
+	assert_equal 42 "$status"
+)
+
+set +e
+(
+	set -e
+	sync_before_update() { :; }
+	prepare_update_candidate() { :; }
+	apply_profile() {
+		false
+		printf 'Failure was ignored\n' >&2
+	}
+	accept_candidate_locks() { exit 99; }
+	accept_candidate_neovim_lock() { :; }
+	sync_live_neovim_runtime() { :; }
+	commit_updates() { exit 99; }
+	apply_with_update tracer
+)
+apply_status=$?
+set -e
+assert_equal 1 "$apply_status"
+
 cleanup_output="$({
 	command_exists() { return 0; }
 	require_command() { :; }
@@ -153,5 +226,37 @@ push_updates >/dev/null
 assert_equal "test: automatic updoot" "$(git -C "$fixture/checkout" log -1 --pretty=%s)"
 assert_equal "$(git -C "$fixture/checkout" rev-parse HEAD)" "$(git --git-dir="$fixture/remote.git" rev-parse main)"
 assert_equal "" "$(git -C "$fixture/checkout" status --short)"
+
+printf 'saved local change\n' >"$fixture/checkout/untracked"
+(
+	git() {
+		if [[ "$3" == fetch ]]; then return 42; fi
+		command git "$@"
+	}
+	status=0
+	sync_before_update || status=$?
+	assert_equal 1 "$status"
+)
+assert_equal "saved local change" "$(cat "$fixture/checkout/untracked")"
+assert_equal "" "$(git -C "$fixture/checkout" stash list)"
+
+printf 'local conflict\n' >"$fixture/checkout/tracked"
+git -C "$fixture/checkout" add tracked
+git -C "$fixture/checkout" commit --quiet -m 'local conflict'
+git -C "$fixture/peer" pull --quiet --rebase
+printf 'upstream conflict\n' >"$fixture/peer/tracked"
+git -C "$fixture/peer" commit --quiet -am 'upstream conflict'
+git -C "$fixture/peer" push --quiet
+(
+	git() {
+		if [[ "$3 $4" == 'stash apply' ]]; then exit 99; fi
+		command git "$@"
+	}
+	status=0
+	sync_before_update || status=$?
+	assert_equal 1 "$status"
+)
+[[ -d "$fixture/checkout/.git/rebase-merge" ]]
+assert_equal "saved local change" "$(git -C "$fixture/checkout" show 'stash@{0}:untracked')"
 
 printf 'dotctl helper tests passed\n'

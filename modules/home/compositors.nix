@@ -39,6 +39,16 @@ let
   '';
   mangoPackage = import ../../lib/mango-package.nix { inherit inputs pkgs; };
   systemctl = lib.getExe' pkgs.systemd "systemctl";
+  vesktopAutostartDesktop = pkgs.writeText "vesktop-autostart.desktop" ''
+    [Desktop Entry]
+    Type=Application
+    Name=Vesktop
+    Comment=Discord client with improved Linux and Wayland support
+    Icon=vesktop
+    Exec=/run/current-system/sw/bin/vesktop --start-minimized
+    Terminal=false
+    X-GNOME-Autostart-enabled=true
+  '';
   wallpaper = config.dotfiles.wallpaper;
   wallpaperPaths = {
     ${wallpaper.connector} = wallpaper.installedPath;
@@ -902,19 +912,14 @@ in
       '';
     };
 
-    xdg.configFile."autostart/vesktop.desktop" = {
-      force = true;
-      text = ''
-        [Desktop Entry]
-        Type=Application
-        Name=Vesktop
-        Comment=Discord client with improved Linux and Wayland support
-        Icon=vesktop
-        Exec=/run/current-system/sw/bin/vesktop --start-minimized
-        Terminal=false
-        X-GNOME-Autostart-enabled=true
-      '';
-    };
+    home.activation.vesktopAutostart = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+      autostart_file=${lib.escapeShellArg "${config.xdg.configHome}/autostart/vesktop.desktop"}
+      if [[ -L "$autostart_file" ]] \
+        || ! ${lib.getExe' pkgs.diffutils "cmp"} -s ${vesktopAutostartDesktop} "$autostart_file" \
+        || [[ ! -w "$autostart_file" ]]; then
+        run ${lib.getExe' pkgs.coreutils "install"} -Dm644 -T ${vesktopAutostartDesktop} "$autostart_file"
+      fi
+    '';
 
     xdg.configFile."niri/config.kdl".text = ''
       // Output policy is generated from dotfiles.compositors.outputs.

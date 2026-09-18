@@ -46,7 +46,7 @@ apply_profile() {
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command sudo
 			require_command nixos-rebuild
-			sudo nixos-rebuild switch --flake "$flake_ref"
+			sudo nixos-rebuild switch --flake "$flake_ref" || return $?
 			verify_native_nixos_activation
 			;;
 		macos-managed)
@@ -123,7 +123,13 @@ apply_with_update() {
 		trap_remove_on_exit "$work"
 		prepare_update_candidate "$candidate" "$work"
 		printf 'Applying %s from the validated staging checkout...\n' "$profile"
-		apply_profile "$profile" "$candidate" || apply_status=$?
+		set +e
+		(
+			set -e
+			apply_profile "$profile" "$candidate"
+		)
+		apply_status=$?
+		set -e
 		# The candidate pins have already passed the full flake evaluation. Keep
 		# the editor runtime reconciled even when a later host-integration step
 		# fails, so opening Neovim does not perform the deferred work itself.

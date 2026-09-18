@@ -165,7 +165,12 @@ those volumes and the old local workstation image too.
 Use `macos` instead of `linux` for a Home Manager-only Apple Silicon Mac. On a
 personal Mac using nix-darwin, apply `darwin-macos`. Native Linux installs
 Neovide, WezTerm, and 1Password through Nix. OpenAI currently publishes the
-Codex desktop app for Windows and macOS only; Linux uses the managed Codex CLI.
+Codex desktop app for Windows and macOS; the native NixOS desktop profile also
+installs OpenAI's ChatGPT desktop app with Codex (`chatgpt` in the terminal).
+The Linux app is packaged in `packages/chatgpt-desktop.nix`, with versioned
+official downloads and SHA-256 hashes in `pins/chatgpt-desktop.json`. NixOS is
+not an officially supported upstream distro. Desktop app updates require
+refreshing that pin and rebuilding; the managed Codex CLI has its own pin.
 
 ## Capabilities
 

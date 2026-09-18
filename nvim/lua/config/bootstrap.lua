@@ -48,24 +48,61 @@ function M.wait_for_mason(timeout_ms)
 	return true
 end
 
-function M.update_mason_packages()
+function M.update_mason_packages(timeout_ms)
+	timeout_ms = timeout_ms or 600000
 	local ok, err = xpcall(function()
 		local registry = require("mason-registry")
+		local refreshed, refresh_ok = false, false
+		registry.update(function(success)
+			refresh_ok = success
+			refreshed = true
+		end)
+		assert(
+			vim.wait(timeout_ms, function()
+				return refreshed
+			end, 100),
+			"Timed out updating the Mason registry"
+		)
+		assert(refresh_ok, "Mason registry update failed")
+		assert(M.wait_for_mason(timeout_ms), "Pending Mason installations did not finish")
+
 		local updates = 0
+		local pending = 0
+		local failures = {}
+		local expected = {}
 		for _, package in ipairs(registry.get_installed_packages()) do
 			local installed = package:get_installed_version()
 			local latest = package:get_latest_version()
-			if installed ~= latest and not package:is_installing() and not package:is_uninstalling() then
-				if package:is_installable({ version = latest }) then
-					updates = updates + 1
-					vim.api.nvim_echo({
-						{
-							("Updating Mason package %s: %s -> %s"):format(package.name, installed or "unknown", latest),
-						},
-					}, true, {})
-					package:install({ version = latest })
-				end
+			expected[package] = latest
+			if installed ~= latest then
+				assert(package:is_installable({ version = latest }), "Cannot update Mason package " .. package.name)
+				updates = updates + 1
+				pending = pending + 1
+				vim.api.nvim_echo({
+					{
+						("Updating Mason package %s: %s -> %s"):format(package.name, installed or "unknown", latest),
+					},
+				}, true, {})
+				package:install({ version = latest }, function(success, result)
+					if not success then
+						table.insert(failures, package.name .. ": " .. tostring(result))
+					end
+					pending = pending - 1
+				end)
 			end
+		end
+		assert(
+			vim.wait(timeout_ms, function()
+				return pending == 0
+			end, 100),
+			"Timed out updating Mason packages"
+		)
+		assert(#failures == 0, "Mason updates failed: " .. table.concat(failures, "; "))
+		for package, version in pairs(expected) do
+			assert(
+				package:is_installed() and package:get_installed_version() == version,
+				("Mason package %s did not reach %s"):format(package.name, version)
+			)
 		end
 		if updates == 0 then
 			vim.api.nvim_echo({ { "Mason packages are up to date." } }, true, {})
@@ -128,7 +165,7 @@ function M.repair_treesitter_query_links()
 end
 
 function M.sync_runtime()
-	local plugins_ok = run_automation({ "Lazy! restore", "MasonUpdate" })
+	local plugins_ok = run_automation({ "Lazy! restore" })
 	local mason_ok = plugins_ok and M.update_mason_packages()
 	local query_links_ok = mason_ok and M.repair_treesitter_query_links()
 	local treesitter_ok = query_links_ok and run_automation({ "TSUpdateSync" })

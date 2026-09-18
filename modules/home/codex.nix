@@ -49,6 +49,7 @@ in
       if cfg.profile == "nixos-desktop" then
         [
           desktopCodex
+          (import ../../packages/chatgpt-desktop.nix { inherit lib pkgs; })
           pkgs.bun
           pkgs.nodejs
         ]

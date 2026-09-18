@@ -136,10 +136,6 @@ in
       pkgs.sbctl
     ];
 
-    # This firmware promoted Windows ahead of Linux after the first unattended
-    # reboot. Keep only Linux in the normal UEFI order; Windows remains fully
-    # available through systemd-boot, F11, and the one-shot reboot-windows
-    # helper without being eligible as the automatic fallback.
     systemd.services.tracer-prefer-linux-boot = {
       description = "Keep Linux first in Tracer's UEFI boot order";
       wantedBy = [ "multi-user.target" ];
@@ -160,8 +156,15 @@ in
           exit 1
         fi
         current="$(efibootmgr | sed -nE 's/^BootOrder:[[:space:]]*//p')"
-        if [[ "$current" != "''${linux_entries[0]}" ]]; then
-          efibootmgr --bootorder "''${linux_entries[0]}"
+        desired="''${linux_entries[0]}"
+        IFS=, read -ra existing_entries <<< "$current"
+        for entry in "''${existing_entries[@]}"; do
+          if [[ -n "$entry" && "''${entry^^}" != "''${linux_entries[0]^^}" ]]; then
+            desired+=",$entry"
+          fi
+        done
+        if [[ "$current" != "$desired" ]]; then
+          efibootmgr --bootorder "$desired"
         fi
       '';
     };
@@ -292,6 +295,8 @@ in
         X11Forwarding = false;
       };
     };
+
+    services.displayManager.defaultSession = "dotfiles-desktop";
 
     home-manager = {
       useGlobalPkgs = true;
