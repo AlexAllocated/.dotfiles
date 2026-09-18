@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   pkgs,
   ...
@@ -43,6 +44,22 @@
   };
 
   boot.initrd.availableKernelModules = [ "exfat" ];
+  boot.initrd.systemd.services.tracer-media-ready = {
+    description = "Wait for boot media device discovery before mounting rescue data";
+    requiredBy = [ "sysroot-media-tracer.mount" ];
+    before = [ "sysroot-media-tracer.mount" ];
+    after = [ "sysroot-iso.mount" ];
+    requires = [ "sysroot-iso.mount" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    script = ''
+      ${config.boot.initrd.systemd.package}/bin/udevadm settle --timeout=60
+      if test -b /dev/mapper/ventoy; then
+        device=$(${pkgs.coreutils}/bin/readlink -f /dev/disk/by-label/TRACERDATA)
+        test -f "/sys/class/block/''${device##*/}/dm/name"
+      fi
+    '';
+  };
   boot.loader.timeout = lib.mkForce 3;
   users.users.alx.hashedPasswordFile = "/media/tracer/remote-seed/accounts/alx-password.hash";
   networking.hostName = lib.mkForce "tracer";
