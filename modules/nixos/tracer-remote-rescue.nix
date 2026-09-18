@@ -44,6 +44,7 @@
 
   boot.initrd.availableKernelModules = [ "exfat" ];
   boot.loader.timeout = lib.mkForce 3;
+  users.users.alx.hashedPasswordFile = "/media/tracer/remote-seed/accounts/alx-password.hash";
   networking.hostName = lib.mkForce "tracer";
   networking.networkmanager.ensureProfiles.profiles.tracer-ethernet = {
     connection = {
