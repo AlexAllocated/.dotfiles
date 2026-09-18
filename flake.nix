@@ -499,6 +499,18 @@
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           home-module-api = mkModuleApiCheck pkgs pkgs.stdenv.hostPlatform.system;
+          tracer-resume =
+            pkgs.runCommand "tracer-resume"
+              {
+                nativeBuildInputs = [
+                  pkgs.bash
+                  pkgs.python3
+                ];
+              }
+              ''
+                python ${self}/tests/resume-tracer.py
+                touch "$out"
+              '';
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
           profile-api = mkDarwinProfileCheck pkgs pkgs.stdenv.hostPlatform.system;

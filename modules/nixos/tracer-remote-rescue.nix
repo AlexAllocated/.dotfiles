@@ -8,30 +8,37 @@
     "/home" = lib.mkForce {
       fsType = "tmpfs";
       options = [ "mode=0755" ];
+      neededForBoot = true;
     };
     "/persist" = lib.mkForce {
       fsType = "tmpfs";
       options = [ "mode=0700" ];
+      neededForBoot = true;
     };
     "/var/lib/NetworkManager" = lib.mkForce {
       fsType = "tmpfs";
       options = [ "mode=0700" ];
+      neededForBoot = true;
     };
     "/etc/NetworkManager/system-connections" = lib.mkForce {
       fsType = "tmpfs";
       options = [ "mode=0700" ];
+      neededForBoot = true;
     };
     "/media/tracer" = {
       device = "/dev/disk/by-label/TRACERDATA";
       fsType = "auto";
       options = [
-        "ro"
+        "rw"
         "noexec"
         "nosuid"
         "nodev"
         "umask=0077"
+        "uid=1000"
+        "gid=100"
       ];
       neededForBoot = true;
+      noCheck = true;
     };
   };
 
@@ -125,12 +132,44 @@
       install -d -m 0700 /persist/ssh
       install -m 0600 "$seed/ssh/ssh_host_ed25519_key" /persist/ssh/ssh_host_ed25519_key
       install -m 0644 "$seed/ssh/ssh_host_ed25519_key.pub" /persist/ssh/ssh_host_ed25519_key.pub
-      install -d -m 0700 -o alx -g users /home/alx/.ssh /home/alx/.config/sunshine/credentials
+      install -d -m 0700 -o alx -g users /home/alx /home/alx/.config /home/alx/.config/sunshine /home/alx/.ssh /home/alx/.config/sunshine/credentials
       install -m 0600 -o alx -g users "$seed/ssh/authorized_keys" /home/alx/.ssh/authorized_keys
       install -m 0600 -o alx -g users "$seed/sunshine/sunshine_state.json" /home/alx/.config/sunshine/sunshine_state.json
       install -m 0600 -o alx -g users "$seed/sunshine/credentials/cacert.pem" /home/alx/.config/sunshine/credentials/cacert.pem
       install -m 0600 -o alx -g users "$seed/sunshine/credentials/cakey.pem" /home/alx/.config/sunshine/credentials/cakey.pem
     '';
+  };
+
+  systemd.services.tracer-boot-report = {
+    description = "Save rescue boot diagnostics on migration media";
+    after = [ "local-fs.target" ];
+    unitConfig.RequiresMountsFor = [ "/media/tracer" ];
+    serviceConfig = {
+      Type = "oneshot";
+      UMask = "0077";
+    };
+    path = [
+      pkgs.coreutils
+      pkgs.systemd
+      pkgs.util-linux
+    ];
+    script = ''
+      report=/media/tracer/NixOS-Migration/boot-logs/$(cat /proc/sys/kernel/random/boot_id)
+      install -d -m 0700 "$report"
+      journalctl --boot --no-pager --output=short-monotonic > "$report/journal.txt.tmp"
+      mv "$report/journal.txt.tmp" "$report/journal.txt"
+      systemctl --failed --no-pager > "$report/failed-units.txt"
+      findmnt --real > "$report/mounts.txt"
+      stat -c '%U:%G %a %n' /home /home/alx /home/alx/.config > "$report/home-permissions.txt"
+      sync -f "$report"
+    '';
+  };
+  systemd.timers.tracer-boot-report = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "30s";
+      OnUnitActiveSec = "2min";
+    };
   };
 
   isoImage.edition = lib.mkForce "tracer-remote-rescue";

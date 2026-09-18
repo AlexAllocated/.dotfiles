@@ -9,7 +9,8 @@ workspace="$HOME/.dotfiles"
 	exit 1
 }
 thread_id="$(<"$thread_file")"
-[[ "$thread_id" =~ ^[0-9a-fA-F-]{36}$ ]] || {
+thread_id="${thread_id%$'\r'}"
+[[ "$thread_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || {
 	printf '%s\n' 'Tracer conversation marker is invalid.' >&2
 	exit 1
 }
