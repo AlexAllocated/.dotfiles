@@ -316,7 +316,10 @@ let
   ]);
   razerKeybindEditor = pkgs.writeShellApplication {
     name = "razer-keybind-editor";
-    runtimeInputs = [ razerProfileTrayPython pkgs.pipewire ];
+    runtimeInputs = [
+      razerProfileTrayPython
+      pkgs.pipewire
+    ];
     text = ''
       export FONTCONFIG_FILE=${
         pkgs.makeFontsConf {
