@@ -41,6 +41,6 @@ foreach ($invalid in @(
 	if (-not $rejected) { throw 'A conflicting or invalid configuration was accepted.' }
 }
 $source = Get-Content -LiteralPath $sourcePath -Raw
-if ($source -notmatch 'dd_configuration_option = "ensure_primary"') { throw 'Physical displays can still be disabled by streaming.' }
+if ($source -notmatch "dd_configuration_option = 'ensure_active'") { throw 'Streaming must preserve physical displays and the primary monitor.' }
 if ($source -notmatch 'global_prep_cmd = \$globalPrepCommand') { throw 'Normal streaming lost its NVIDIA frame limit.' }
 Write-Host 'PASS: recovery access, existing apps preserved, conflicts rejected, second pass unchanged, physical displays retained.'

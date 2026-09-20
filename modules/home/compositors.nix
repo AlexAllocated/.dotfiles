@@ -14,6 +14,7 @@ let
     else
       config.dotfiles.source;
   noctaliaPackage = config.programs.noctalia.package;
+  screenshotDirectory = "${config.home.homeDirectory}/Pictures/Screenshots";
   dmsPackage = pkgs.dms-shell;
   noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
     builtins.readFile ../../patches/noctalia-focus-existing-windows.patch
@@ -760,9 +761,10 @@ in
             drawer = true;
             drawer_columns = 3;
             pinned = [
-              "chrome_status_icon_1"
+              "ChatGPT"
+              "AMPS"
+              "tray-icon tray app amps"
               "flameshot"
-              "lan-mouse-edge-toggle"
               "razer-profile-selector"
             ];
           };
@@ -887,6 +889,7 @@ in
     # standard screenshot portal. Migrate the mutable per-user config without
     # taking ownership of the rest of Alex's Flameshot preferences.
     home.activation.flameshotPortalMigration = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      run ${lib.getExe' pkgs.coreutils "mkdir"} -p -m 0700 ${lib.escapeShellArg screenshotDirectory}
       config_file="$HOME/.config/flameshot/flameshot.ini"
       if [[ -f "$config_file" ]]; then
         $DRY_RUN_CMD ${lib.getExe pkgs.gnused} -i \
@@ -1027,6 +1030,7 @@ in
         ];
       };
       Service = {
+        ExecStartPre = "${lib.getExe' pkgs.coreutils "mkdir"} -p -m 0700 %h/Pictures/Screenshots";
         ExecStart = lib.getExe pkgs.flameshot;
         Restart = "on-failure";
         RestartSec = 1;

@@ -9,17 +9,37 @@ let
   cfg = config.dotfiles.compositors;
   mangoPackage = import ../../lib/mango-package.nix { inherit inputs pkgs; };
   niriPackage = pkgs.niri.overrideAttrs (oldAttrs: {
-    patches = (oldAttrs.patches or [ ]) ++ [
-      # Niri 26.04 advertises only DMA-BUF buffers, while Discord requests
-      # ordinary shared-memory frames. Backport upstream's SHM fallback so
-      # Discord works without replacing the GNOME portal and losing Niri's
-      # per-window capture support.
-      (pkgs.fetchurl {
-        url = "https://github.com/niri-wm/niri/compare/dd1c3bcb9f1ef416df33ffa22d1d9bcee1398e7d...2ab59b90d55afbbe362a63e2a061afe4b524d8c4.diff";
-        hash = "sha256-gkQnj931BC5/ttf81UVYOi0VRQvXzJN3CA8osUA7iXU=";
-      })
-      ../../patches/niri-window-rule-open-animation.patch
-    ];
+    src =
+      if config.dotfiles.desktop.sunshine.mode == "adaptive" then
+        pkgs.fetchFromGitHub {
+          owner = "willybarret";
+          repo = "niri";
+          rev = "dc0505f043028a8cc1e007d5760953753dec2d3b";
+          hash = "sha256-NmsIOdV1MW1GJ54rXOhPmD3DZJVP+c1qyim9nfWxREE=";
+        }
+      else
+        oldAttrs.src;
+    cargoDeps =
+      if config.dotfiles.desktop.sunshine.mode == "adaptive" then
+        pkgs.rustPlatform.fetchCargoVendor {
+          src = niriPackage.src;
+          hash = "sha256-aNovCzrTtmqTO33YtZap47npdN73zXC1bap5q5dZvZk=";
+        }
+      else
+        oldAttrs.cargoDeps;
+    patches =
+      (oldAttrs.patches or [ ])
+      ++ [
+        # Niri 26.04 advertises only DMA-BUF buffers, while Discord requests
+        # ordinary shared-memory frames. Backport upstream's SHM fallback so
+        # Discord works without replacing the GNOME portal and losing Niri's
+        # per-window capture support.
+        (pkgs.fetchurl {
+          url = "https://github.com/niri-wm/niri/compare/dd1c3bcb9f1ef416df33ffa22d1d9bcee1398e7d...2ab59b90d55afbbe362a63e2a061afe4b524d8c4.diff";
+          hash = "sha256-gkQnj931BC5/ttf81UVYOi0VRQvXzJN3CA8osUA7iXU=";
+        })
+      ]
+      ++ [ ../../patches/niri-window-rule-open-animation.patch ];
   });
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   loginctl = lib.getExe' pkgs.systemd "loginctl";
@@ -597,17 +617,21 @@ in
     # handoff.
     xdg.portal.config.niri = {
       "org.freedesktop.impl.portal.ScreenCast" = "gnome";
-      "org.freedesktop.impl.portal.Screenshot" = "gnome";
+      "org.freedesktop.impl.portal.Screenshot" = "wlr";
     };
 
     systemd.user.services.dotfiles-niri-portal-ready = {
       description = "Expose Niri screenshot and screencast portals";
       wantedBy = [ "niri.service" ];
       partOf = [ "niri.service" ];
-      wants = [ "xdg-desktop-portal-gnome.service" ];
+      wants = [
+        "xdg-desktop-portal-gnome.service"
+        "xdg-desktop-portal-wlr.service"
+      ];
       after = [
         "graphical-session.target"
         "xdg-desktop-portal-gnome.service"
+        "xdg-desktop-portal-wlr.service"
       ];
       serviceConfig = {
         Type = "oneshot";

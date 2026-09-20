@@ -15,6 +15,11 @@ pub mod devices;
 pub mod phone;
 pub mod topology;
 
+#[cfg(target_os = "linux")]
+mod linux_audio;
+#[cfg(target_os = "linux")]
+pub use linux_audio::*;
+
 #[cfg(windows)]
 mod app_routing;
 #[cfg(windows)]
@@ -441,9 +446,10 @@ impl Config {
 		}
 		validate_device_connections(&self.patchbay.connections, &self.devices)?;
 		for route in &self.routes {
-			if route.process.trim().is_empty() || !route.process.to_ascii_lowercase().ends_with(".exe")
+			if route.process.trim().is_empty()
+				|| (cfg!(windows) && !route.process.to_ascii_lowercase().ends_with(".exe"))
 			{
-				bail!("route process names must be non-empty .exe names");
+				bail!("route process names must be non-empty executable names (.exe on Windows)");
 			}
 			if route.output.is_none() && route.input.is_none() {
 				bail!(
@@ -851,33 +857,33 @@ impl MeterProbe {
 	}
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn select_main_output(_config: &Config, _endpoint: &str) -> Result<()> {
 	bail!("AMPS's Linux endpoint backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn select_main_input(_endpoint: &str) -> Result<()> {
 	bail!("AMPS's Linux endpoint backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn graph_snapshot(_config: &Config) -> Result<GraphSnapshot> {
 	bail!("AMPS's Linux graph backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn meter_snapshot(_config: &Config) -> Result<Vec<MeterReading>> {
 	bail!("AMPS's Linux meter backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub struct MeterProbe;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub struct CleanMicMonitor;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 impl CleanMicMonitor {
 	pub fn new(_config: &Config) -> Result<Self> {
 		bail!("AMPS's Linux Clean Mic monitor backend has not been connected yet")
@@ -888,7 +894,7 @@ impl CleanMicMonitor {
 	}
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 impl MeterProbe {
 	pub fn new(_config: &Config) -> Result<Self> {
 		bail!("AMPS's Linux meter backend has not been connected yet")

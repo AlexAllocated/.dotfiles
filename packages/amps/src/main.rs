@@ -7,15 +7,15 @@ use std::{
 };
 
 use amps::{default_config_path, Config, DEFAULT_CONFIG};
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 use anyhow::bail;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use anyhow::Context;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(about = "Seven-bus Windows audio router", version)]
+#[command(about = "Audio Mixing and Processing Subsystem", version)]
 struct Cli {
 	#[arg(long, global = true, value_name = "FILE")]
 	config: Option<PathBuf>,
@@ -87,9 +87,9 @@ fn main() -> Result<()> {
 		return Ok(());
 	}
 	if matches!(cli.command, Command::Devices) {
-		#[cfg(windows)]
+		#[cfg(any(windows, target_os = "linux"))]
 		return amps::print_devices();
-		#[cfg(not(windows))]
+		#[cfg(not(any(windows, target_os = "linux")))]
 		bail!("AMPS device enumeration runs on Windows; build and run amps.exe");
 	}
 
@@ -121,7 +121,7 @@ fn main() -> Result<()> {
 	}
 	let config = Config::load(&config_path)?;
 
-	#[cfg(windows)]
+	#[cfg(any(windows, target_os = "linux"))]
 	{
 		match cli.command {
 			Command::Snapshot => {
@@ -168,7 +168,7 @@ fn main() -> Result<()> {
 		}
 	}
 
-	#[cfg(not(windows))]
+	#[cfg(not(any(windows, target_os = "linux")))]
 	{
 		let _ = (config, Arc::new(AtomicBool::new(false)), Ordering::Relaxed);
 		match cli.command {

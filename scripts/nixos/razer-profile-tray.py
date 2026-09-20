@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""StatusNotifier profile selector for the Razer Basilisk."""
+"""StatusNotifier profile selector for Razer devices."""
 
 import argparse
 import subprocess
@@ -14,8 +14,9 @@ from gi.repository import GLib, Gtk  # noqa: E402
 
 
 class ProfileTray:
-    def __init__(self, controller):
+    def __init__(self, controller, editor=None):
         self.controller = controller
+        self.editor = editor
         self.selected = self.run("status")
         self.busy = False
         self.items = {}
@@ -28,11 +29,22 @@ class ProfileTray:
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
         self.indicator.set_title(f"Razer profile: {self.selected}")
 
+        self.build_menu()
+        GLib.timeout_add_seconds(2, self.refresh)
+
+    def build_menu(self):
+        self.items = {}
         menu = Gtk.Menu()
-        heading = Gtk.MenuItem(label="Basilisk profile")
+        heading = Gtk.MenuItem(label="Razer profile")
         heading.set_sensitive(False)
         menu.append(heading)
         menu.append(Gtk.SeparatorMenuItem())
+
+        if self.editor:
+            editor = Gtk.MenuItem(label="Open keybind editor")
+            editor.connect("activate", lambda _: subprocess.Popen([self.editor]))
+            menu.append(editor)
+            menu.append(Gtk.SeparatorMenuItem())
 
         group = None
         for name in self.run("list-profiles").splitlines():
@@ -49,7 +61,6 @@ class ProfileTray:
         menu.append(reapply)
         menu.show_all()
         self.indicator.set_menu(menu)
-        GLib.timeout_add_seconds(2, self.refresh)
 
     def run(self, *arguments):
         return subprocess.run(
@@ -119,14 +130,20 @@ class ProfileTray:
             self.selected = selected
             self.indicator.set_title(f"Razer profile: {selected}")
             self.sync_checks()
+        try:
+            if list(self.items) != self.run("list-profiles").splitlines():
+                self.build_menu()
+        except subprocess.CalledProcessError:
+            pass
         return True
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--controller", required=True)
+    parser.add_argument("--editor")
     args = parser.parse_args()
-    ProfileTray(args.controller)
+    ProfileTray(args.controller, args.editor)
     Gtk.main()
 
 

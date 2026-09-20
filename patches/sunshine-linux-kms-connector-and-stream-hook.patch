@@ -55,7 +55,7 @@
 +      }
 @@ -873,0 +879,8 @@
 +      streaming_prepared = true;
-+      if (!platf::streaming_will_prepare()) {
++      if (!platf::streaming_will_prepare(launch_session->width, launch_session->height, launch_session->fps)) {
 +        tree.put("root.<xmlattr>.status_code", 503);
 +        tree.put("root.<xmlattr>.status_message", "Failed to prepare the host display for streaming");
 +        tree.put("root.gamesession", 0);
@@ -73,7 +73,7 @@
 +      }
 @@ -979,0 +999,8 @@
 +      streaming_prepared = true;
-+      if (!platf::streaming_will_prepare()) {
++      if (!platf::streaming_will_prepare(launch_session->width, launch_session->height, launch_session->fps)) {
 +        tree.put("root.resume", 0);
 +        tree.put("root.<xmlattr>.status_code", 503);
 +        tree.put("root.<xmlattr>.status_message", "Failed to prepare the host display for streaming");
@@ -85,21 +85,35 @@
 --- a/src/platform/common.h
 +++ b/src/platform/common.h
 @@ -629,0 +630 @@
-+  bool streaming_will_prepare();
++  bool streaming_will_prepare(int width, int height, int fps);
 --- a/src/platform/linux/misc.cpp
 +++ b/src/platform/linux/misc.cpp
 @@ -11,0 +12 @@
 +#include <cstdlib>
-@@ -411,0 +413,14 @@
-+  bool streaming_will_prepare() {
+@@ -411,0 +413,28 @@
++  bool streaming_will_prepare(int width, int height, int fps) {
 +    const char *command = std::getenv("SUNSHINE_STREAM_START_COMMAND");
 +    if (command == nullptr || *command == '\0') {
 +      return true;
 +    }
 +
-+    if (const int status = std::system(command); status != 0) {
++    const auto invocation = std::string(command) + " " + std::to_string(width) + " " +
++                            std::to_string(height) + " " + std::to_string(fps);
++    if (const int status = std::system(invocation.c_str()); status != 0) {
 +      BOOST_LOG(warning) << "Stream-start command exited with status ["sv << status << ']';
 +      return false;
++    }
++
++    if (const char *path = std::getenv("SUNSHINE_SELECTED_OUTPUT_FILE")) {
++      std::ifstream selected_file(path);
++      std::string selected;
++      if (!std::getline(selected_file, selected) || selected.empty() ||
++          selected.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.") != std::string::npos) {
++        BOOST_LOG(error) << "Display policy did not return a valid output";
++        return false;
++      }
++      config::video.output_name = selected;
++      BOOST_LOG(info) << "Display policy selected " << selected;
 +    }
 +
 +    return true;

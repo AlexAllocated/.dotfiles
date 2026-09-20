@@ -189,6 +189,23 @@ pub fn project(
 			None,
 		),
 	] {
+		let detail = if graph.platform == "linux" {
+			format!(
+				"{} · PipeWire",
+				detail.split(" · ").next().unwrap_or(detail)
+			)
+		} else {
+			detail.into()
+		};
+		let effect = if graph.platform == "linux" {
+			if matches!(id, "game" | "music") {
+				Some("Binaural spatial audio · headphone output")
+			} else {
+				None
+			}
+		} else {
+			effect
+		};
 		let source = graph.patch_sources.iter().any(|p| p.id == id);
 		let target = graph.patch_destinations.iter().any(|p| p.id == id);
 		let mut inputs = if target {
@@ -207,7 +224,7 @@ pub fn project(
 			} else {
 				"bus"
 			},
-			detail: detail.into(),
+			detail,
 			meter: Some(meter.into()),
 			inputs,
 			outputs: if source {

@@ -23,6 +23,19 @@ const { chromium } = requireRuntime("playwright");
 		const errors = [];
 		page.on("pageerror", e => errors.push(String(e)));
 		const assertWindowFit = async () => {
+			const dropdowns = await page.locator("select:not(:disabled)").evaluateAll(elements =>
+				elements.map(element => {
+					const style = getComputedStyle(element);
+					return { appearance: style.appearance, color: style.color, background: style.backgroundColor };
+				})
+			);
+			for (const dropdown of dropdowns) {
+				assert.deepEqual(dropdown, {
+					appearance: "none",
+					color: "rgb(0, 0, 0)",
+					background: "rgb(153, 204, 255)"
+				});
+			}
 			assert.equal(
 				await page.locator("h1").innerText(),
 				"Audio Mixing and Processing Subsystem"

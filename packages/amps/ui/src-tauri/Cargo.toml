@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 amps = { path = "../.." }
 serde = { version = "1", features = ["derive"] }
+fs2 = "0.4"
 tauri = { version = "2", features = ["tray-icon"] }
 
 [target.'cfg(windows)'.dependencies]

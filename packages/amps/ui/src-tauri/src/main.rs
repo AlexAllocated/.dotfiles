@@ -21,6 +21,11 @@ use tauri::{
 	Emitter, Manager, RunEvent, WindowEvent,
 };
 
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux::InstanceGuard;
+
 #[cfg(windows)]
 use std::os::windows::{io::AsRawHandle, process::CommandExt};
 
@@ -331,6 +336,7 @@ fn spawn_engine(config_path: &Path, log: &File) -> std::io::Result<Child> {
 	command.spawn()
 }
 
+#[cfg(not(target_os = "linux"))]
 fn supervise_engine(config_path: PathBuf, control: Arc<EngineControl>) {
 	thread::Builder::new()
 		.name("amps-engine-supervisor".into())
@@ -411,7 +417,7 @@ fn supervise_engine(config_path: PathBuf, control: Arc<EngineControl>) {
 }
 
 fn main() {
-	#[cfg(windows)]
+	#[cfg(any(windows, target_os = "linux"))]
 	let _instance = match InstanceGuard::acquire() {
 		Ok(Some(instance)) => instance,
 		Ok(None) => return,
@@ -474,7 +480,10 @@ fn main() {
 			phone,
 		})
 		.setup(move |app| {
+			#[cfg(not(target_os = "linux"))]
 			supervise_engine(setup_config_path.clone(), setup_engine.clone());
+			#[cfg(target_os = "linux")]
+			linux::supervise(app.handle().clone(), setup_config_path.clone(), setup_engine.clone());
 			let show = MenuItem::with_id(app, "show", "Show AMPS", true, None::<&str>)?;
 			let restart = MenuItem::with_id(app, "restart", "Restart AMPS", true, None::<&str>)?;
 			let exit = MenuItem::with_id(app, "exit", "Exit AMPS", true, None::<&str>)?;
@@ -529,6 +538,18 @@ fn main() {
 				let _ = app.emit("amps-ui-feedback", "key-02");
 				let state = app.state::<UiState>();
 				stop_clean_mic_monitor(&state);
+				#[cfg(target_os = "linux")]
+				{
+					let handle = app.clone();
+					tauri::async_runtime::spawn_blocking(move || {
+						match linux::service("stop") {
+							Ok(()) => handle.exit(0),
+							Err(error) => { eprintln!("AMPS shutdown failed: {error}"); show_main(&handle); }
+						}
+					});
+					return;
+				}
+				#[cfg(not(target_os = "linux"))]
 				app.exit(0);
 			}
 			_ => {}

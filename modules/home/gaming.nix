@@ -12,6 +12,32 @@ let
   battleNetAppId = toString cfg.battleNet.appId;
   battleNetPrefix = "${config.xdg.dataHome}/Steam/steamapps/compatdata/${battleNetAppId}";
   battleNetExecutable = "${battleNetPrefix}/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net.exe";
+  battleNetInstaller = pkgs.fetchurl {
+    name = "Battle.net-Setup.exe";
+    url = "https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe";
+    hash = "sha256-3l0y1Ope7VqeEgAn+2izcJdtv+zI8qj5EwWXfwuH/K8=";
+  };
+  battleNetLauncher = pkgs.writeShellApplication {
+    name = "battlenet";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.umu-launcher
+    ];
+    text = ''
+      export WINEPREFIX=${lib.escapeShellArg "${battleNetPrefix}/pfx"}
+      export PROTONPATH=${lib.escapeShellArg (toString pkgs.proton-ge-bin.steamcompattool)}
+      export GAMEID=umu-battlenet
+      export STORE=battlenet
+      mkdir -p "$WINEPREFIX"
+      executable=${lib.escapeShellArg battleNetExecutable}
+      if [[ ! -f "$executable" ]]; then
+        exec umu-run ${battleNetInstaller}
+      fi
+      umu-run "$WINEPREFIX/drive_c/windows/system32/reg.exe" add \
+        'HKCU\Software\Wine\Explorer' /v ShowSystray /t REG_DWORD /d 0 /f
+      exec umu-run "$executable" "$@"
+    '';
+  };
   battleNetSchemes = [
     "x-scheme-handler/battlenet"
     "x-scheme-handler/blizzard"
@@ -28,6 +54,10 @@ let
           exit 64
           ;;
       esac
+
+      ${lib.optionalString cfg.battleNet.useUmu ''
+        exec ${lib.getExe battleNetLauncher} "--uri=$uri"
+      ''}
 
       executable=${lib.escapeShellArg battleNetExecutable}
       if [[ ! -f "$executable" ]]; then
@@ -203,6 +233,7 @@ in
     steamAutostart.enable = lib.mkEnableOption "silent Steam startup with the graphical session";
     battleNet = {
       enable = lib.mkEnableOption "Battle.net browser callbacks for a Steam-managed Proton prefix";
+      useUmu = lib.mkEnableOption "declarative Battle.net and Heroes launchers using UMU/GE-Proton";
       appId = lib.mkOption {
         type = lib.types.ints.unsigned;
         default = 2527490029;
@@ -306,6 +337,21 @@ in
       xdg.mimeApps.defaultApplications = lib.genAttrs battleNetSchemes (_: [
         "battlenet-proton-handler.desktop"
       ]);
+    })
+    (lib.mkIf (linuxWorkstation && cfg.battleNet.enable && cfg.battleNet.useUmu) {
+      home.packages = [ battleNetLauncher ];
+      xdg.desktopEntries.battlenet = {
+        name = "Battle.net";
+        exec = "${lib.getExe battleNetLauncher}";
+        terminal = false;
+        categories = [ "Game" ];
+      };
+      xdg.desktopEntries.heroes-of-the-storm = {
+        name = "Heroes of the Storm";
+        exec = "${lib.getExe battleNetLauncher} --exec=\"launch Hero\"";
+        terminal = false;
+        categories = [ "Game" ];
+      };
     })
   ];
 }

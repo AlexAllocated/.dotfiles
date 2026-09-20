@@ -7,5 +7,11 @@
 	"buildRevision": "a07bf4c56eda88f9fe88470788b59d543786e4f4",
 	"buildRun": 34179336505,
 	"artifact": "build-Windows-AMD64",
-	"activation": "manual-after-validation"
+	"activation": "manual-after-validation",
+	"pendingAdaptiveDisplay": {
+		"branch": "codex/adaptive-stream-display",
+		"revision": "a1d6afa168bfc972a13ab359ba842d198cb58cf2",
+		"buildRun": 35388393118,
+		"status": "awaiting-build-and-windows-validation"
+	}
 }

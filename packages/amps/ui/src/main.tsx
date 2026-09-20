@@ -108,7 +108,7 @@ const SignalNode = memo(function SignalNode({ data, selected }: any) {
 			{n.effect && (
 				<div
 					className="attachment"
-					title="This Windows endpoint effect cannot be moved to another wire"
+					title="This bus effect cannot be moved to another wire"
 				>
 					🔒 {n.effect}
 				</div>
@@ -953,9 +953,8 @@ function Console() {
 									</p>
 								)}
 								<p className="hint">
-									Windows device selection uses the same history. During Moonlight, use
-									these selectors to change AMPS without resetting stream audio. Master
-									volume affects listening, not OBS stems.
+									Use these selectors to choose your listening output and microphone.
+									Main output volume affects listening, not the separate bus recordings.
 								</p>
 							</section>
 						)}

@@ -99,6 +99,7 @@ name = "amps-ui"
 version = "0.1.0"
 dependencies = [
  "amps",
+ "fs2",
  "serde",
  "tauri",
  "tauri-build",

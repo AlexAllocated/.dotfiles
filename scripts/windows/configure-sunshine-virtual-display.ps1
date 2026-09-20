@@ -12,6 +12,23 @@ param(
 $ErrorActionPreference = "Stop"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
+function Get-SunshineAdaptiveDisplaySettings {
+	param([string]$BinaryPath, [string]$VirtualOutput)
+	$binaryText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($BinaryPath))
+	if (-not $binaryText.Contains('preferred_output_name')) {
+		throw 'Install the adaptive-display Sunshine fork before applying this policy. The existing configuration has not been changed.'
+	}
+	return [ordered]@{
+		output_name = $VirtualOutput
+		preferred_output_name = ''
+		dd_configuration_option = 'ensure_active'
+		dd_resolution_option = 'auto'
+		dd_refresh_rate_option = 'auto'
+		dd_hdr_option = 'auto'
+		dd_config_revert_on_disconnect = 'enabled'
+	}
+}
+
 function Get-SunshineSignInApplicationsJson {
 	param([string]$Json)
 	$document = $Json | ConvertFrom-Json
@@ -91,19 +108,15 @@ $globalPrepCommand = ConvertTo-Json -InputObject @(
 		elevated = $true
 	}
 ) -Compress
-$settings = [ordered]@{
-	output_name = $outputName
-	dd_configuration_option = "ensure_primary"
-	dd_resolution_option = "auto"
-	dd_refresh_rate_option = "auto"
-	dd_hdr_option = "auto"
-	dd_config_revert_on_disconnect = "enabled"
+$settings = Get-SunshineAdaptiveDisplaySettings -BinaryPath (Join-Path $env:ProgramFiles 'Sunshine\sunshine.exe') -VirtualOutput $outputName
+$audioSettings = [ordered]@{
 	# Sunshine makes this sink the Windows default only while a client is
 	# connected. AMPS observes that real endpoint transition directly.
 	virtual_sink = $StreamingMixName
 	install_steam_audio_drivers = "disabled"
 	global_prep_cmd = $globalPrepCommand
 }
+foreach ($key in $audioSettings.Keys) { $settings[$key] = $audioSettings[$key] }
 
 $obsoleteSettings = @(
 	"audio_sink"
@@ -219,9 +232,9 @@ if (Test-Path -LiteralPath $ConfigurationPath) {
 Restart-Service -Name $ServiceName -Force
 (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(15))
 
-Write-Host "Sunshine now targets $outputName (VDD by MTT)."
-Write-Host "The VDD becomes primary while streaming; physical displays remain active."
+Write-Host "Sunshine mirrors the active LG without changing its mode; otherwise it uses $outputName (VDD by MTT)."
+Write-Host "The VDD is no longer used as a secondary monitor beside the LG."
 Write-Host "Windows Sign-In provides desktop access without commands that require a signed-in user."
-Write-Host "Resolution, refresh rate, and HDR now follow the Moonlight client request."
+Write-Host "Virtual-display resolution, refresh rate, and HDR follow the Moonlight client request."
 Write-Host "Sunshine audio and display policy reconciled. External audio management: $($settings.external_audio -eq 'enabled')."
 Write-Host "The NVIDIA driver now limits local play to 158 FPS and reserves three frames of headroom on Moonlight."

@@ -121,14 +121,13 @@ Allowed access, but Windows returned success from `RegisterApp` while
 transport object. It was unregistered and removed without connecting a call.
 No answer/hang-up buttons or microphone-to-iPhone port are exposed without a
 working native call backend. See the [implementation and call-gate notes](../../docs/amps-device-graph-plan.md).
-Linux retains the shared graph contract but does not yet implement these native
-Windows audio routes.
+Linux implements the shared graph through PipeWire. The Windows phone reception
+and call-control integration is not implemented on Linux.
 
 ### Bus routing
 
-AMPS is Alex's private cross-platform streaming-audio graph. Its Windows
-engine is paired with a Tauri operations console; a future Linux engine will
-implement the same Rust status/control contract beneath the identical UI. The
+AMPS is Alex's private cross-platform streaming-audio graph. Its Windows and
+Linux engines share the Rust status/control contract and Tauri operations console. The
 seven buses stay intentionally boring and can be plugged together like a small
 hardware patch panel:
 
@@ -520,5 +519,14 @@ request.json` accepts a typed request containing `id`, `session`,
 An acknowledgement timeout is an **unknown outcome**: refresh status before
 retrying, rather than assuming the edit failed. Live device/hotplug, Bluetooth,
 Quest/Moonlight, and game/stream soak tests remain distinct from the isolated
-browser checks. Linux audio execution and freely insertable DSP are future
-backend work; the canvas/model themselves are platform-neutral.
+browser checks. Linux provides native PipeWire routing, metering, spatial
+processing, NVIDIA AFX and DeepFilterNet filtering, and temporary microphone
+monitoring. Freely insertable DSP remains future work.
+
+On NixOS, `dotfiles.amps` runs the engine as a system service under the configured
+desktop user, using that user's PipeWire session. The user-session UI controls
+the service through narrowly scoped Polkit authorization. Closing its window
+keeps the graph running; tray Restart restarts the engine, and tray Exit stops
+both the engine and UI. Run `amps doctor` to check the live graph. NVIDIA AFX
+currently packages the RTX 50-series native runtime; other GPU generations
+require matching models and runtime packaging.

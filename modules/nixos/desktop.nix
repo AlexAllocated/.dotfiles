@@ -8,6 +8,11 @@ let
   cfg = config.dotfiles.desktop;
   workstationPackageOverlay = _final: prev: {
     alvr = prev.alvr.overrideAttrs (oldAttrs: {
+      postPatch = (oldAttrs.postPatch or "") + ''
+        substituteInPlace alvr/adb/src/commands.rs \
+          --replace-fail 'let exe_name = afs::exec_fname("adb").to_owned();' \
+            'let exe_name = "${lib.getExe' prev.android-tools "adb"}".to_owned();'
+      '';
       # SteamVR 2.16+ stripped the private compositor symbol ALVR used to
       # associate captured frames with headset poses. Backport the upstream
       # fallback so frames use the latest valid pose instead of accumulating
@@ -70,6 +75,8 @@ let
     });
   };
   sunshineKms = cfg.sunshine.mode == "kms";
+  sunshineAdaptive = cfg.sunshine.mode == "adaptive";
+  sunshinePersistent = sunshineKms || sunshineAdaptive;
   steamVrCompositorLauncher = "/home/${cfg.user}/.local/share/Steam/steamapps/common/SteamVR/bin/linux64/vrcompositor-launcher";
   steamVrCapabilityScript = ''
     target=${lib.escapeShellArg steamVrCompositorLauncher}
@@ -206,8 +213,8 @@ let
         "$@"
     '';
   };
-  razerProfile = pkgs.writeShellApplication {
-    name = "razer-profile";
+  razerHardwareProfile = pkgs.writeShellApplication {
+    name = if cfg.unifiedRazerProfiles then "razer-hardware-profile" else "razer-profile";
     runtimeInputs = [
       pkgs.systemd
       razerProfileDirect
@@ -225,10 +232,11 @@ let
       openrazer_was_active=false
       polychromatic_tray_was_active=false
       polychromatic_tray_unit=polychromatic-tray.service
-      user_systemctl=(systemctl --machine=${cfg.user}@.host --user)
       if [[ "$EUID" -eq 0 ]]; then
+        user_systemctl=(systemctl --machine=${cfg.user}@.host --user)
         user_busctl=(busctl --machine=${cfg.user}@.host --user)
       else
+        user_systemctl=(systemctl --user)
         user_busctl=(busctl --user)
       fi
       if [[ "$needs_hardware" == true ]] \
@@ -260,6 +268,33 @@ let
       razer-profile-direct "$@"
     '';
   };
+  razerImportPython = pkgs.python3.withPackages (p: [ p.evdev ]);
+  razerUnifiedProfiles = pkgs.runCommand "razer-unified-profiles" { } ''
+    ${razerImportPython}/bin/python3 ${../../scripts/nixos/razer-import-profiles.py} \
+      ${../../razer/synapse-profiles.json} "$out"
+  '';
+  razerProfile =
+    if !cfg.unifiedRazerProfiles then
+      razerHardwareProfile
+    else
+      pkgs.writeShellApplication {
+        name = "razer-profile";
+        runtimeInputs = [
+          razerImportPython
+          pkgs.input-remapper
+          pkgs.systemd
+        ];
+        text = ''
+          exec ${razerImportPython}/bin/python3 ${../../scripts/nixos/razer-profile.py} \
+            --source ${razerUnifiedProfiles} \
+            --definitions ${../../razer/synapse-profiles.json} \
+            --importer ${../../scripts/nixos/razer-import-profiles.py} \
+            --editor-model ${../../scripts/nixos/razer-editor-model.py} \
+            --state /home/${cfg.user}/.local/state/razer-profile \
+            --config /home/${cfg.user}/.config/input-remapper-2 \
+            --hardware ${lib.getExe razerHardwareProfile} "$@"
+        '';
+      };
   razerProfileSync = pkgs.writeShellApplication {
     name = "razer-profile-sync";
     runtimeInputs = [
@@ -269,14 +304,80 @@ let
     text = ''
       while ! razer-profile --attempts 3 reapply-profile; do
         printf '%s\n' \
-          'Razer Basilisk is unavailable; keeping its selected profile pending and retrying in 30 seconds.' >&2
+          'Razer devices are unavailable; keeping the selected profile pending and retrying in 30 seconds.' >&2
         sleep 30
       done
     '';
   };
   razerProfileTrayPython = pkgs.python3.withPackages (pythonPackages: [
     pythonPackages.pygobject3
+    pythonPackages.pycairo
+    pythonPackages.evdev
   ]);
+  razerKeybindEditor = pkgs.writeShellApplication {
+    name = "razer-keybind-editor";
+    runtimeInputs = [ razerProfileTrayPython pkgs.pipewire ];
+    text = ''
+      export FONTCONFIG_FILE=${
+        pkgs.makeFontsConf {
+          fontDirectories = [
+            razerEditorFont
+            pkgs.dejavu_fonts
+          ];
+        }
+      }
+      export GI_TYPELIB_PATH=${
+        lib.makeSearchPath "lib/girepository-1.0" (
+          map lib.getLib [
+            pkgs.at-spi2-core
+            pkgs.gdk-pixbuf
+            pkgs.glib
+            pkgs.gobject-introspection-unwrapped
+            pkgs.gtk3
+            pkgs.harfbuzz
+            pkgs.pango
+          ]
+        )
+      }
+      export XDG_DATA_DIRS=${pkgs.adwaita-icon-theme}/share:${pkgs.gtk3}/share:''${XDG_DATA_DIRS:-}
+      exec ${razerProfileTrayPython}/bin/python3 ${../../scripts/nixos/razer-keybind-editor.py} \
+        --controller ${lib.getExe razerProfile} --model ${../../scripts/nixos/razer-editor-model.py} \
+        --sounds ${../../packages/amps/ui/public/audio} "$@"
+    '';
+  };
+  razerEditorFont =
+    pkgs.runCommand "razer-antonio-font"
+      {
+        nativeBuildInputs = [
+          (pkgs.python3.withPackages (p: [
+            p.fonttools
+            p.brotli
+          ]))
+        ];
+      }
+      ''
+        mkdir -p "$out/share/fonts/truetype"
+        python - "$out" ${../../packages/amps/ui/public/fonts} <<'PY'
+        import sys
+        from pathlib import Path
+        from fontTools.ttLib import TTFont
+        for path in Path(sys.argv[2]).glob("*.woff2"):
+            font = TTFont(path)
+            font.flavor = None
+            font.save(Path(sys.argv[1]) / "share/fonts/truetype" / (path.stem + ".ttf"))
+        PY
+      '';
+  razerKeybindDesktop = pkgs.makeDesktopItem {
+    name = "razer-keybind-editor";
+    desktopName = "Razer Input Control";
+    comment = "Unified Razer keybinds and profiles";
+    exec = lib.getExe razerKeybindEditor;
+    icon = "input-gaming";
+    categories = [
+      "Settings"
+      "HardwareSettings"
+    ];
+  };
   razerProfileTray = pkgs.writeShellApplication {
     name = "razer-profile-tray";
     runtimeInputs = [
@@ -302,6 +403,7 @@ let
       exec ${razerProfileTrayPython}/bin/python3 \
         ${../../scripts/nixos/razer-profile-tray.py} \
         --controller ${lib.getExe razerProfile} \
+        ${lib.optionalString cfg.unifiedRazerProfiles "--editor ${lib.getExe razerKeybindEditor}"} \
       "$@"
     '';
   };
@@ -916,6 +1018,56 @@ let
         --unit="$unit" -- "$@"
     '';
   };
+  sunshineDisplayPolicy = pkgs.writeShellApplication {
+    name = "sunshine-display-policy";
+    runtimeInputs = [ config.programs.niri.package ];
+    text = ''
+      exec ${pkgs.python3}/bin/python3 ${../../scripts/nixos/sunshine-display-policy.py} "$@"
+    '';
+  };
+  sunshineAdaptiveLauncher = pkgs.writeShellApplication {
+    name = "sunshine-adaptive-launch";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      export SUNSHINE_SELECTED_OUTPUT_FILE="$RUNTIME_DIRECTORY/selected-output"
+      export SUNSHINE_PHYSICAL_OUTPUTS=${lib.escapeShellArg (lib.concatStringsSep " " sunshineFallbackConnectors)}
+      export SUNSHINE_STREAM_START_COMMAND=${lib.getExe sunshineDisplayPolicy}
+      export SUNSHINE_STREAM_STOP_COMMAND="${lib.getExe sunshineDisplayPolicy} stop"
+      while true; do
+        unset WAYLAND_DISPLAY NIRI_SOCKET
+        while IFS= read -r entry; do
+          case "$entry" in
+            WAYLAND_DISPLAY=* | NIRI_SOCKET=* | DISPLAY=* | XDG_CURRENT_DESKTOP=*) export "''${entry?}" ;;
+          esac
+        done < <(systemctl --user show-environment)
+        if [[ -n "''${NIRI_SOCKET:-}" && -S "$NIRI_SOCKET" ]] \
+          && ${lib.getExe sunshineDisplayPolicy} idle; then
+          break
+        fi
+        sleep 2
+      done
+      runtime_config="$RUNTIME_DIRECTORY/sunshine.conf"
+      install -m 0600 ${sunshineKmsConfig} "$runtime_config"
+      render_node="$(${lib.getExe sunshineDisplayPolicy} render-node)"
+      printf 'Pinning Sunshine capture to NVIDIA render node %s\n' "$render_node"
+      printf '\nadapter_name = %s\n' "$render_node" >> "$runtime_config"
+      printf '\noutput_name = %s\n' "$(<"$SUNSHINE_SELECTED_OUTPUT_FILE")" >> "$runtime_config"
+      socket="$NIRI_SOCKET"
+      ${lib.getExe config.services.sunshine.package} "$runtime_config" &
+      child=$!
+      cleanup() { kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; }
+      trap cleanup EXIT
+      trap 'exit 0' TERM INT
+      while kill -0 "$child" 2>/dev/null; do
+        [[ -S "$socket" ]] || exit 75
+        sleep 2
+      done
+      wait "$child"
+    '';
+  };
   sunshineKmsLauncher = pkgs.writeShellApplication {
     name = "sunshine-kms-launch";
     runtimeInputs = [
@@ -994,7 +1146,8 @@ let
       # repeats this before each real stream; the last-client hook turns it off
       # only when another active display can keep the compositor out of a
       # headless DRM state.
-      if [[ -n "$configured" ]]; then
+      directory="$(connector_directory "$configured" || true)"
+      if [[ -n "$configured" && -r "$directory/status" && "$(<"$directory/status")" == connected ]]; then
         if ${ipadDisplaySessionOn}/bin/ipad-display-session-on \
           && connector_state "$configured"; then
           configured_ready=1
@@ -1022,6 +1175,10 @@ let
         printf '%s\n' 'No connected, enabled DRM output is available for Sunshine.' >&2
         exit 1
       }
+
+      if [[ "$selected" != "$configured" ]]; then
+        unset SUNSHINE_STREAM_START_COMMAND SUNSHINE_STREAM_STOP_COMMAND
+      fi
 
       install -m 0600 -- ${sunshineKmsConfig} "$runtime_config"
       printf '\noutput_name = %s\n' "$selected" >>"$runtime_config"
@@ -1070,6 +1227,7 @@ let
 in
 {
   options.dotfiles.desktop = {
+    unifiedRazerProfiles = lib.mkEnableOption "unified recovered Razer mouse, keyboard and keypad profiles";
     user = lib.mkOption {
       type = lib.types.str;
       default = "alex";
@@ -1168,9 +1326,10 @@ in
         type = lib.types.enum [
           "session"
           "kms"
+          "adaptive"
         ];
         default = "session";
-        description = "Run Sunshine inside the graphical session or persistently below every compositor with KMS capture.";
+        description = "Sunshine capture policy: KDE session, persistent KMS, or adaptive Niri physical/virtual output.";
       };
 
       fallbackConnector = lib.mkOption {
@@ -1530,7 +1689,7 @@ in
 
       sunshine = {
         enable = true;
-        autoStart = !sunshineKms;
+        autoStart = !sunshinePersistent;
         openFirewall = true;
         # Keep CUDA interop available as a fallback without enabling CUDA
         # globally. The local KMS patch selects the iPad by stable connector
@@ -1538,7 +1697,13 @@ in
         package = sunshinePackage;
         settings = {
           sunshine_name = cfg.sunshine.name;
-          capture = if sunshineKms then "kms" else "kwin";
+          capture =
+            if sunshineAdaptive then
+              "wlr"
+            else if sunshineKms then
+              "kms"
+            else
+              "kwin";
           # Encode directly through the NVIDIA hardware encoder. Vulkan Video was a
           # workaround for the previous RTX 3090 host; on Tracer it produces visible
           # flicker while capturing the iPad dummy through KMS.
@@ -1547,9 +1712,9 @@ in
           credentials_file = "sunshine_state.json";
           cert = "credentials/cacert.pem";
           pkey = "credentials/cakey.pem";
-          system_tray = !sunshineKms;
+          system_tray = !sunshinePersistent;
         }
-        // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
+        // lib.optionalAttrs (!sunshinePersistent && cfg.ipadDisplay.connector != null) {
           output_name = cfg.ipadDisplay.connector;
         };
         applications.apps = [
@@ -1557,7 +1722,7 @@ in
             {
               name = "Desktop";
             }
-            // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
+            // lib.optionalAttrs (!sunshinePersistent && cfg.ipadDisplay.connector != null) {
               prep-cmd = [
                 {
                   do = "${ipadDisplayOn}/bin/ipad-display-on";
@@ -1569,13 +1734,13 @@ in
             {
               name = "Steam Big Picture";
               cmd =
-                if sunshineKms then
+                if sunshinePersistent then
                   "${sunshineSessionRun}/bin/sunshine-session-run ${pkgs.steam}/bin/steam steam://open/bigpicture"
                 else
                   "${pkgs.steam}/bin/steam steam://open/bigpicture";
               auto-detach = "true";
             }
-            // lib.optionalAttrs (!sunshineKms && cfg.ipadDisplay.connector != null) {
+            // lib.optionalAttrs (!sunshinePersistent && cfg.ipadDisplay.connector != null) {
               prep-cmd = [
                 {
                   do = "${ipadDisplayOn}/bin/ipad-display-on";
@@ -1606,7 +1771,7 @@ in
       # Home Manager's first activation. Wait for it instead of failing the
       # boot-time autoload race and succeeding only on later boots.
       after = [ "home-manager-${cfg.user}.service" ];
-      serviceConfig.ExecStartPost = [
+      serviceConfig.ExecStartPost = lib.optionals (!cfg.unifiedRazerProfiles) [
         "${lib.getExe' pkgs.util-linux "runuser"} -u ${cfg.user} -- ${lib.getExe' pkgs.input-remapper "input-remapper-control"} --command autoload --config-dir /home/${cfg.user}/.config/input-remapper-2"
       ];
     };
@@ -1652,10 +1817,18 @@ in
     # profile commands, so keep the work pending in an asynchronous service
     # instead of failing an otherwise successful NixOS activation.
     systemd.services.razer-basilisk-linux-bindings = {
-      description = "Reapply the selected Razer Basilisk profile";
+      description = "Reapply the selected Razer profile";
       wantedBy = [ "multi-user.target" ];
-      after = [ "systemd-udev-settle.service" ];
-      serviceConfig = {
+      after = [
+        "systemd-udev-settle.service"
+      ]
+      ++ lib.optional cfg.unifiedRazerProfiles "input-remapper.service";
+      requires = lib.optional cfg.unifiedRazerProfiles "input-remapper.service";
+      environment = lib.optionalAttrs cfg.unifiedRazerProfiles {
+        XDG_RUNTIME_DIR = "/run/user/${toString config.users.users.${cfg.user}.uid}";
+        DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString config.users.users.${cfg.user}.uid}/bus";
+      };
+      serviceConfig = lib.optionalAttrs cfg.unifiedRazerProfiles { User = cfg.user; } // {
         Type = "simple";
         ExecStartPre = "${lib.getExe' pkgs.coreutils "sleep"} 1";
         ExecStart = lib.getExe razerProfileSync;
@@ -1665,7 +1838,7 @@ in
     };
 
     systemd.user.services.razer-profile-tray = {
-      description = "Razer Basilisk profile tray selector";
+      description = "Razer profile tray selector";
       wantedBy = [ "graphical-session.target" ];
       partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
@@ -1702,25 +1875,25 @@ in
     # be prepared; an ExecStartPre failure would enter a restart loop and can
     # block the compositor from stopping graphical-session.target during logout.
     systemd.user.services.sunshine.serviceConfig.ExecCondition = lib.mkIf (
-      !sunshineKms && cfg.ipadDisplay.connector != null
+      !sunshinePersistent && cfg.ipadDisplay.connector != null
     ) "${ipadDisplayEnsure}/bin/ipad-display-ensure";
     # Keep the scheduling capability available for the compiled NVENC fallback
     # so its EGL context can request high GPU priority. Grant only that narrow
     # capability through a root-owned wrapper; CAP_SYS_ADMIN is neither needed
     # nor granted.
-    security.wrappers.sunshine = lib.mkIf (!sunshineKms) {
+    security.wrappers.sunshine = lib.mkIf (!sunshinePersistent) {
       owner = "root";
       group = "root";
       capabilities = "cap_sys_nice+p";
       source = lib.getExe config.services.sunshine.package;
     };
-    systemd.user.services.sunshine.serviceConfig.ExecStart = lib.mkIf (!sunshineKms) (
+    systemd.user.services.sunshine.serviceConfig.ExecStart = lib.mkIf (!sunshinePersistent) (
       lib.mkForce "${config.security.wrapperDir}/sunshine ${sunshineConfig}"
     );
     # Session-local capture and dummy-display preparation require a compatible
     # desktop backend. Keep that legacy mode gated to a KDE session.
     systemd.user.services.sunshine.unitConfig =
-      if sunshineKms then
+      if sunshinePersistent then
         {
           RefuseManualStart = true;
         }
@@ -1734,8 +1907,8 @@ in
     # the existing ~/.config/sunshine pairing state; only the KMS capture and
     # scheduling capabilities are elevated. The web rescue terminal is kept
     # independent so a failed capture experiment cannot strand the machine.
-    systemd.services.sunshine = lib.mkIf sunshineKms {
-      description = "Persistent KMS game stream host for Moonlight";
+    systemd.services.sunshine = lib.mkIf sunshinePersistent {
+      description = "Persistent game stream host for Moonlight";
       wantedBy = [ "multi-user.target" ];
       wants = [
         "avahi-daemon.service"
@@ -1780,7 +1953,7 @@ in
         ];
         RuntimeDirectory = "sunshine";
         RuntimeDirectoryMode = "0700";
-        ExecStart = lib.getExe sunshineKmsLauncher;
+        ExecStart = lib.getExe (if sunshineAdaptive then sunshineAdaptiveLauncher else sunshineKmsLauncher);
         Restart = "always";
         RestartSec = 5;
         # Sunshine's long-lived KMS backend can retain DRM descriptors across
@@ -1788,14 +1961,8 @@ in
         # default while retaining the existing hard ceiling.
         LimitNOFILE = "65536:524288";
         UMask = "0077";
-        AmbientCapabilities = [
-          "CAP_SYS_ADMIN"
-          "CAP_SYS_NICE"
-        ];
-        CapabilityBoundingSet = [
-          "CAP_SYS_ADMIN"
-          "CAP_SYS_NICE"
-        ];
+        AmbientCapabilities = [ "CAP_SYS_NICE" ] ++ lib.optional sunshineKms "CAP_SYS_ADMIN";
+        CapabilityBoundingSet = [ "CAP_SYS_NICE" ] ++ lib.optional sunshineKms "CAP_SYS_ADMIN";
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectControlGroups = true;
@@ -1858,7 +2025,9 @@ in
       KERNEL=="hidraw*", ATTRS{name}=="Sunshine PS5 (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
       KERNEL=="hidraw*", ATTRS{idVendor}=="1532", GROUP="openrazer", MODE="0660", TAG+="uaccess"
       SUBSYSTEM=="usb", ATTR{idVendor}=="1532", GROUP="openrazer", MODE="0660", TAG+="uaccess"
-      ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1532", ATTR{idProduct}=="00d[67]", TAG+="systemd", ENV{SYSTEMD_WANTS}+="razer-basilisk-linux-bindings.service"
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1532", ATTR{idProduct}=="${
+        if cfg.unifiedRazerProfiles then "00d[67]|0244|0266" else "00d[67]"
+      }", TAG+="systemd", ENV{SYSTEMD_WANTS}+="razer-basilisk-linux-bindings.service"
       SUBSYSTEMS=="input", ATTRS{name}=="Sunshine X-Box One (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
       SUBSYSTEMS=="input", ATTRS{name}=="Sunshine gamepad (virtual) motion sensors*", GROUP="input", MODE="0660", TAG+="uaccess"
       SUBSYSTEMS=="input", ATTRS{name}=="Sunshine Nintendo (virtual) pad*", GROUP="input", MODE="0660", TAG+="uaccess"
@@ -1967,7 +2136,7 @@ in
       uid = 1000;
       # Keep PipeWire and the user bus available to persistent Sunshine even
       # while the display manager owns the visible session.
-      linger = sunshineKms;
+      linger = sunshinePersistent;
       description = cfg.userDescription;
       home = "/home/${cfg.user}";
       createHome = true;
@@ -2037,11 +2206,20 @@ in
       nvtopPackages.nvidia
       papers
       pciutils
-      plex-desktop
+      (plex-desktop.override {
+        extraEnv = {
+          QT_QPA_PLATFORM = "xcb";
+          QT_XCB_GL_INTEGRATION = "xcb_glx";
+          __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+          __EGL_EXTERNAL_PLATFORM_CONFIG_DIRS = "/run/opengl-driver/share/egl/egl_external_platform.d";
+        };
+      })
       pulseaudio
       polychromatic
       qbittorrent
       razerProfile
+      razerKeybindEditor
+      razerKeybindDesktop
       slack
       spotify
       teamsWebApp

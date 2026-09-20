@@ -19,9 +19,11 @@ in
     inputs.mango.nixosModules.mango
     inputs.noctalia.nixosModules.default
     ../../modules/nixos/desktop.nix
-    ../../modules/nixos/audio.nix
+    ../../modules/nixos/audio-hardware.nix
+    ../../modules/nixos/amps.nix
     ../../modules/nixos/compositors.nix
     ../../modules/nixos/durable-tmux.nix
+    ../../modules/nixos/chatgpt-service.nix
     ../../modules/nixos/github-actions-runner.nix
     ../../modules/nixos/tracer-tools.nix
   ];
@@ -56,6 +58,7 @@ in
       };
       desktop = {
         inherit user;
+        unifiedRazerProfiles = true;
         userDescription = "Alex";
         hostName = "tracer";
         cpuVendor = "amd";
@@ -75,12 +78,12 @@ in
         sunshine = {
           fallbackConnector = "DP-4";
           fallbackConnectorAliases = [ "DP-1" ];
-          mode = "kms";
+          mode = "adaptive";
           name = "TRACER";
         };
         ipadDisplay = {
-          connector = "DP-2";
-          connectorAliases = [ "DP-5" ];
+          connector = null;
+          connectorAliases = [ ];
         };
       };
       tracerTools = {
@@ -90,6 +93,14 @@ in
       durableTmux = {
         enable = true;
         user = user;
+      };
+      chatgptService = {
+        enable = true;
+        inherit user;
+      };
+      amps = {
+        enable = true;
+        inherit user;
       };
       githubActionsRunner = {
         enable = true;
@@ -132,6 +143,9 @@ in
     };
 
     environment.systemPackages = [
+      (pkgs.callPackage ../../packages/iloader.nix {
+        iloader = inputs.iloader.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      })
       pkgs.efibootmgr
       pkgs.sbctl
     ];
@@ -279,6 +293,18 @@ in
       allowInterfaces = [ cfg.lanInterface ];
     };
 
+    security.sudo.extraRules = [
+      {
+        users = [ user ];
+        commands = [
+          {
+            command = "ALL";
+            options = [ "NOPASSWD" ];
+          }
+        ];
+      }
+    ];
+
     services.openssh = {
       enable = true;
       startWhenNeeded = false;
@@ -339,24 +365,13 @@ in
               };
               focusAtStartup = true;
             };
-            "The Linux Foundation ipad2732 Linux #0" = {
-              # Sunshine enables the dummy only while a remote client needs
-              # it. The LG remains the sole startup output whenever it is on.
-              enable = false;
-              mode = "2732x2048@60";
-              scale = 1.75;
-              niriGaps = 24;
-              position = {
-                x = 3440;
-                y = 0;
-              };
-            };
           };
           gaming = {
             steamLibrary = "/games/SteamLibrary";
             steamAutostart.enable = true;
             haloCampaignEvolved.enable = true;
             battleNet.enable = true;
+            battleNet.useUmu = true;
           };
         };
       };

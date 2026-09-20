@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  osConfig ? { },
   ...
 }:
 let
@@ -75,7 +76,7 @@ in
 {
   imports = [ ./core.nix ];
 
-  config = lib.mkIf enabled {
+  config = lib.mkIf (enabled && !(osConfig.dotfiles.desktop.unifiedRazerProfiles or false)) {
     home.packages = [ syncProfiles ];
 
     # Seed real, user-writable files instead of immutable Home Manager links.

@@ -33,6 +33,8 @@
       url = "github:noctalia-dev/noctalia-shell/v5.0.0-beta.3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    iloader.url = "github:nab138/iloader/v2.3.3";
   };
 
   outputs =
@@ -122,6 +124,8 @@
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
             python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py
+            python3 -m unittest discover -s tests -p 'test_sunshine_display_policy.py'
+            python3 -m unittest discover -s tests -p 'test_chatgpt_supervisor.py'
             python3 scripts/windows/configure-codex.py --self-test
             python3 scripts/codex/canonicalize-home.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
@@ -504,6 +508,16 @@
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           home-module-api = mkModuleApiCheck pkgs pkgs.stdenv.hostPlatform.system;
+          razer-profiles =
+            pkgs.runCommand "razer-profiles-tests"
+              {
+                nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.evdev ])) ];
+              }
+              ''
+                export PYTHONDONTWRITEBYTECODE=1
+                python -m unittest discover -s ${self}/tests -p 'test_razer*.py'
+                touch "$out"
+              '';
           tracer-resume =
             pkgs.runCommand "tracer-resume"
               {
@@ -573,6 +587,18 @@
               touch "$out"
             '';
           tracer-contract = pkgs.runCommand "tracer-contract" { } ''
+            ${self.nixosConfigurations.tracer.config.programs.niri.package}/bin/niri validate --config ${
+              pkgs.writeText "tracer-niri-config.kdl"
+                self.nixosConfigurations.tracer.config.home-manager.users.alx.xdg.configFile."niri/config.kdl".text
+            }
+            test ${
+              nixpkgs.lib.escapeShellArg
+                self.nixosConfigurations.tracer.config.xdg.portal.config.niri."org.freedesktop.impl.portal.Screenshot"
+            } = wlr
+            test ${
+              nixpkgs.lib.escapeShellArg
+                self.nixosConfigurations.tracer.config.xdg.portal.config.niri."org.freedesktop.impl.portal.ScreenCast"
+            } = gnome
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.networking.hostName} = tracer
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.dotfiles.desktop.user} = alx
             test ${

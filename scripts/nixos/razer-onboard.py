@@ -24,11 +24,8 @@ PRODUCT_IDS = {
     "wireless": 0x00D7,
 }
 
-# Linux input events emitted by the physical controls in the recovered
-# Input Remapper profiles.  The four F13-F16 entries were only an old bridge;
-# they identify the corresponding Razer controls and are never emitted by the
-# direct layouts produced here.
 INPUT_BUTTONS = {
+    (1, 274, None): protocol.Button.MIDDLE,
     (1, 183, None): protocol.Button.BOTTOM,
     (1, 184, None): protocol.Button.AIM,
     (1, 185, None): protocol.Button.MIDDLE_BACKWARD,
@@ -43,11 +40,14 @@ INPUT_BUTTONS = {
 # present in the recovered Synapse profiles must be understood before any
 # hardware write begins.
 KEYBOARD_USAGES = {
+    "KEY_A": 0x04,
     "KEY_B": 0x05,
     "KEY_C": 0x06,
     "KEY_E": 0x08,
+    "KEY_F": 0x09,
     "KEY_G": 0x0A,
     "KEY_H": 0x0B,
+    "KEY_I": 0x0C,
     "KEY_K": 0x0E,
     "KEY_M": 0x10,
     "KEY_Q": 0x14,
@@ -55,6 +55,7 @@ KEYBOARD_USAGES = {
     "KEY_T": 0x17,
     "KEY_V": 0x19,
     "KEY_X": 0x1B,
+    "KEY_Z": 0x1D,
     "KEY_ESC": 0x29,
     "KEY_TAB": 0x2B,
     "KEY_SPACE": 0x2C,
@@ -64,6 +65,14 @@ KEYBOARD_USAGES = {
     "KEY_DOT": 0x37,
     "KEY_F1": 0x3A,
     "KEY_F5": 0x3E,
+    "KEY_F10": 0x43,
+    "KEY_PAGEUP": 0x4B,
+    "KEY_PAGEDOWN": 0x4E,
+    "KEY_KP0": 0x62,
+    "KEY_F13": 0x68,
+    "KEY_F14": 0x69,
+    "KEY_F15": 0x6A,
+    "KEY_F16": 0x6B,
 }
 KEYBOARD_MODIFIERS = {
     "KEY_LEFTCTRL": protocol.FnKeyboardModifier.LEFT_CONTROL,
@@ -75,6 +84,22 @@ KEYBOARD_MODIFIERS = {
     "KEY_RIGHTALT": protocol.FnKeyboardModifier.RIGHT_ALT,
     "KEY_RIGHTMETA": protocol.FnKeyboardModifier.RIGHT_GUI,
 }
+KEYBOARD_USAGES.update({f"KEY_{letter}": 4 + index for index, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ")})
+KEYBOARD_USAGES.update({f"KEY_{key}": 30 + index for index, key in enumerate("1234567890")})
+KEYBOARD_USAGES.update({f"KEY_F{index}": 57 + index for index in range(1, 13)})
+KEYBOARD_USAGES.update({f"KEY_F{index}": 91 + index for index in range(13, 25)})
+KEYBOARD_USAGES.update({
+    "KEY_ENTER": 40, "KEY_BACKSPACE": 42, "KEY_MINUS": 45,
+    "KEY_LEFTBRACE": 47, "KEY_RIGHTBRACE": 48, "KEY_BACKSLASH": 49,
+    "KEY_SEMICOLON": 51, "KEY_APOSTROPHE": 52, "KEY_SLASH": 56, "KEY_CAPSLOCK": 57,
+    "KEY_SYSRQ": 70, "KEY_SCROLLLOCK": 71, "KEY_PAUSE": 72, "KEY_INSERT": 73,
+    "KEY_HOME": 74, "KEY_DELETE": 76, "KEY_END": 77,
+    "KEY_RIGHT": 79, "KEY_LEFT": 80, "KEY_DOWN": 81, "KEY_UP": 82,
+    "KEY_NUMLOCK": 83, "KEY_KPSLASH": 84, "KEY_KPASTERISK": 85, "KEY_KPMINUS": 86,
+    "KEY_KPPLUS": 87, "KEY_KPENTER": 88, "KEY_KPDOT": 99, "KEY_102ND": 100,
+    "KEY_COMPOSE": 101,
+})
+KEYBOARD_USAGES.update({f"KEY_KP{index}": 88 + index for index in range(1, 10)})
 
 
 def candidate_paths(transport):
@@ -188,6 +213,9 @@ def keyboard_function(output_symbol):
 def baseline_bindings():
     """Return the normal hardware behavior for every profile-aware control."""
     return {
+        protocol.Button.MIDDLE: protocol.ButtonFunction().set_mouse(
+            protocol.FnMouse.MIDDLE
+        ),
         protocol.Button.BACKWARD: protocol.ButtonFunction().set_mouse(
             protocol.FnMouse.BACKWARD
         ),
