@@ -15,6 +15,7 @@ pkgs.stdenvNoCC.mkDerivation {
     autoPatchelfHook
     dpkg
     makeWrapper
+    python3
     wrapGAppsHook3
   ];
   buildInputs = with pkgs; [
@@ -72,6 +73,9 @@ pkgs.stdenvNoCC.mkDerivation {
     chmod -R u+w app-source
     substituteInPlace app-source/node_modules/@parcel/watcher/node_modules/detect-libc/lib/filesystem.js \
       --replace-fail "'/usr/bin/ldd'" "'${lib.getBin pkgs.glibc}/bin/ldd'"
+    # Nix store modes must not make mutable bundled-plugin staging copies read-only.
+    python ${./chatgpt-desktop/patch-bundled-copy.py} app-source/.vite/build/main-*.js
+    cp ${./chatgpt-desktop/bundled-copy.cjs} app-source/.vite/build/bundled-copy.cjs
     asar pack app-source usr/lib/chatgpt/resources/app.asar --unpack-dir node_modules
   '';
 
@@ -108,6 +112,7 @@ pkgs.stdenvNoCC.mkDerivation {
   installCheckPhase = ''
     runHook preInstallCheck
     node ${../tests/chatgpt-watcher.cjs} "$out/lib/chatgpt/resources/app.asar.unpacked/node_modules/@parcel/watcher"
+    node ${../tests/chatgpt-bundled-copy.cjs} app-source/.vite/build/main-*.js
     runHook postInstallCheck
   '';
 

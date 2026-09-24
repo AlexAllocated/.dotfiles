@@ -21,3 +21,26 @@ Tracer also grants its declared desktop user passwordless sudo through a
 host-specific rule. It does not grant this to every member of `wheel` or apply it
 to other hosts. All programs running as that user can consequently invoke sudo;
 the app itself remains unprivileged until a command explicitly uses it.
+
+## Missing desktop task tools on NixOS
+
+If desktop task tools such as `create_thread` disappear, check the app logs for
+bundled-marketplace materialization failures. The vendor's Linux directory copy
+preserves the Nix store's read-only modes in
+`~/.codex/.tmp/bundled-marketplaces/openai-bundled.staging-*`. A subsequent plugin
+metadata rewrite fails with `EACCES`; cleanup can then fail with another `EACCES`
+and obscure the original write error. This can prevent the bundled desktop tools
+from resolving even when the desktop IPC connection works.
+
+`packages/chatgpt-desktop.nix` patches that copy operation to make the new staging
+copy owner-writable. It preserves executable bits, leaves the source unchanged,
+and never follows copied symlinks when changing permissions. The package build
+fails if the expected vendor code changes, and its install checks reproduce the
+read-only copy, metadata rewrite, cleanup, and symlink boundaries.
+
+Build and activate the updated desktop package through the normal dotfiles
+workflow. The running app keeps its old code until restarted; wait until active
+tasks have finished before restarting it. No `~/.codex/config.toml` overrides or
+plugin preference changes are required. A successful package check does not
+prove the restarted app has exposed the tools; verify a real task-tool invocation
+after restart.
