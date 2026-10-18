@@ -13,7 +13,7 @@ import subprocess
 import urllib.parse
 import urllib.request
 
-from core import age, digest, envelope, nix_source, now, read, run
+from core import age, digest, envelope, mason_receipt_purl, mason_receipt_version, nix_source, now, read, run
 from catalog import applies_here, is_background, records, runtime
 
 
@@ -156,12 +156,10 @@ def editor_local(ctx):
     packages = []
     for name, version in desired.items():
         receipt = read(data_home / 'nvim/mason/packages' / name / 'mason-receipt.json', {})
-        installed = receipt.get('install_options', {}).get('version')
-        if not installed:
-            source = receipt.get('source', {}).get('id', '')
-            installed = source.rsplit('@', 1)[1] if '@' in source else None
+        installed = mason_receipt_version(receipt)
         packages.append({'id': 'mason:' + name, 'name': name, 'declared_version': version,
                          'selected_version': selected_locks.get(name),
+                         'source_purl': mason_receipt_purl(receipt),
                          'installed_version': installed, 'running_version': None,
                          'deployment': 'matches' if installed == version else 'different' if installed else 'unverified'})
     return {'observed_at': now(), 'mason': packages, 'profile': profile, 'selected_source': selected,

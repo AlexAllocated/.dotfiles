@@ -292,12 +292,18 @@ assert(not ok and tostring(err):find('differs from reviewed commit', 1, true))
 
     def test_acceptance_reads_installed_receipts_and_parser_revisions(self):
         self.write('nvim/lazy-lock.json', {'example': {'commit': 'abc'}, 'disabled-plugin': {'commit': 'def'}})
-        self.write('nvim/mason-lock.json', {'packages': {'cmakelang': '0.6.13'}})
+        pins = {'cmakelang': '0.6.13', 'delve': 'v1.27.2', 'nil': '2025-06-13', 'encoded': 'v1.2.3+build#meta'}
+        purls = {'cmakelang': 'pkg:pypi/cmakelang@0.6.13?extra=YAML',
+                 'delve': 'pkg:golang/github.com/go-delve/delve@v1.27.2#cmd/dlv',
+                 'nil': 'pkg:cargo/nil@2025-06-13?repository_url=https://github.com/oxalica/nil',
+                 'encoded': 'pkg:npm/%40scope/tool@v1.2.3%2Bbuild%23meta?repository_url=https://git@example.com/repo'}
+        self.write('nvim/mason-lock.json', {'packages': pins})
         live = Path(self.tmp.name) / 'live'
         validation = Path(self.tmp.name) / 'validated'
         (live / 'lazy/example').mkdir(parents=True)
-        atomic(live / 'mason/packages/cmakelang/mason-receipt.json',
-               {'source': {'id': 'pkg:pypi/cmakelang@0.6.13?extra=YAML'}})
+        for name, purl in purls.items():
+            atomic(live / 'mason/packages' / name / 'mason-receipt.json',
+                   {'source': {'id': purl}, 'install_options': {'version': 'latest'}})
         for runtime in (live, validation):
             (runtime / 'site/parser-info').mkdir(parents=True)
             (runtime / 'site/parser-info/lua.revision').write_text('revision-a')
@@ -309,8 +315,15 @@ assert(not ok and tostring(err):find('differs from reviewed commit', 1, true))
         (live / 'site/parser/lua.so').write_bytes(b'compiled parser')
         with patch.object(adapters, 'run', return_value=result('abc')):
             evidence = adapters._installed_editor_evidence(self.root, validation, live)
-            self.assertEqual(evidence['mason']['cmakelang'], '0.6.13')
+            self.assertEqual(evidence['mason'], pins)
+            self.assertEqual(evidence['mason_sources'], purls)
             self.assertEqual(evidence['inactive_plugins'], ['disabled-plugin'])
+            cmakelang_receipt = live / 'mason/packages/cmakelang/mason-receipt.json'
+            for bad_source in ('pkg:pypi/cmakelang@0.6.12?extra=YAML', 'pkg:npm/@scope/tool', ''):
+                atomic(cmakelang_receipt, {'source': {'id': bad_source}, 'install_options': {'version': '0.6.13'}})
+                with self.subTest(source=bad_source), self.assertRaisesRegex(adapters.AdapterHold, 'Mason tool cmakelang has'):
+                    adapters._installed_editor_evidence(self.root, validation, live)
+            atomic(cmakelang_receipt, {'source': {'id': purls['cmakelang']}})
             (live / 'site/parser-info/lua.revision').write_text('old-revision')
             with self.assertRaisesRegex(adapters.AdapterHold, 'parser lua differs'):
                 adapters._installed_editor_evidence(self.root, validation, live)

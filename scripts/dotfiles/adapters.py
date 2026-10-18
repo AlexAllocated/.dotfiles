@@ -14,9 +14,8 @@ from pathlib import Path
 import platform
 import re
 import shutil
-from urllib.parse import unquote
 
-from core import atomic, digest, envelope, nix_source, now, read, run
+from core import atomic, digest, envelope, mason_receipt_purl, mason_receipt_version, nix_source, now, read, run
 
 GROUPS = ('system', 'os-release', 'drivers', 'desktop', 'editor', 'mac')
 SYSTEM_INPUTS = ('nixpkgs', 'nixpkgs-unstable', 'home-manager', 'nix-darwin', 'lanzaboote')
@@ -387,7 +386,7 @@ def apply_mac(candidate, work):
 
 def _installed_editor_evidence(candidate, validation_data, live_data, profile=None):
     """Inspect persisted runtime identity without loading or repairing Neovim."""
-    evidence = {'plugins': {}, 'mason': {}, 'parsers': {}, 'queries': []}
+    evidence = {'plugins': {}, 'mason': {}, 'mason_sources': {}, 'parsers': {}, 'queries': []}
     plugin_lock, mason_lock = editor_locks(profile)
     reviewed = read(Path(candidate) / plugin_lock)
     manifest = read(validation_data / 'dotfiles-plugin-pins.json', {})
@@ -412,11 +411,11 @@ def _installed_editor_evidence(candidate, validation_data, live_data, profile=No
         receipt = read(live_data / 'mason/packages' / name / 'mason-receipt.json')
         if not receipt:
             raise AdapterHold(f'Live Mason tool {name} is missing')
-        purl = receipt.get('source', {}).get('id', '')
-        actual = unquote(purl.split('?', 1)[0].split('#', 1)[0].rsplit('@', 1)[-1])
+        actual = mason_receipt_version(receipt)
         if actual != expected:
             raise AdapterHold(f'Live Mason tool {name} has {actual}, expected {expected}')
         evidence['mason'][name] = actual
+        evidence['mason_sources'][name] = mason_receipt_purl(receipt)
     expected_parsers = sorted((validation_data / 'site/parser-info').glob('*.revision'))
     if not expected_parsers:
         raise AdapterHold('Isolated editor check produced no parser evidence')

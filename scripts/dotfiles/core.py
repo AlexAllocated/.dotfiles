@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from urllib.parse import unquote
 
 SCHEMA = 1
 
@@ -27,6 +28,33 @@ def read(path, default=None):
         return json.loads(Path(path).read_text())
     except FileNotFoundError:
         return default
+
+
+def mason_receipt_purl(receipt):
+    """The resolved source is authoritative; install_options records the request."""
+    if not isinstance(receipt, dict):
+        return None
+    try:
+        schema = int(str(receipt.get('schema_version', '2.0')).split('.', 1)[0])
+    except ValueError:
+        return None
+    source = receipt.get('source' if schema >= 2 else 'primary_source', {})
+    purl = source.get('id') if isinstance(source, dict) else None
+    return purl if isinstance(purl, str) else None
+
+
+def mason_receipt_version(receipt):
+    """Extract Mason's PURL version, excluding qualifiers and subpath metadata."""
+    purl = mason_receipt_purl(receipt)
+    if not purl or not purl.startswith('pkg:'):
+        return None
+    # Match Mason's component order: subpath, qualifiers, then version. Decode
+    # only after splitting, so an encoded delimiter remains part of the version.
+    package, separator, version = purl.rsplit('#', 1)[0].rsplit('?', 1)[0].rpartition('@')
+    if (not separator or not version or '/' in version or '/' not in package[4:]
+            or not package.rsplit('/', 1)[-1]):
+        return None
+    return unquote(version)
 
 
 def atomic(path, value):
