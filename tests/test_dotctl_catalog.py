@@ -72,6 +72,39 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('uncataloged operational surface: scripts/forgotten.py', errors)
         self.assertIn('unowned source: scripts/forgotten.py', errors)
 
+    def test_generated_assets_do_not_change_clean_worktree_catalog(self):
+        self.write('packages/amps/ui/.gitignore', 'web/\ntest-results/\n')
+        self.write('packages/amps/ui/src/app.js', '// authoritative source\n')
+        self.write('packages/amps/ui/web/assets/bundle.js', '// ignored generated bundle\n')
+        self.write('packages/amps/ui/test-results/report.json', '{}\n')
+        self.component('amps', source='packages/amps/ui')
+        self.save()
+        self.assertTrue(catalog.validate(self.ctx)['ok'])
+        self.assertFalse(any('/web/' in key or '/test-results/' in key
+                             for key in catalog.discovered(self.root)))
+
+        def git(*args):
+            subprocess.run(['git', '-C', str(self.root), *args], check=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        git('init', '-q')
+        git('add', '.')
+        git('-c', 'user.name=Catalog test', '-c', 'user.email=catalog@example.invalid',
+            'commit', '-qm', 'catalog source fixture')
+        clean = Path(self.tmp.name) / 'clean-worktree'
+        git('worktree', 'add', '--detach', str(clean), 'HEAD')
+        self.assertFalse((clean / 'packages/amps/ui/web').exists())
+        self.assertEqual(catalog.discovered(self.root), catalog.discovered(clean))
+        report = catalog.validate(Context(clean, Path(self.tmp.name) / 'clean-state'))
+        self.assertTrue(report['ok'], '\n'.join(report['errors']))
+
+    def test_generated_exclusions_do_not_hide_other_web_sources_or_ignored_helpers(self):
+        self.write('packages/other/web/app.js', '// real source\n')
+        self.write('scripts/.gitignore', 'forgotten.py\n')
+        self.write('scripts/forgotten.py', 'print("must be reviewed")\n')
+        found = catalog.discovered(self.root)
+        self.assertIn('packages/other/web/app.js', found)
+        self.assertIn('scripts/forgotten.py', found)
+
     def test_new_alias_or_service_inside_existing_block_is_detected(self):
         self.write('modules/sample.nix', '''{
   programs.zsh.shellAliases = { ls = "eza"; };

@@ -7,6 +7,7 @@ approves a newly added startup hook, wrapper, patch, or executable.
 from __future__ import annotations
 
 import json
+import os
 import platform
 import re
 import subprocess
@@ -19,6 +20,12 @@ CAPABILITIES = {'foundation', 'recovery', 'development', 'editor', 'desktop', 'g
 CUSTOMIZATION = re.compile(r'overrideAttrs|\boverride\s*\{|(?:postPatch|prePatch)\s*=|substituteInPlace|fetchpatch|\b(?:rev|tag)\s*=|\bversion\s*=\s*"|\burl\s*=\s*"github:')
 PATCH_STATES = {'required', 'upstream candidate found', 'removal testing needed', 'removal validated', 'unknown'}
 IGNORED = {'node_modules', 'target', '__pycache__', '.git', '.ruff_cache'}
+# Only reviewed generated-output roots are excluded. Keep this independent of
+# .git metadata so working trees and Nix source archives discover the same
+# surfaces. Do not honor arbitrary .gitignore rules: an ignored new helper must
+# still require catalog ownership and review. Never exclude every `web` folder,
+# since another component may keep source files under that name.
+GENERATED_ROOTS = {'packages/amps/ui/web', 'packages/amps/ui/test-results'}
 SOURCE_ROOTS = ('scripts', 'bin', 'modules', 'packages', 'hosts', 'lib', 'patches', 'pins',
                 'platforms', 'bootstrap', 'docker', 'nvim', 'neovide', 'wezterm', 'komorebi',
                 'noctalia', 'razer', 'tmux', 'wayland')
@@ -112,9 +119,15 @@ def discovered(root):
         base = root / directory
         if not base.is_dir() or base.is_symlink():
             continue
-        paths.extend(path for path in base.rglob('*')
-                     if path.is_file() and not path.is_symlink()
-                     and not (set(path.relative_to(root).parts) & IGNORED))
+        for parent, directories, files in os.walk(base, followlinks=False):
+            parent = Path(parent)
+            directories[:] = [name for name in directories
+                              if name not in IGNORED
+                              and (parent / name).relative_to(root).as_posix() not in GENERATED_ROOTS
+                              and not (parent / name).is_symlink()]
+            paths.extend(parent / name for name in files
+                         if name not in IGNORED and not (parent / name).is_symlink()
+                         and (parent / name).is_file())
     found = {}
     def declaration(rel, anchor, kind='declaration'):
         anchor = normalize_anchor(anchor)
