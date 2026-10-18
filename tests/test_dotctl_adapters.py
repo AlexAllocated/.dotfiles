@@ -23,8 +23,8 @@ class Adapters(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / 'candidate'
-        self.work = Path(self.tmp.name) / 'work'
+        self.root = Path(self.tmp.name).resolve() / 'candidate'
+        self.work = Path(self.tmp.name).resolve() / 'work'
         self.root.mkdir()
         (self.root / 'flake.nix').write_text('{}')
         subprocess.run(['git', 'init', '-q', self.root], check=True)

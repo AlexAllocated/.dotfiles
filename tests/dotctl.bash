@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 REPO_ROOT="$repo_root"
 
 # shellcheck source=scripts/lib/common.sh
@@ -20,15 +20,17 @@ assert_equal() {
 	}
 }
 
-assert_equal "git+file://$repo_root#linux" "$(flake_ref_for_profile linux)"
-assert_equal "git+file://$repo_root#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
+repo_uri="$(python3 -c 'from pathlib import Path; import sys; print("git+" + Path(sys.argv[1]).as_uri())' "$repo_root")"
+assert_equal "$repo_uri#linux" "$(flake_ref_for_profile linux)"
+assert_equal "$repo_uri#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
-assert_equal "git+file://$repo_root#tracer" "$(flake_ref_for_profile tracer)"
-assert_equal "git+file://$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
-assert_equal "git+file://$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
-assert_equal "git+file:///tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
+assert_equal "$repo_uri#tracer" "$(flake_ref_for_profile tracer)"
+assert_equal "$repo_uri#macos-arm64" "$(flake_ref_for_profile macos)"
+assert_equal "$repo_uri#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
+canonical_tmp="$(cd /tmp && pwd -P)"
+assert_equal "git+file://$canonical_tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
-assert_equal "git+file:///tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
+assert_equal "git+file://$canonical_tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
 
 detected_tracer="$({
 	WSL_DISTRO_NAME=""
@@ -181,6 +183,10 @@ bash -c 'set -u; source "$1"; cleanup_path="$2"; register_cleanup() { local work
 
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
+physical_fixture="$(cd "$fixture" && pwd -P)"
+fixture_uri="$(python3 -c 'from pathlib import Path; import sys; print("git+" + Path(sys.argv[1]).as_uri())' "$physical_fixture")"
+ln -s "$physical_fixture" "$fixture/alias"
+assert_equal "$fixture_uri/candidate#tracer" "$(flake_ref_for_profile tracer "$fixture/alias/candidate")"
 mkdir -p "$fixture/source/modules/home"
 printf 'untracked module\n' >"$fixture/source/modules/home/foundation.nix"
 REPO_ROOT="$fixture/source"

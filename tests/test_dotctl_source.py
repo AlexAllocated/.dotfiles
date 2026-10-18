@@ -17,7 +17,7 @@ class SourceIdentity(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.root = self.base / 'source with spaces'
         self.root.mkdir()
         self.git(self.root, 'init', '-q')
@@ -51,6 +51,11 @@ class SourceIdentity(unittest.TestCase):
         (self.root / 'payload').chmod(0o700)
         self.assertNotEqual(_source_digest(self.root), before)
         self.assertIn('source%20with%20spaces', nix_source(self.root))
+
+    def test_git_source_normalizes_symlinked_temporary_directory_ancestors(self):
+        alias = self.base / 'temporary-alias'
+        alias.symlink_to(self.base, target_is_directory=True)
+        self.assertEqual(nix_source(alias / self.root.name), nix_source(self.root))
 
     @unittest.skipUnless(shutil.which('nix'), 'native Nix is needed for a real Git-flake identity check')
     def test_nix_git_source_matches_across_worktrees_and_includes_reviewed_changes(self):
