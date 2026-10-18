@@ -927,7 +927,8 @@
     ],
     "startup": [],
     "effects": [
-      "Configures graphical applications, wrappers, default file handlers and hardware services."
+      "Configures graphical applications, wrappers, default file handlers and hardware services.",
+      "Updates the managed systemd EFI loader while preserving the installer-recorded Windows fallback."
     ],
     "state_locations": [],
     "installed_locations": [],

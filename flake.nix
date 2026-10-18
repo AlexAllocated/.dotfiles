@@ -565,6 +565,15 @@
           profile-api = mkDarwinProfileCheck pkgs pkgs.stdenv.hostPlatform.system;
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          systemd-boot-windows-fallback =
+            let
+              workstation = self.nixosConfigurations.tracer.config;
+            in
+            assert workstation.boot.loader.systemd-boot.graceful;
+            pkgs.runCommand "systemd-boot-windows-fallback" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+              python ${self}/tests/systemd-boot-fallback.py ${workstation.systemd.package}
+              touch "$out"
+            '';
           vesktop-autostart =
             let
               home = self.nixosConfigurations.tracer.config.home-manager.users.alx;
