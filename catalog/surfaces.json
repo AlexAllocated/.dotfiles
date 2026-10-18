@@ -4726,5 +4726,11 @@
     "source": "wezterm-shell-integration.sh",
     "type": "source",
     "owner": "terminal"
+  },
+  "flake.nix::ap = workstation.systemd.services.hostapd;": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "ap = workstation.systemd.services.hostapd;",
+    "owner": "native-manifests"
   }
 }

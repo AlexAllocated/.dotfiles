@@ -632,6 +632,24 @@
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.networking.hostName} = tracer
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.dotfiles.desktop.user} = alx
             test ${
+              let
+                workstation = self.nixosConfigurations.tracer.config;
+                ap = workstation.systemd.services.hostapd;
+                radio = "sys-subsystem-net-devices-wlp8s0.device";
+                address = "network-addresses-wlp8s0.service";
+              in
+              if
+                workstation.services.hostapd.enable
+                && ap.wantedBy == [ radio ]
+                && builtins.elem radio ap.bindsTo
+                && builtins.elem address ap.requires
+                && builtins.elem address ap.after
+              then
+                "device-triggered"
+              else
+                "invalid-ap-dependencies"
+            } = device-triggered
+            test ${
               if self.nixosConfigurations.tracer.config.services.displayManager.autoLogin.enable then
                 "enabled"
               else

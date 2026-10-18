@@ -942,7 +942,8 @@
       "lan-mouse",
       "ipad-display",
       "gaming-launchers",
-      "desktop-appearance"
+      "desktop-appearance",
+      "quest-access-point"
     ],
     "runtime": {
       "mode": "configuration"
@@ -1955,7 +1956,8 @@
     },
     "relationships": [
       "gaming-launchers",
-      "sunshine"
+      "sunshine",
+      "quest-access-point"
     ],
     "runtime": {
       "mode": "service",
@@ -1966,6 +1968,61 @@
     "desired": {
       "state": "native-evaluation-required",
       "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "quest-access-point",
+    "name": "Quest VR wireless access point",
+    "purpose": "Provide the dedicated Tracer Quest VR Wi-Fi access point on wlp8s0. Start hostapd when the optional radio appears so unavailable wireless hardware does not delay the workstation boot or generation switch.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos"
+    ],
+    "classification": "unreviewed",
+    "aliases": [
+      "Quest hotspot",
+      "VR Wi-Fi",
+      "hostapd",
+      "wlp8s0"
+    ],
+    "sources": [
+      "modules/nixos/desktop.nix",
+      "hosts/tracer/default.nix",
+      "flake.nix"
+    ],
+    "owns": [],
+    "commands": [
+      "systemctl status hostapd.service",
+      "ip link show wlp8s0"
+    ],
+    "startup": [
+      "hostapd.service is wanted by sys-subsystem-net-devices-wlp8s0.device, not multi-user.target. BindsTo the radio is preserved; static addressing and regulatory readiness run before hostapd."
+    ],
+    "effects": [
+      "Configures the dedicated Quest wireless network, static interface addressing, DHCP and forwarding when the radio is available. Removing the radio stops hostapd through its device dependency."
+    ],
+    "state_locations": [
+      "/var/lib/hostapd/tracer-quest-vr.password"
+    ],
+    "installed_locations": [],
+    "disable": "Set dotfiles.desktop.questAccessPoint.enable = false only as an explicit reviewed feature change. Missing wlp8s0 means unavailable hardware, not a disabled access point. Preserve the local wireless credential.",
+    "verification": {
+      "procedure": "Build the tracer-contract check; verify hostapd remains enabled, is wanted only by the radio device, and retains BindsTo, static-address and regulatory prerequisites. On the actual host inspect wlp8s0, then verify access-point startup and a headset connection when the radio is present.",
+      "last_verified": null,
+      "evidence": "The evaluated startup contract passed during rewrite integration. wlp8s0 was absent at that check, so radio recovery, live access-point startup and headset connectivity remain unverified."
+    },
+    "relationships": [
+      "desktop-integration",
+      "vr-integration"
+    ],
+    "runtime": {
+      "mode": "unknown",
+      "reason": "This optional device-triggered service needs a fresh radio-presence observation as well as its unit state. An absent wlp8s0 is unavailable hardware, not evidence the feature was disabled or repaired."
+    },
+    "replacement": null,
+    "desired": {
+      "state": "enabled-when-radio-present",
+      "evidence": "Tracer enables dotfiles.desktop.questAccessPoint; the native contract preserves that feature and starts hostapd from the wlp8s0 device dependency."
     }
   },
   {

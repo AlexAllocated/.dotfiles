@@ -1834,6 +1834,10 @@ in
     # active, so explicitly pull in its static address before either AP
     # service starts. This also gives boot a deterministic dependency chain.
     systemd.services.hostapd = lib.mkIf cfg.questAccessPoint.enable {
+      # This radio is optional: multi-user.target must not wait for its .device
+      # unit when firmware leaves it absent. Start the AP when the interface
+      # appears, and retain upstream BindsTo so removal stops it again.
+      wantedBy = lib.mkForce [ "sys-subsystem-net-devices-wlp8s0.device" ];
       requires = [ "network-addresses-wlp8s0.service" ];
       after = [ "network-addresses-wlp8s0.service" ];
       # Run this before every hostapd start, including automatic restarts
