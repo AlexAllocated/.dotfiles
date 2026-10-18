@@ -69,6 +69,8 @@ apply_profile() {
 		darwin-macos)
 			flake_ref="$(flake_ref_for_profile "$profile" "$source_root")"
 			require_command darwin-rebuild
+			ensure_homebrew
+			migrate_macos_cask_ownership
 			darwin-rebuild switch --flake "$flake_ref"
 			;;
 		linux)

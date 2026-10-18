@@ -103,6 +103,7 @@
                 bash
                 git
                 lua
+                neovim
                 nixfmt
                 python3
                 rsync
@@ -117,18 +118,22 @@
               chmod -R u+w source
               cd source
               find . -name '*.nix' -print0 | xargs -0 nixfmt --check
-            shellcheck scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
-            bash -n scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
-            shfmt -d -i 0 -ci scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            shellcheck scripts/dotctl scripts/updoot scripts/maintenance-adapter.sh scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            bash -n scripts/dotctl scripts/updoot scripts/maintenance-adapter.sh scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            shfmt -d -i 0 -ci scripts/dotctl scripts/updoot scripts/maintenance-adapter.sh scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
             for script in reboot-windows rescue-remote-on rescue-remote-off; do
               bash "scripts/nixos/$script.sh" --help >/dev/null
             done
             bash tests/dotctl.bash
+            bash tests/macos-managed.bash
+            python3 tests/codex-archive.py
             bash tests/x11-primary.bash
             lua tests/neovim-bootstrap.lua
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
             python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py scripts/updates/*.py
+            python3 -m unittest discover -s tests -p 'test_dotctl*.py'
+            python3 scripts/dotfiles/cli.py catalog --validate
             python3 -m unittest discover -s tests -p 'test_release_updates.py'
             python3 -m unittest discover -s tests -p 'test_sunshine_display_policy.py'
             python3 -m unittest discover -s tests -p 'test_wine_display_dpi.py'

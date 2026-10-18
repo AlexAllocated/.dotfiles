@@ -1,0 +1,3497 @@
+[
+  {
+    "id": "maintenance",
+    "name": "Dotfiles maintenance and inventory",
+    "purpose": "Index custom behavior, show health and freshness, prepare isolated update candidates, and apply explicitly reviewed changes. Keep local evidence and receipts outside Git. Automated Codex repair/review runs only on permitted personal hosts; managed Mac failures require local Claude or manual review.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [
+      "updoot",
+      "updates",
+      "doctor",
+      "catalog",
+      "dotfiles"
+    ],
+    "sources": [
+      "scripts/dotctl",
+      "scripts/updoot",
+      "scripts/maintenance-adapter.sh",
+      "scripts/dotfiles",
+      "scripts/commands",
+      "scripts/lib",
+      "scripts/updates"
+    ],
+    "owns": [
+      "scripts/dotctl",
+      "scripts/updoot",
+      "scripts/maintenance-adapter.sh",
+      "scripts/dotfiles",
+      "scripts/commands",
+      "scripts/lib",
+      "scripts/updates"
+    ],
+    "commands": [
+      "dotctl",
+      "updoot"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit apply changes installed configuration; prepare uses isolated worktrees. Inspection is read-only apart from a requested metadata refresh."
+    ],
+    "state_locations": [
+      "~/.local/state/dotfiles",
+      "~/.local/share/dotfiles"
+    ],
+    "installed_locations": [
+      "user profile/bin/dotctl",
+      "user profile/bin/updoot"
+    ],
+    "disable": "Remove or disable this component in scripts/dotctl, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run the dotctl behavioral tests and catalog validation; inspect status and exercise candidate preparation before acceptance.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "native-manifests",
+    "name": "Native package and capability declarations",
+    "purpose": "Select Nix capabilities and direct packages, the company Mac Brewfile, shared Mac applications, personal-only Mac applications and legacy WinGet inventory. Native manifests remain authoritative; generated inventory is evidence, not another package declaration.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "flake.nix",
+      "flake.lock",
+      "lib/toolsets.nix",
+      "modules/home/default.nix",
+      "modules/home/foundation.nix",
+      "modules/home/capabilities",
+      "platforms/macos-managed/Brewfile",
+      "platforms/macos/Brewfile",
+      "platforms/windows/winget.json",
+      "platforms/macos-personal/Brewfile"
+    ],
+    "owns": [
+      "flake.nix",
+      "flake.lock",
+      "lib/toolsets.nix",
+      "modules/home/default.nix",
+      "modules/home/foundation.nix",
+      "modules/home/capabilities",
+      "platforms/macos-managed/Brewfile",
+      "platforms/macos/Brewfile",
+      "platforms/windows/winget.json",
+      "platforms/macos-personal/Brewfile"
+    ],
+    "commands": [],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in flake.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "maintenance"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "tracer-host",
+    "name": "Tracer hardware and system configuration",
+    "purpose": "Define the active NixOS workstation, encrypted storage, boot ordering, NVIDIA driver selection, networking and capability choices.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "hosts/tracer"
+    ],
+    "owns": [
+      "hosts/tracer"
+    ],
+    "commands": [],
+    "startup": [],
+    "effects": [
+      "System and boot configuration; data mounts; hardware driver branch."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in hosts/tracer, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build the complete tracer toplevel, activate it, compare loaded kernel and drivers with the new generation, and verify affected hardware.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests",
+      "desktop-integration",
+      "tracer-recovery"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "hosts": [
+      "tracer"
+    ],
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "legacy-hosts",
+    "name": "Legacy NixOS and personal Mac profiles",
+    "purpose": "Preserve the former Chev workstation, generic Home Manager profiles and nix-darwin path while Tracer and the managed work Mac receive active acceptance.",
+    "capability": "foundation",
+    "platforms": [
+      "linux-generic",
+      "darwin",
+      "wsl"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "hosts/chev-desktop",
+      "modules/darwin"
+    ],
+    "owns": [
+      "hosts/chev-desktop",
+      "modules/darwin"
+    ],
+    "commands": [],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in hosts/chev-desktop, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "mac-managed",
+    "name": "Managed work Mac setup",
+    "purpose": "Apply host-native Homebrew tooling, shared application settings and symlinks without Nix. Preserve the existing company Claude-only policy: do not install or invoke Codex/Copilot on the managed Mac. Employer-controlled macOS updates remain informational.",
+    "capability": "foundation",
+    "platforms": [
+      "macos-managed"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "scripts/profiles/macos-managed.sh"
+    ],
+    "owns": [
+      "scripts/profiles/macos-managed.sh"
+    ],
+    "commands": [
+      "dotctl apply macos-managed"
+    ],
+    "startup": [],
+    "effects": [
+      "Installs declared Homebrew packages including Claude Code; creates configuration links and editor state. Official WezTerm nightly is an explicit manual hold when its mutable latest artifact cannot be reviewed reproducibly."
+    ],
+    "state_locations": [
+      "~/.local/share/dotfiles",
+      "~/.cache/dotfiles",
+      "~/.bun"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/profiles/macos-managed.sh, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run acceptance on the actual managed Mac; compare Homebrew recipe identity, inspect explicit manual holds, verify Claude Code and normal editor startup, and confirm Codex/Copilot are not installed or invoked by this profile.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests",
+      "neovim",
+      "shell",
+      "maintenance"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "shell",
+    "name": "Shell startup, aliases and prompt",
+    "purpose": "Configure Zsh, shared aliases, prompt appearance and project runtime integration. Authentication remains explicit and Codex user preferences remain machine-local.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "modules/home/shell.nix",
+      ".zshrc",
+      ".zprofile",
+      ".p10k.zsh",
+      ".tool-versions"
+    ],
+    "owns": [
+      "modules/home/shell.nix",
+      ".zshrc",
+      ".zprofile",
+      ".p10k.zsh",
+      ".tool-versions"
+    ],
+    "commands": [
+      "zsh"
+    ],
+    "startup": [
+      "Interactive/login shell startup"
+    ],
+    "effects": [],
+    "state_locations": [
+      "~/.zsh_history"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/shell.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "maintenance",
+      "terminal",
+      "development-tooling"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "internal_declarations": {
+      "modules/home/shell.nix::rust = { version = \"<native value>\", components = [\"rust-analyzer\", \"rust-src\"] }": "The project-local Rust policy selects the stable toolchain; this is native runtime configuration, not a package patch."
+    },
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "git",
+    "name": "Git behavior and local identity",
+    "purpose": "Share Git aliases and defaults while keeping author identity in the machine-local identity file.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "modules/home/git.nix",
+      ".gitconfig"
+    ],
+    "owns": [
+      "modules/home/git.nix",
+      ".gitconfig"
+    ],
+    "commands": [
+      "git"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [
+      "~/.config/git/identity"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/git.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "shell"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "terminal",
+    "name": "WezTerm and tmux configuration",
+    "purpose": "Provide terminal appearance, key bindings, shell integration and the canonical durable tmux client. Existing Mac configuration selects the official WezTerm nightly cask; its mutable latest artifact remains visible as a maintenance hold.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "modules/home/terminal.nix",
+      "wezterm",
+      "tmux",
+      ".wezterm.lua",
+      "wezterm-shell-integration.sh",
+      "platforms/macos/Brewfile",
+      "modules/darwin/default.nix"
+    ],
+    "owns": [
+      "modules/home/terminal.nix",
+      "wezterm",
+      "tmux",
+      ".wezterm.lua",
+      "wezterm-shell-integration.sh"
+    ],
+    "commands": [
+      "wezterm",
+      "tmux"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [
+      "~/.config/wezterm",
+      "~/.config/tmux"
+    ],
+    "disable": "Remove or disable this component in modules/home/terminal.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "durable-tmux"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "durable-tmux",
+    "name": "Durable tmux server",
+    "purpose": "Keep terminal sessions alive across graphical logout by using a system-owned tmux server and wrappers that preserve explicit sockets.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/durable-tmux.nix"
+    ],
+    "owns": [
+      "modules/nixos/durable-tmux.nix"
+    ],
+    "commands": [
+      "tmux"
+    ],
+    "startup": [
+      "dotfiles-durable-tmux.service at multi-user.target"
+    ],
+    "effects": [
+      "Keeps user processes alive outside the graphical user manager."
+    ],
+    "state_locations": [
+      "/run/dotfiles-durable-tmux/tmux.sock"
+    ],
+    "installed_locations": [],
+    "disable": "Migrate or save attached sessions before disabling dotfiles.durableTmux.enable; stopping its server terminates those sessions.",
+    "verification": {
+      "procedure": "Attach to the canonical tmux server, log out of the graphical session, and confirm the same pane and process survive.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "terminal",
+      "migration-recovery"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "dotfiles-durable-tmux.service",
+      "scope": "system"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "development-tooling",
+    "name": "Development and cloud toolsets",
+    "purpose": "Declare language runtimes, build tools, source-control utilities, containers and cloud CLIs through shared native package selections.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "modules/home/development.nix",
+      "modules/home/cloud.nix"
+    ],
+    "owns": [
+      "modules/home/development.nix",
+      "modules/home/cloud.nix"
+    ],
+    "commands": [],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/development.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests",
+      "mac-managed"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "neovim",
+    "name": "Neovim, LazyVim and Mason tools",
+    "purpose": "Keep the complete editor configuration, plugins, language servers, linters and formatters, with editor updates isolated from system activation. The company Mac has separate plugin/Mason locks and filters AI extras plus the Nix-dependent language extra; ordinary startup follows the verified active editor release.",
+    "capability": "editor",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [
+      "LazyVim",
+      "Mason",
+      "language servers",
+      "formatter"
+    ],
+    "sources": [
+      "modules/home/nvim.nix",
+      "nvim"
+    ],
+    "owns": [
+      "modules/home/nvim.nix",
+      "nvim"
+    ],
+    "commands": [
+      "nvim",
+      "vim",
+      "vi"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [
+      "~/.local/share/nvim",
+      "~/.cache/nvim",
+      "~/.local/state/nvim",
+      "~/.local/state/dotfiles/active-editor.json"
+    ],
+    "installed_locations": [
+      "~/.config/nvim"
+    ],
+    "disable": "Remove or disable this component in modules/home/nvim.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run Neovim bootstrap/profile tests and isolated restore for each profile, then open normal Neovim after explicit activation and verify it selects the applied release. On the managed Mac confirm AI extras and Nix-dependent Mason tooling stay excluded.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "maintenance",
+      "neovide"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "neovide",
+    "name": "Neovide GUI editor",
+    "purpose": "Configure native Neovide and the preserved Windows-to-WSL Neovim GUI integration.",
+    "capability": "editor",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/home/neovide.nix",
+      "neovide",
+      "scripts/windows/NvimWSL.cs",
+      "scripts/windows/open-in-neovide.ps1",
+      "scripts/windows/open-in-nvim.ps1",
+      "scripts/windows/open-in-nvim.sh"
+    ],
+    "owns": [
+      "modules/home/neovide.nix",
+      "neovide",
+      "scripts/windows/NvimWSL.cs",
+      "scripts/windows/open-in-neovide.ps1",
+      "scripts/windows/open-in-nvim.ps1",
+      "scripts/windows/open-in-nvim.sh"
+    ],
+    "commands": [
+      "neovide"
+    ],
+    "startup": [],
+    "effects": [
+      "Windows helpers translate file paths and launch the selected WSL editor."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/neovide.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Launch a file with spaces through the native GUI and, on legacy Windows, through each registered Open With handler.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "neovim",
+      "windows-integration"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "codex-tooling",
+    "name": "Codex CLI and platform integration",
+    "purpose": "Install the pinned Codex CLI and platform wrappers without managing the user’s model preferences, plugins, authentication or config.toml. The company-managed Mac is excluded; its declared assistant is Claude Code.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "modules/home/codex.nix",
+      "packages/codex.nix",
+      "pins/codex.json",
+      "scripts/windows/configure-codex.py",
+      "platforms/windows/codex-desktop.toml"
+    ],
+    "owns": [
+      "modules/home/codex.nix",
+      "packages/codex.nix",
+      "pins/codex.json",
+      "scripts/windows/configure-codex.py",
+      "platforms/windows/codex-desktop.toml"
+    ],
+    "commands": [
+      "codex"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [
+      "~/.codex (application-owned; not declaratively managed)"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/codex.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Check codex --version and platform command resolution; confirm user preferences are untouched.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "codex-history-tools",
+    "name": "Codex history repair and sharing tools",
+    "purpose": "Canonicalize local Codex history paths and create selected conversation exports for explicit recovery or sharing. These are manual operations on private local state.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/codex"
+    ],
+    "owns": [
+      "scripts/codex"
+    ],
+    "commands": [
+      "scripts/codex/canonicalize-home.py",
+      "scripts/codex/share.py"
+    ],
+    "startup": [],
+    "effects": [
+      "May rewrite selected history path records or create an export. Review arguments and make a backup before repair."
+    ],
+    "state_locations": [
+      "~/.codex",
+      "user-selected export destination"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/codex, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run each tool --help, inspect its planned scope and validate exported or repaired thread references without exposing conversation contents.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "codex-tooling",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "chatgpt-desktop",
+    "name": "ChatGPT desktop packaging and session supervisor",
+    "purpose": "Repackage the official Linux desktop app for NixOS, preserve mutable bundled-plugin copies, and supervise its process across graphical session replacement.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/chatgpt-desktop.nix",
+      "packages/chatgpt-desktop",
+      "pins/chatgpt-desktop.json",
+      "modules/nixos/chatgpt-service.nix",
+      "scripts/nixos/chatgpt-supervisor.py"
+    ],
+    "owns": [
+      "packages/chatgpt-desktop.nix",
+      "packages/chatgpt-desktop",
+      "pins/chatgpt-desktop.json",
+      "modules/nixos/chatgpt-service.nix",
+      "scripts/nixos/chatgpt-supervisor.py"
+    ],
+    "commands": [
+      "chatgpt"
+    ],
+    "startup": [
+      "chatgpt-desktop.service"
+    ],
+    "effects": [],
+    "state_locations": [
+      "~/.config/ChatGPT",
+      "~/.codex (application-owned)"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/chatgpt-desktop.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run watcher, bundled-copy and supervisor tests, then open the actual app and verify session handoff and writable plugin staging.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "codex-tooling",
+      "keyring-unlock",
+      "desktop-compositors"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "chatgpt-desktop.service",
+      "scope": "system"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "keyring-unlock",
+    "name": "TPM-backed desktop keyring unlock",
+    "purpose": "Enroll an encrypted keyring credential and unlock the existing GNOME keyring before unattended desktop clients start. The credential remains local.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/keyring-unlock.nix",
+      "scripts/nixos/keyring-unlock.py"
+    ],
+    "owns": [
+      "modules/nixos/keyring-unlock.nix",
+      "scripts/nixos/keyring-unlock.py"
+    ],
+    "commands": [
+      "keyring-tpm-enroll"
+    ],
+    "startup": [
+      "tracer-keyring-unlock.service called by the desktop session launcher"
+    ],
+    "effects": [
+      "Explicit enrollment seals a credential to TPM-backed systemd credentials."
+    ],
+    "state_locations": [
+      "/var/lib/tracer-keyring/keyring-password.cred",
+      "~/.local/share/keyrings"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/keyring-unlock.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run keyring unit tests; on Tracer verify unlock after a fresh session without printing or replacing the keyring password.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-compositors",
+      "chatgpt-desktop"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "tracer-keyring-unlock.service",
+      "scope": "system"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "desktop-integration",
+    "name": "Desktop application and hardware integration",
+    "purpose": "Own the shared NixOS desktop module: application packages, wrappers, MIME handlers, input and display services, browser schemas, VR hooks and streaming integration. Individual custom helpers are indexed separately below.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/desktop.nix",
+      "modules/home/core.nix",
+      "patches/vesktop-discord-deep-links.patch"
+    ],
+    "owns": [
+      "modules/nixos/desktop.nix",
+      "modules/home/core.nix",
+      "patches/vesktop-discord-deep-links.patch"
+    ],
+    "commands": [
+      "firefox-focused",
+      "chrome-focused"
+    ],
+    "startup": [],
+    "effects": [
+      "Configures graphical applications, wrappers, default file handlers and hardware services."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/desktop.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-compositors",
+      "sunshine",
+      "razer-profiles",
+      "lan-mouse",
+      "ipad-display",
+      "gaming-launchers",
+      "desktop-appearance"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "desktop-appearance",
+    "name": "Desktop appearance, wallpapers and shell plugins",
+    "purpose": "Keep shared themes, fonts, wallpapers and the Noctalia Mullvad toggle integration.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/home/appearance.nix",
+      "modules/home/wallpaper.nix",
+      "noctalia"
+    ],
+    "owns": [
+      "modules/home/appearance.nix",
+      "modules/home/wallpaper.nix",
+      "noctalia"
+    ],
+    "commands": [
+      "Noctalia Mullvad toggle"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/appearance.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-compositors"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "desktop-compositors",
+    "name": "Niri, Mango and Noctalia sessions",
+    "purpose": "Provide selectable Wayland sessions, shell lifecycle, polkit, tray integration, portal readiness, output following and compositor key bindings.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/home/compositors.nix",
+      "modules/nixos/compositors.nix",
+      "lib/mango-package.nix",
+      "wayland",
+      "patches/mango-subsurface-window-capture.patch",
+      "patches/mango-window-capture-repaint.patch",
+      "patches/niri-floating-above-fullscreen.patch",
+      "patches/niri-virtual-presentation-feedback.patch",
+      "patches/niri-window-rule-open-animation.patch",
+      "patches/noctalia-focus-existing-windows.patch",
+      "patches/noctalia-hidden-audio-nodes.patch",
+      "patches/noctalia-nixos-nvml.patch",
+      "patches/noctalia-wezterm-notifications.patch",
+      "patches/scenefx-xrgb8888-screencopy.patch"
+    ],
+    "owns": [
+      "modules/home/compositors.nix",
+      "modules/nixos/compositors.nix",
+      "lib/mango-package.nix",
+      "wayland",
+      "patches/mango-subsurface-window-capture.patch",
+      "patches/mango-window-capture-repaint.patch",
+      "patches/niri-floating-above-fullscreen.patch",
+      "patches/niri-virtual-presentation-feedback.patch",
+      "patches/niri-window-rule-open-animation.patch",
+      "patches/noctalia-focus-existing-windows.patch",
+      "patches/noctalia-hidden-audio-nodes.patch",
+      "patches/noctalia-nixos-nvml.patch",
+      "patches/noctalia-wezterm-notifications.patch",
+      "patches/scenefx-xrgb8888-screencopy.patch"
+    ],
+    "commands": [
+      "desktop-switch",
+      "start-desktop-shell"
+    ],
+    "startup": [
+      "dotfiles-desktop-shell.service",
+      "dotfiles-compositor-polkit.service",
+      "dotfiles-xembed-tray.service",
+      "dotfiles-niri-output-follow.service",
+      "dotfiles-niri-portal-ready.service"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/compositors.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build both compositor packages; verify session switching, portals, tray icons, fullscreen/floating input, output scaling and screen sharing on the actual desktop.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-integration",
+      "xwayland-display",
+      "sunshine",
+      "desktop-appearance"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "dotfiles-desktop-shell.service",
+          "scope": "user"
+        },
+        {
+          "unit": "dotfiles-compositor-polkit.service",
+          "scope": "user"
+        },
+        {
+          "unit": "dotfiles-xembed-tray.service",
+          "scope": "user"
+        },
+        {
+          "unit": "dotfiles-niri-output-follow.service",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "xwayland-display",
+    "name": "Xwayland display and Wine DPI helpers",
+    "purpose": "Keep X11 primary-output selection, per-output DPI, pointer scaling and Wine display topology coherent across scaled monitor moves and iPad streaming sessions.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/wine-display-dpi.py",
+      "scripts/nixos/x11-primary.sh",
+      "patches/xwayland-satellite-fixed-dpi.patch",
+      "patches/xwayland-satellite-fractional-size.patch",
+      "patches/xwayland-satellite-output-dpi.patch",
+      "patches/xwayland-satellite-pointer-scale.patch",
+      "patches/xwayland-satellite-stable-primary.patch"
+    ],
+    "owns": [
+      "scripts/nixos/wine-display-dpi.py",
+      "scripts/nixos/x11-primary.sh",
+      "patches/xwayland-satellite-fixed-dpi.patch",
+      "patches/xwayland-satellite-fractional-size.patch",
+      "patches/xwayland-satellite-output-dpi.patch",
+      "patches/xwayland-satellite-pointer-scale.patch",
+      "patches/xwayland-satellite-stable-primary.patch"
+    ],
+    "commands": [
+      "wine-display-dpi",
+      "x11-primary"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit helpers adjust X11 primary output or Wine DPI settings."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/wine-display-dpi.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run DPI and primary-output tests; move a live Wine app between differently scaled displays and verify pointer motion without leaving and re-entering the window.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-compositors",
+      "wine-display-sync",
+      "ipad-display"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "flameshot",
+    "name": "Wayland screenshots",
+    "purpose": "Patch and launch Flameshot with working Wayland identity, overlay geometry and fractional-scale capture on monitors away from the desktop origin.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/desktop.nix",
+      "modules/home/compositors.nix",
+      "patches/flameshot-v14-nix-dependencies.patch",
+      "patches/flameshot-v14-nonzero-origin.patch",
+      "patches/flameshot-v14-wayland-app-id.patch",
+      "patches/flameshot-v14-wayland-overlay.patch"
+    ],
+    "owns": [
+      "patches/flameshot-v14-nix-dependencies.patch",
+      "patches/flameshot-v14-nonzero-origin.patch",
+      "patches/flameshot-v14-wayland-app-id.patch",
+      "patches/flameshot-v14-wayland-overlay.patch"
+    ],
+    "commands": [
+      "flameshot"
+    ],
+    "startup": [
+      "flameshot.service"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/desktop.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Capture each monitor at its actual scale and origin; verify overlay, toolbar and saved crop.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-compositors"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "flameshot.service",
+      "scope": "user"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "lan-mouse",
+    "name": "LAN keyboard and mouse sharing",
+    "purpose": "Run Lan Mouse with its authenticated peer protocol and a tray helper for sharing input between configured machines.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/lan-mouse-tray.py"
+    ],
+    "owns": [
+      "scripts/nixos/lan-mouse-tray.py"
+    ],
+    "commands": [
+      "lan-mouse",
+      "lan-mouse-tray"
+    ],
+    "startup": [
+      "lan-mouse.service",
+      "lan-mouse-tray.service"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/lan-mouse-tray.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Verify peer authentication and controlled input handoff on both participating machines.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-integration"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "lan-mouse.service",
+          "scope": "user"
+        },
+        {
+          "unit": "lan-mouse-tray.service",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "razer-profiles",
+    "name": "Razer profiles, hardware controls and tray",
+    "purpose": "Import Synapse profiles, synchronize input-remapper mappings, edit bindings, write supported onboard controls and expose the active profile in a tray.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/razer-editor-model.py",
+      "scripts/nixos/razer-import-profiles.py",
+      "scripts/nixos/razer-keybind-editor.py",
+      "scripts/nixos/razer-onboard.py",
+      "scripts/nixos/razer-profile-sync.sh",
+      "scripts/nixos/razer-profile-tray.py",
+      "scripts/nixos/razer-profile.py",
+      "modules/home/razer.nix",
+      "razer"
+    ],
+    "owns": [
+      "scripts/nixos/razer-editor-model.py",
+      "scripts/nixos/razer-import-profiles.py",
+      "scripts/nixos/razer-keybind-editor.py",
+      "scripts/nixos/razer-onboard.py",
+      "scripts/nixos/razer-profile-sync.sh",
+      "scripts/nixos/razer-profile-tray.py",
+      "scripts/nixos/razer-profile.py",
+      "modules/home/razer.nix",
+      "razer"
+    ],
+    "commands": [
+      "razer-profile",
+      "razer-profile-direct",
+      "razer-hardware-profile",
+      "razer-profile-sync",
+      "razer-keybind-editor",
+      "razer-profile-tray"
+    ],
+    "startup": [
+      "razer-basilisk-linux-bindings.service",
+      "razer-profile-tray.service"
+    ],
+    "effects": [
+      "Writes mappings and, when explicitly invoked, supported mouse onboard settings."
+    ],
+    "state_locations": [
+      "~/.config/input-remapper-2",
+      "~/.config/dotfiles/razer"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/razer-editor-model.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run Razer model, editor, profile and onboard tests, then verify selected bindings on each actual device.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-integration"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "razer-profile-tray.service",
+      "scope": "user"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "sunshine",
+    "name": "Sunshine remote desktop and display policy",
+    "purpose": "Stream the workstation with persistent KMS or adaptive capture, stable connector selection and session hooks that manage display transitions.",
+    "capability": "remote-streaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/sunshine-display-policy.py",
+      "patches/sunshine-linux-kms-connector-and-stream-hook.patch"
+    ],
+    "owns": [
+      "scripts/nixos/sunshine-display-policy.py",
+      "patches/sunshine-linux-kms-connector-and-stream-hook.patch"
+    ],
+    "commands": [
+      "sunshine",
+      "sunshine-display-policy",
+      "sunshine-session-run"
+    ],
+    "startup": [
+      "sunshine.service (system or user according to selected mode)"
+    ],
+    "effects": [],
+    "state_locations": [
+      "~/.config/sunshine",
+      "/var/lib/sunshine"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/sunshine-display-policy.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run display-policy tests, connect a real streaming client, verify capture and audio, then disconnect the final client and confirm local displays recover.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-integration",
+      "ipad-display",
+      "audio-routing",
+      "amps"
+    ],
+    "runtime": {
+      "mode": "unknown",
+      "reason": "Sunshine service scope depends on the selected Nix mode; inspect the evaluated host and its service."
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "ipad-display",
+    "name": "iPad streaming display helpers",
+    "purpose": "Recognize the intended dummy adapter, generate a digital EDID and switch the streaming display session on or off without mistaking the physical LG monitor for the dummy.",
+    "capability": "remote-streaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/ipad-display-off.sh",
+      "scripts/nixos/ipad-display-on.sh",
+      "scripts/nixos/ipad-display-prepare.sh"
+    ],
+    "owns": [
+      "scripts/nixos/ipad-display-off.sh",
+      "scripts/nixos/ipad-display-on.sh",
+      "scripts/nixos/ipad-display-prepare.sh"
+    ],
+    "commands": [
+      "ipad-display-prepare",
+      "ipad-display-on",
+      "ipad-display-off"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit commands change connected display state; --apply-now can write a temporary debugfs EDID override."
+    ],
+    "state_locations": [
+      "/run/dotfiles-ipad-display"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/ipad-display-off.sh, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Check generated EDID and detected connector, stream at 2732x2048, then restore the local monitor layout.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "sunshine",
+      "xwayland-display"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "audio-routing",
+    "name": "PipeWire creator audio and spatial routing",
+    "purpose": "Define application buses, clean microphone processing, selectable spatial audio and hardware hotplug recovery independently of AMPS.",
+    "capability": "audio",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/audio.nix",
+      "modules/nixos/audio-hardware.nix"
+    ],
+    "owns": [
+      "modules/nixos/audio.nix",
+      "modules/nixos/audio-hardware.nix"
+    ],
+    "commands": [
+      "spatial-audio",
+      "creator-recover-yeti-hotplug"
+    ],
+    "startup": [
+      "WirePlumber policy and creator-yeti-hotplug-recovery.path/service"
+    ],
+    "effects": [
+      "Changes application audio routing and microphone processing."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/audio.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Exercise the actual microphone, headphones and speakers, toggle spatial modes, and reconnect the Yeti while checking capture/playback.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "amps",
+      "obs"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "pipewire.service",
+          "scope": "user"
+        },
+        {
+          "unit": "wireplumber.service",
+          "scope": "user"
+        },
+        {
+          "unit": "creator-yeti-hotplug-recovery.path",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "amps",
+    "name": "AMPS audio application",
+    "purpose": "Maintain the standalone Rust/Tauri audio router, phone audio bridge, UI, PipeWire integration and NVIDIA microphone effects packaging as one independent application.",
+    "capability": "audio",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/amps",
+      "modules/nixos/amps.nix"
+    ],
+    "owns": [
+      "packages/amps",
+      "modules/nixos/amps.nix"
+    ],
+    "commands": [
+      "amps",
+      "amps-ui"
+    ],
+    "startup": [
+      "amps.service",
+      "amps-ui.service"
+    ],
+    "effects": [
+      "Routes and processes audio and can connect phone sessions."
+    ],
+    "state_locations": [
+      "~/.config/amps",
+      "/var/lib/amps"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/amps, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run AMPS Rust, UI and Linux integration suites, then verify real audio routes, effects and phone reconnect behavior.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "audio-routing",
+      "obs",
+      "sunshine"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "amps.service",
+          "scope": "system"
+        },
+        {
+          "unit": "amps-ui.service",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "internal_declarations": {
+      "packages/amps/default.nix::version = \"<native value>\";": "Version label for the application source maintained in this repository, not a third-party source pin.",
+      "packages/amps/default.nix::version = \"<native value>\";::occurrence-2": "Version label for the application source maintained in this repository, not a third-party source pin.",
+      "packages/amps/default.nix::version = \"<native value>\";::occurrence-3": "Version label for the application source maintained in this repository, not a third-party source pin."
+    },
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "obs",
+    "name": "OBS capture, scenes and branch output",
+    "purpose": "Configure OBS Studio and its pinned branch-output plugin; preserve Windows migration tools and production frame-rate control separately from live scene state.",
+    "capability": "audio",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/home/obs.nix",
+      "packages/obs-branch-output",
+      "scripts/nixos/migrate-obs-windows.py"
+    ],
+    "owns": [
+      "modules/home/obs.nix",
+      "packages/obs-branch-output",
+      "scripts/nixos/migrate-obs-windows.py"
+    ],
+    "commands": [
+      "obs",
+      "scripts/nixos/migrate-obs-windows.py"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit migration imports Windows OBS configuration; normal OBS use writes scenes and profiles."
+    ],
+    "state_locations": [
+      "~/.config/obs-studio"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/obs.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run OBS migration tests; open actual OBS and verify scenes, audio and a test recording without starting a public stream.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "audio-routing",
+      "amps"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "gaming-launchers",
+    "name": "Native and Proton game entrypoints",
+    "purpose": "Keep declarative launchers and desktop entries for Battle.net, Guild Wars 2, Halo, Fantasy Grounds and Steam, plus explicit game-specific settings.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/home/gaming.nix"
+    ],
+    "owns": [
+      "modules/home/gaming.nix"
+    ],
+    "commands": [
+      "battlenet",
+      "guild-wars-2",
+      "halo-campaign-evolved-optimized"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/gaming.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "battlenet",
+      "wine-display-sync",
+      "steam-health",
+      "fantasy-grounds",
+      "halo-settings",
+      "wow-settings"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "battlenet",
+    "name": "Battle.net Proton session and recovery",
+    "purpose": "Stage the selected Proton build, launch Battle.net, keep its settings stable, expose tray recovery and close only processes verified to belong to its Wine prefix.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [
+      "Battle.net",
+      "Blizzard",
+      "force close"
+    ],
+    "sources": [
+      "scripts/gaming/battlenet-force-close.py",
+      "scripts/gaming/battlenet-settings.py",
+      "scripts/gaming/stage-battlenet-proton.py",
+      "scripts/gaming/wine-session.py",
+      "packages/battlenet-force-close.nix",
+      "packages/battlenet-proton.nix",
+      "pins/battlenet-proton.json"
+    ],
+    "owns": [
+      "scripts/gaming/battlenet-force-close.py",
+      "scripts/gaming/battlenet-settings.py",
+      "scripts/gaming/stage-battlenet-proton.py",
+      "scripts/gaming/wine-session.py",
+      "packages/battlenet-force-close.nix",
+      "packages/battlenet-proton.nix",
+      "pins/battlenet-proton.json"
+    ],
+    "commands": [
+      "battlenet",
+      "battlenet-force-close",
+      "battlenet-diagnostics"
+    ],
+    "startup": [],
+    "effects": [
+      "Launches or terminates prefix-scoped processes and adjusts Battle.net settings."
+    ],
+    "state_locations": [
+      "~/.local/share/battlenet",
+      "~/.local/share/Steam/compatibilitytools.d"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/gaming/battlenet-force-close.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run prefix/process and settings tests, launch the actual client and test recovery without affecting unrelated Wine games.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "gaming-launchers",
+      "wine-display-sync",
+      "wine-tray",
+      "wow-settings"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "wine-display-sync",
+    "name": "Live Wine display synchronization",
+    "purpose": "Bridge XRandR display changes into running Wine games, preserving native fullscreen size and avoiding unnecessary mode changes.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/gaming/wine-display-probe.c",
+      "scripts/gaming/wine-display-sync.c",
+      "scripts/gaming/wine-display-topology.py",
+      "packages/wine-display-sync.nix",
+      "packages/libxrandr-hotplug.nix",
+      "patches/libxrandr-hotplug-output-query.patch"
+    ],
+    "owns": [
+      "scripts/gaming/wine-display-probe.c",
+      "scripts/gaming/wine-display-sync.c",
+      "scripts/gaming/wine-display-topology.py",
+      "packages/wine-display-sync.nix",
+      "packages/libxrandr-hotplug.nix",
+      "patches/libxrandr-hotplug-output-query.patch"
+    ],
+    "commands": [
+      "wine-display-sync",
+      "wine-display-probe"
+    ],
+    "startup": [
+      "battlenet-display-sync.service",
+      "battlenet-display-sync-failed.service"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/gaming/wine-display-probe.c, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run topology, XRandR hotplug and Wine modeset tests; move a running game between local and streamed outputs and verify fullscreen and input.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "xwayland-display",
+      "battlenet"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "battlenet-display-sync.service",
+      "scope": "user"
+    },
+    "replacement": null,
+    "internal_declarations": {
+      "packages/wine-display-sync.nix::version = \"<native value>\";": "Version label for the helper source maintained in this repository, not a third-party source pin."
+    },
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "wine-tray",
+    "name": "Wine tray bridge and recovery menu",
+    "purpose": "Expose Wine XEmbed tray icons to the Wayland StatusNotifier tray, including safe Battle.net recovery actions.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/wine-sni-bridge.nix",
+      "scripts/gaming/wine-tray-menu.py",
+      "patches/wine-sni-bridge-niri.patch",
+      "patches/wine-sni-bridge-recovery-menu.patch"
+    ],
+    "owns": [
+      "packages/wine-sni-bridge.nix",
+      "scripts/gaming/wine-tray-menu.py",
+      "patches/wine-sni-bridge-niri.patch",
+      "patches/wine-sni-bridge-recovery-menu.patch"
+    ],
+    "commands": [
+      "wine-sni-bridge"
+    ],
+    "startup": [
+      "Started with desktop tray integration"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/wine-sni-bridge.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run D-Bus menu and Xvfb tray-host tests, then open a Wine tray icon and use its menu on the active desktop.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-compositors",
+      "battlenet"
+    ],
+    "runtime": {
+      "mode": "unknown",
+      "reason": "Bridge process presence alone does not establish working tray registration; verify the actual tray."
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "steam-health",
+    "name": "Steam startup and UI health checks",
+    "purpose": "Start Steam for the gaming session and periodically check its UI responsiveness without treating unrelated Wine sessions as Steam state.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/home/gaming.nix"
+    ],
+    "owns": [],
+    "commands": [
+      "steam-ui-healthcheck"
+    ],
+    "startup": [
+      "steam-autostart.service",
+      "steam-ui-healthcheck.timer"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/gaming.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Inspect the timer and logs, launch Steam and verify a real game starts and exits cleanly.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "gaming-launchers"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "steam-autostart.service",
+          "scope": "user"
+        },
+        {
+          "unit": "steam-ui-healthcheck.timer",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "vr-integration",
+    "name": "SteamVR and ALVR compatibility",
+    "purpose": "Backport ALVR compositor pose recovery, provide compatible SteamVR libraries and maintain the narrow compositor capability hook for headset streaming.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/desktop.nix",
+      "patches/alvr-linux-stripped-compositor-pose-scan.patch",
+      "patches/alvr-linux-zero-pose-fallback.patch",
+      "patches/alvr-steamvr-2.16-compositor-name.patch"
+    ],
+    "owns": [
+      "patches/alvr-linux-stripped-compositor-pose-scan.patch",
+      "patches/alvr-linux-zero-pose-fallback.patch",
+      "patches/alvr-steamvr-2.16-compositor-name.patch"
+    ],
+    "commands": [
+      "alvr_dashboard",
+      "steamvr"
+    ],
+    "startup": [
+      "steamvr-compositor-capability.path/service"
+    ],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/desktop.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build ALVR and verify live headset pose latency, dashboard startup and compositor capability after SteamVR updates.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "gaming-launchers",
+      "sunshine"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "steamvr-compositor-capability.path",
+      "scope": "system"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "wow-settings",
+    "name": "World of Warcraft display settings",
+    "purpose": "Apply the intended WoW display and fullscreen configuration for the active Wine display topology.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/gaming/wow-display-settings.py"
+    ],
+    "owns": [
+      "scripts/gaming/wow-display-settings.py"
+    ],
+    "commands": [
+      "wow-display-settings"
+    ],
+    "startup": [],
+    "effects": [
+      "Writes selected WoW configuration values; preserves unrelated settings."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/gaming/wow-display-settings.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run tests/test_wow_display_settings.py and verify the affected settings in a live WoW client.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "battlenet",
+      "wine-display-sync"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "halo-settings",
+    "name": "Halo Campaign Evolved launch settings",
+    "purpose": "Apply the selected Halo graphics/display settings before launching the optimized desktop entry.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/gaming/halo-campaign-evolved-settings.py"
+    ],
+    "owns": [
+      "scripts/gaming/halo-campaign-evolved-settings.py"
+    ],
+    "commands": [
+      "halo-campaign-evolved-settings",
+      "halo-campaign-evolved-optimized"
+    ],
+    "startup": [],
+    "effects": [
+      "Writes game-specific configuration values."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/gaming/halo-campaign-evolved-settings.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Inspect the generated settings and launch the real game at the target display resolution.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "gaming-launchers"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "fantasy-grounds",
+    "name": "Fantasy Grounds installer and launcher",
+    "purpose": "Package the vendor Fantasy Grounds installer and wrap the mutable game installation and updater for NixOS.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/fantasy-grounds.nix"
+    ],
+    "owns": [
+      "packages/fantasy-grounds.nix"
+    ],
+    "commands": [
+      "fantasy-grounds",
+      "fantasy-grounds-updater"
+    ],
+    "startup": [],
+    "effects": [
+      "An explicit installer/updater writes the user-owned application installation."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/fantasy-grounds.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build the package and open the installed client and updater without replacing campaign data.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "gaming-launchers"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "curseforge",
+    "name": "CurseForge desktop packaging",
+    "purpose": "Pin and wrap the vendor Linux AppImage, including a desktop entry that launches the Nix wrapper correctly.",
+    "capability": "gaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/curseforge.nix"
+    ],
+    "owns": [
+      "packages/curseforge.nix"
+    ],
+    "commands": [
+      "curseforge"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/curseforge.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build the AppImage wrapper and verify the actual client opens and locates game add-ons.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "gaming-launchers"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "davinci-resolve",
+    "name": "DaVinci Resolve package pin",
+    "purpose": "Install the selected Resolve release using the vendor archive and local pin metadata, preserving project state outside the package.",
+    "capability": "desktop",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/davinci-resolve.nix",
+      "pins/davinci-resolve.json"
+    ],
+    "owns": [
+      "packages/davinci-resolve.nix",
+      "pins/davinci-resolve.json"
+    ],
+    "commands": [
+      "davinci-resolve"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/davinci-resolve.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build using the required vendor archive and verify Resolve opens the intended GPU-backed workspace without altering projects.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-integration"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "iloader",
+    "name": "iLoader package and Cargo pin",
+    "purpose": "Package iLoader with the selected release and matching Cargo dependency hashes.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "packages/iloader.nix",
+      "pins/iloader-cargo.json"
+    ],
+    "owns": [
+      "packages/iloader.nix",
+      "pins/iloader-cargo.json"
+    ],
+    "commands": [
+      "iloader"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in packages/iloader.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build iLoader for the target platform and exercise device discovery with the actual intended device.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "bumblebee-desktop",
+    "name": "Bumblebee desktop preview",
+    "purpose": "Install the pinned Linux preview of Bumblebee Desktop; application-owned credentials and SQLite settings stay local and activation does not start streaming.",
+    "capability": "remote-streaming",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "experimental",
+    "aliases": [],
+    "sources": [
+      "modules/home/bumblebee.nix",
+      "packages/bumblebee-desktop.nix"
+    ],
+    "owns": [
+      "modules/home/bumblebee.nix",
+      "packages/bumblebee-desktop.nix"
+    ],
+    "commands": [
+      "bumblebee"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [
+      "application-owned Bumblebee credentials and SQLite settings"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/bumblebee.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Launch the preview, inspect its own status and explicitly test a private stream when ready.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "desktop-integration"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "bumblebee-resume",
+    "name": "Private resume site and tunnel",
+    "purpose": "Start the separate private resume repository and its Cloudflare tunnel only when its build, pinned runtime and local tunnel config exist. The application remains owned by that repository.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "experimental",
+    "aliases": [],
+    "sources": [
+      "modules/home/bumblebee-resume.nix"
+    ],
+    "owns": [
+      "modules/home/bumblebee-resume.nix"
+    ],
+    "commands": [],
+    "startup": [
+      "bumblebee-resume.service",
+      "bumblebee-resume-tunnel.service"
+    ],
+    "effects": [
+      "Exposes the configured private resume service through its tunnel."
+    ],
+    "state_locations": [
+      "~/code/bumblebee-resume",
+      "~/.config/bumblebee-resume/tunnel.yml"
+    ],
+    "installed_locations": [],
+    "disable": "Set dotfiles.bumblebeeResume.enable = false and apply; preserve the application checkout and local tunnel credentials.",
+    "verification": {
+      "procedure": "Check both units and the local application health endpoint; verify the intended published route separately.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "development-tooling"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "bumblebee-resume.service",
+          "scope": "user"
+        },
+        {
+          "unit": "bumblebee-resume-tunnel.service",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "github-runner",
+    "name": "Bumblebee GitHub Actions runner",
+    "purpose": "Configure optional self-hosted runner instances and bounded build-cache collection, with tokens provisioned separately from Git.",
+    "capability": "development",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/github-actions-runner.nix"
+    ],
+    "owns": [
+      "modules/nixos/github-actions-runner.nix"
+    ],
+    "commands": [],
+    "startup": [
+      "Configured GitHub runner services",
+      "bumblebee-runner-cache-gc.timer"
+    ],
+    "effects": [
+      "Runs authorized repository workflows and manages the runner cache."
+    ],
+    "state_locations": [
+      "/var/lib/github-runner",
+      "machine-local runner token"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/github-actions-runner.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Inspect configured runner units and confirm a targeted workflow completes on the intended runner; never include tokens in catalog output.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "development-tooling"
+    ],
+    "runtime": {
+      "mode": "service",
+      "unit": "bumblebee-runner-cache-gc.timer",
+      "scope": "system"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "recovery-artifacts",
+    "name": "Backups, migration capsules and recovery archives",
+    "purpose": "Index the registered backup and recovery roots without interpreting age as dispensability. Existing unknown archives remain protected until classified and restore-tested.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "catalog/policy.json"
+    ],
+    "owns": [
+      "catalog/policy.json"
+    ],
+    "commands": [
+      "dotctl storage",
+      "dotctl cleanup --plan"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [
+      "~/Backups",
+      "~/migration-recovery",
+      "~/save-recovery",
+      "~/.local/share/dotfiles",
+      "~/.backup_dotfiles",
+      "~/Archives/codex-history"
+    ],
+    "installed_locations": [],
+    "disable": "Remove a root from catalog/policy.json to stop inventorying it; do not delete its contents as part of disabling discovery.",
+    "verification": {
+      "procedure": "Compare inventory with the registered roots and explicit producer receipts. A checksum is not a restore test.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "maintenance",
+      "migration-recovery",
+      "tracer-recovery"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "migration-recovery",
+    "name": "Migration checkpoints and machine manifests",
+    "purpose": "Create and validate recovery capsules, export machine manifests, resume migrations and offer explicit Windows fallback or remote rescue helpers. Preserve old capsules as independent artifacts.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/migration-tools.nix",
+      "scripts/nixos/checkpoint-migration.sh",
+      "scripts/nixos/machine-manifest.sh",
+      "scripts/nixos/recovery-migration.sh",
+      "scripts/nixos/resume-migration.sh",
+      "scripts/nixos/recover-windows-fallback.sh",
+      "scripts/nixos/rescue-remote-on.sh",
+      "scripts/nixos/rescue-remote-off.sh"
+    ],
+    "owns": [
+      "modules/nixos/migration-tools.nix",
+      "scripts/nixos/checkpoint-migration.sh",
+      "scripts/nixos/machine-manifest.sh",
+      "scripts/nixos/recovery-migration.sh",
+      "scripts/nixos/resume-migration.sh",
+      "scripts/nixos/recover-windows-fallback.sh",
+      "scripts/nixos/rescue-remote-on.sh",
+      "scripts/nixos/rescue-remote-off.sh"
+    ],
+    "commands": [
+      "checkpoint-migration",
+      "export-machine-manifest",
+      "validate-machine-manifest",
+      "resume-migration",
+      "recover-windows-fallback",
+      "rescue-remote-on",
+      "rescue-remote-off"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit commands create or restore recovery data; remote rescue can expose a temporary LAN terminal."
+    ],
+    "state_locations": [
+      "~/migration-recovery",
+      "~/save-recovery"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/migration-tools.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Validate manifest and hashes, then use an isolated restore test. Inspect any remote rescue listener explicitly on its target machine.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "recovery-artifacts",
+      "durable-tmux",
+      "tracer-recovery"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "tracer-recovery",
+    "name": "Tracer rescue media, diagnostics and handoff",
+    "purpose": "Build and refresh bootable rescue media, resume the Tracer migration and inspect diagnostics. Installation remains an explicit confirmation-gated destructive command.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/tracer-tools.nix",
+      "modules/nixos/tracer-rescue.nix",
+      "modules/nixos/tracer-remote-rescue.nix",
+      "scripts/nixos/install-tracer.sh",
+      "scripts/nixos/resume-tracer.sh",
+      "scripts/nixos/tracer-diagnostics.sh",
+      "scripts/nixos/prepare-tracer-rescue.sh",
+      "scripts/nixos/refresh-tracer-rescue.sh"
+    ],
+    "owns": [
+      "modules/nixos/tracer-tools.nix",
+      "modules/nixos/tracer-rescue.nix",
+      "modules/nixos/tracer-remote-rescue.nix",
+      "scripts/nixos/install-tracer.sh",
+      "scripts/nixos/resume-tracer.sh",
+      "scripts/nixos/tracer-diagnostics.sh",
+      "scripts/nixos/prepare-tracer-rescue.sh",
+      "scripts/nixos/refresh-tracer-rescue.sh"
+    ],
+    "commands": [
+      "tracer-diagnostics",
+      "resume-tracer",
+      "tracer-rescue-media",
+      "tracer-rescue-media-refresh",
+      "install-tracer"
+    ],
+    "startup": [],
+    "effects": [
+      "Rescue media tools write the explicitly selected medium; install-tracer repartitions only after its own confirmation."
+    ],
+    "state_locations": [
+      "~/migration-recovery",
+      "recovery media selected by the operator"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/tracer-tools.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run resume-tracer tests, build rescue outputs, verify hashes and boot the intended rescue medium only with explicit reboot approval.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "tracer-host",
+      "migration-recovery",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "codex-handoff",
+    "name": "Codex recovery capsule exporters",
+    "purpose": "Export a normalized selected Codex thread and seed a minimal consistent Codex home for a migration or rescue handoff, without silently changing the active home.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/export-codex-handoff.py",
+      "scripts/nixos/seed-tracer-codex.py"
+    ],
+    "owns": [
+      "scripts/nixos/export-codex-handoff.py",
+      "scripts/nixos/seed-tracer-codex.py"
+    ],
+    "commands": [
+      "scripts/nixos/export-codex-handoff.py",
+      "scripts/nixos/seed-tracer-codex.py"
+    ],
+    "startup": [],
+    "effects": [
+      "Copies selected private thread state into an explicit destination; outputs require protected local storage."
+    ],
+    "state_locations": [
+      "operator-selected recovery capsule"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/export-codex-handoff.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Verify destination confinement, JSONL completeness and SQLite thread references using a copy of the intended thread.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "codex-tooling",
+      "tracer-recovery",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "legacy-installer",
+    "name": "Legacy Chev installer",
+    "purpose": "Preserve the old workstation installer and boot-media configuration for reference and explicitly requested recovery. It is not routine maintenance.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "modules/nixos/installer.nix",
+      "scripts/nixos/install-chev-desktop.sh"
+    ],
+    "owns": [
+      "modules/nixos/installer.nix",
+      "scripts/nixos/install-chev-desktop.sh"
+    ],
+    "commands": [
+      "install-chev-desktop"
+    ],
+    "startup": [],
+    "effects": [
+      "Confirmation-gated disk partitioning and operating-system installation."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/nixos/installer.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build its image and inspect disk-selection guards; do not execute installation as a status probe.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "migration-recovery",
+      "legacy-hosts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "docker-storage-migration",
+    "name": "Docker data-root migration and finalization",
+    "purpose": "Move Docker state to the intended storage and finalize it only after verifying the copied data and daemon configuration.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/migrate-docker-data-root.sh",
+      "scripts/nixos/finalize-docker-data-root.sh"
+    ],
+    "owns": [
+      "scripts/nixos/migrate-docker-data-root.sh",
+      "scripts/nixos/finalize-docker-data-root.sh"
+    ],
+    "commands": [
+      "migrate-docker-data-root",
+      "finalize-docker-data-root"
+    ],
+    "startup": [],
+    "effects": [
+      "Stops or reconfigures Docker and copies or finalizes its persistent data."
+    ],
+    "state_locations": [
+      "/var/lib/docker",
+      "configured Docker data-root",
+      "migration backup selected by the tool"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/migrate-docker-data-root.sh, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Inspect the migration receipt and compare Docker images, volumes and container state before any old data is retired.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "tracer-host",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "reboot-windows",
+    "name": "Explicit Windows reboot helper",
+    "purpose": "Select the preserved Windows boot entry for a deliberate reboot from Linux. This is never a background maintenance action.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "scripts/nixos/reboot-windows.sh"
+    ],
+    "owns": [
+      "scripts/nixos/reboot-windows.sh"
+    ],
+    "commands": [
+      "reboot-windows"
+    ],
+    "startup": [],
+    "effects": [
+      "Changes next boot selection and requests a reboot only when explicitly invoked."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/nixos/reboot-windows.sh, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Inspect boot entry resolution without rebooting; a live reboot requires explicit approval.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "tracer-recovery",
+      "windows-integration"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "container-images",
+    "name": "Linux and rescue container images",
+    "purpose": "Build full Linux and pocket-knife repair images from the shared package selections.",
+    "capability": "recovery",
+    "platforms": [
+      "linux",
+      "nixos",
+      "linux-generic"
+    ],
+    "classification": "unreviewed",
+    "aliases": [],
+    "sources": [
+      "modules/docker",
+      "docker"
+    ],
+    "owns": [
+      "modules/docker",
+      "docker"
+    ],
+    "commands": [
+      "nix build .#docker-linux",
+      "nix build .#docker-pocket-knife"
+    ],
+    "startup": [],
+    "effects": [
+      "Build outputs and explicitly loaded container images consume local storage."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/docker, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Build both images and smoke-test their intended tools in isolated containers.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "native-manifests"
+    ],
+    "runtime": {
+      "mode": "configuration"
+    },
+    "replacement": null,
+    "internal_declarations": {
+      "modules/docker/images.nix::tag = \"<native value>\";": "The latest label names a locally built image; this is not an upstream dependency pin."
+    },
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "wsl-bootstrap",
+    "name": "Legacy Ubuntu WSL bootstrap",
+    "purpose": "Preserve the side-by-side Ubuntu WSL installation and root/user bootstrap scripts.",
+    "capability": "foundation",
+    "platforms": [
+      "windows",
+      "wsl"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "dot-bootstrap",
+      "bootstrap"
+    ],
+    "owns": [
+      "dot-bootstrap",
+      "bootstrap"
+    ],
+    "commands": [
+      "dot-bootstrap ubuntu-wsl"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicitly creates or configures a WSL distribution and its host integration."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in dot-bootstrap, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Test only on an explicitly selected disposable WSL distribution; verify distro identity before mutation.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "windows-integration",
+      "legacy-hosts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-integration",
+    "name": "Legacy Windows package and WSL integration",
+    "purpose": "Preserve Windows package setup, app links, SSH forwarding, font installation and legacy window-manager configuration. Helpers are not assumed installed or running on an unreachable Windows host.",
+    "capability": "foundation",
+    "platforms": [
+      "windows",
+      "wsl"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "modules/home/windows.nix",
+      "scripts/windows/apply-packages.ps1",
+      "scripts/windows/apply-wsl-links.ps1",
+      "scripts/windows/apply-wsl-ssh-forward.ps1",
+      "scripts/windows/install-user-fonts.ps1",
+      "komorebi",
+      "bin"
+    ],
+    "owns": [
+      "modules/home/windows.nix",
+      "scripts/windows/apply-packages.ps1",
+      "scripts/windows/apply-wsl-links.ps1",
+      "scripts/windows/apply-wsl-ssh-forward.ps1",
+      "scripts/windows/install-user-fonts.ps1",
+      "komorebi",
+      "bin"
+    ],
+    "commands": [
+      "apply-wsl-links.ps1",
+      "apply-packages.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit apply can install WinGet packages, update links, file associations and SSH integration."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in modules/home/windows.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review the listed sources and installed entrypoints on the target host; exercise the documented behavior before recording runtime verification.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "wsl-bootstrap",
+      "neovide",
+      "slack-presence",
+      "windows-desktop-settings"
+    ],
+    "runtime": {
+      "mode": "unknown",
+      "reason": "Legacy Windows runtime is unobserved from the NixOS workstation."
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "slack-presence",
+    "name": "Slack presence pulse (Windows legacy)",
+    "purpose": "A hidden Windows scheduled task waits five minutes and sends a zero-distance mouse movement only while Slack is running, resetting system idle activity. It was intended to prevent Slack showing idle; source presence is not evidence it is maintained or active.",
+    "capability": "desktop",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "unreviewed",
+    "aliases": [
+      "Slack",
+      "keep-slack-active",
+      "keep Slack active",
+      "Slack idle helper",
+      "Dotfiles Slack Presence Pulse"
+    ],
+    "sources": [
+      "scripts/windows/keep-slack-active.ps1",
+      "scripts/windows/keep-slack-active-hidden.vbs"
+    ],
+    "owns": [
+      "scripts/windows/keep-slack-active.ps1",
+      "scripts/windows/keep-slack-active-hidden.vbs"
+    ],
+    "commands": [
+      "powershell -File scripts/windows/keep-slack-active.ps1 -Mode Status",
+      "powershell -File scripts/windows/keep-slack-active.ps1 -Mode Remove"
+    ],
+    "startup": [
+      "Scheduled task: Dotfiles Slack Presence Pulse; interactive-user logon, hidden wscript launcher. Legacy WSL Windows integration invokes -Mode Ensure."
+    ],
+    "effects": [
+      "Resets Windows idle activity with user32 mouse_event(MOUSEEVENTF_MOVE, 0, 0); no Slack API call. Default mode Ensure installs/updates the task, so never use it for inspection."
+    ],
+    "state_locations": [
+      "Windows Task Scheduler: Dotfiles Slack Presence Pulse",
+      "%LOCALAPPDATA%/dotfiles/keep-slack-active.ps1",
+      "%LOCALAPPDATA%/dotfiles/keep-slack-active-hidden.vbs"
+    ],
+    "installed_locations": [
+      "%LOCALAPPDATA%/dotfiles"
+    ],
+    "disable": "On the actual Windows host run the helper with -Mode Remove, then verify the scheduled task is absent. Also remove its Ensure call from legacy Windows integration before applying that profile again.",
+    "verification": {
+      "procedure": "On Windows use -Mode Status or Get-ScheduledTask -TaskName \"Dotfiles Slack Presence Pulse\". Inspect task actions and process state; do not invoke Ensure, Run or Pulse during an audit.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "windows-integration"
+    ],
+    "runtime": {
+      "mode": "scheduled-task",
+      "task": "Dotfiles Slack Presence Pulse",
+      "platforms": [
+        "windows"
+      ],
+      "reason": "Windows host has not been queried; installation and running state are unknown."
+    },
+    "replacement": null,
+    "desired": {
+      "state": "legacy-profile-conditional",
+      "evidence": "The legacy Windows integration has an Ensure call. Whether that profile is desired on an existing Windows host has not been established."
+    }
+  },
+  {
+    "id": "windows-desktop-settings",
+    "name": "Legacy Windows desktop and power settings",
+    "purpose": "Preserve explicit setup helpers for always-on behavior, LG display settings, wallpapers, system restore and Docker Desktop.",
+    "capability": "desktop",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "scripts/windows/configure-always-on.ps1",
+      "scripts/windows/configure-lg-display.ps1",
+      "scripts/windows/configure-wallpapers.ps1",
+      "scripts/windows/configure-system-restore.ps1",
+      "scripts/windows/configure-docker-desktop.ps1"
+    ],
+    "owns": [
+      "scripts/windows/configure-always-on.ps1",
+      "scripts/windows/configure-lg-display.ps1",
+      "scripts/windows/configure-wallpapers.ps1",
+      "scripts/windows/configure-system-restore.ps1",
+      "scripts/windows/configure-docker-desktop.ps1"
+    ],
+    "commands": [
+      "configure-always-on.ps1",
+      "configure-lg-display.ps1",
+      "configure-wallpapers.ps1",
+      "configure-system-restore.ps1",
+      "configure-docker-desktop.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Changes power, display, desktop, restore or Docker settings when explicitly invoked."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/windows/configure-always-on.ps1, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Inspect each helper’s declared scope and read back the selected settings on the actual Windows host.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "windows-integration"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-sunshine",
+    "name": "Legacy Windows Sunshine fork and display sessions",
+    "purpose": "Preserve the pinned Sunshine fork, identity recovery, virtual display policy and session hooks for the prior Windows streaming host.",
+    "capability": "remote-streaming",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "platforms/windows/sunshine-fork.json",
+      "platforms/windows/vdd_settings.xml",
+      "scripts/windows/fetch-sunshine-fork.sh",
+      "scripts/windows/install-sunshine-fork.ps1",
+      "scripts/windows/configure-sunshine-virtual-display.ps1",
+      "scripts/windows/install-virtual-display.ps1",
+      "scripts/windows/restore-sunshine-identity.ps1",
+      "scripts/windows/set-sunshine-display-session.ps1"
+    ],
+    "owns": [
+      "platforms/windows/sunshine-fork.json",
+      "platforms/windows/vdd_settings.xml",
+      "scripts/windows/fetch-sunshine-fork.sh",
+      "scripts/windows/install-sunshine-fork.ps1",
+      "scripts/windows/configure-sunshine-virtual-display.ps1",
+      "scripts/windows/install-virtual-display.ps1",
+      "scripts/windows/restore-sunshine-identity.ps1",
+      "scripts/windows/set-sunshine-display-session.ps1"
+    ],
+    "commands": [
+      "install-sunshine-fork.ps1",
+      "restore-sunshine-identity.ps1",
+      "set-sunshine-display-session.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit helpers install a custom server/virtual driver, change display sessions or restore pairing identity."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in platforms/windows/sunshine-fork.json, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run Windows Sunshine guard, sign-in and display-policy tests; then test a real streaming session on that host.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "windows-integration",
+      "windows-amps"
+    ],
+    "runtime": {
+      "mode": "unknown",
+      "reason": "Windows streaming host has not been observed."
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-amps",
+    "name": "Legacy Windows AMPS and NVIDIA effects setup",
+    "purpose": "Preserve Windows AMPS endpoint configuration, session launch context, audio migration, Sunshine hooks and NVIDIA audio/video effects setup.",
+    "capability": "audio",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "scripts/windows/amps-launch-context.ps1",
+      "scripts/windows/amps-migration.ps1",
+      "scripts/windows/configure-amps.ps1",
+      "scripts/windows/configure-amps-endpoints.ps1",
+      "scripts/windows/configure-nvidia-audio-effects.ps1",
+      "scripts/windows/configure-nvidia-video-effects.ps1",
+      "scripts/windows/set-amps-sunshine-session.ps1"
+    ],
+    "owns": [
+      "scripts/windows/amps-launch-context.ps1",
+      "scripts/windows/amps-migration.ps1",
+      "scripts/windows/configure-amps.ps1",
+      "scripts/windows/configure-amps-endpoints.ps1",
+      "scripts/windows/configure-nvidia-audio-effects.ps1",
+      "scripts/windows/configure-nvidia-video-effects.ps1",
+      "scripts/windows/set-amps-sunshine-session.ps1"
+    ],
+    "commands": [
+      "configure-amps.ps1",
+      "configure-amps-endpoints.ps1",
+      "set-amps-sunshine-session.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Writes audio endpoints, processing configuration and stream-session policy."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/windows/amps-launch-context.ps1, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run Windows AMPS migration and OBS tests, then verify actual endpoints and audio with the target hardware.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "amps",
+      "windows-sunshine",
+      "windows-obs"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-obs",
+    "name": "Legacy Windows OBS production controls",
+    "purpose": "Preserve OBS configuration, production mode scripting, the hidden frame-limit launcher and NVIDIA frame-limit settings.",
+    "capability": "audio",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "scripts/windows/configure-obs.ps1",
+      "scripts/windows/obs-production-mode.lua",
+      "scripts/windows/obs-production-frame-limit.vbs",
+      "scripts/windows/set-nvidia-frame-limit.ps1"
+    ],
+    "owns": [
+      "scripts/windows/configure-obs.ps1",
+      "scripts/windows/obs-production-mode.lua",
+      "scripts/windows/obs-production-frame-limit.vbs",
+      "scripts/windows/set-nvidia-frame-limit.ps1"
+    ],
+    "commands": [
+      "configure-obs.ps1",
+      "set-nvidia-frame-limit.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Writes OBS profiles and explicit per-application GPU frame-rate limits."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/windows/configure-obs.ps1, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Open the intended OBS profile and verify a private test recording and frame pacing on the Windows host.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "obs",
+      "windows-amps"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-games-vr",
+    "name": "Legacy Windows game and VR setup",
+    "purpose": "Preserve Minecraft desktop/VR assets, Flat2VR configuration, Quest hotspot setup and the PowerWash Simulator 2 launcher.",
+    "capability": "gaming",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "scripts/windows/PowerWashLauncher.cs",
+      "scripts/windows/configure-minecraft-desktop.ps1",
+      "scripts/windows/configure-minecraft-vr.ps1",
+      "scripts/windows/minecraft-graphics-assets.ps1",
+      "scripts/windows/configure-flat2vr-mods.ps1",
+      "scripts/windows/configure-quest-hotspot.ps1",
+      "scripts/windows/configure-powerwash-simulator-2.ps1"
+    ],
+    "owns": [
+      "scripts/windows/PowerWashLauncher.cs",
+      "scripts/windows/configure-minecraft-desktop.ps1",
+      "scripts/windows/configure-minecraft-vr.ps1",
+      "scripts/windows/minecraft-graphics-assets.ps1",
+      "scripts/windows/configure-flat2vr-mods.ps1",
+      "scripts/windows/configure-quest-hotspot.ps1",
+      "scripts/windows/configure-powerwash-simulator-2.ps1"
+    ],
+    "commands": [
+      "configure-minecraft-desktop.ps1",
+      "configure-minecraft-vr.ps1",
+      "configure-flat2vr-mods.ps1",
+      "configure-quest-hotspot.ps1",
+      "configure-powerwash-simulator-2.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Installs selected game assets/mods or changes launcher and hotspot configuration."
+    ],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/windows/PowerWashLauncher.cs, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Review installed versions and test the actual chosen game/headset; do not execute setup during status inspection.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "windows-integration",
+      "windows-sunshine"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-handoff",
+    "name": "Legacy Windows-to-NixOS handoff capsule",
+    "purpose": "Export a Windows machine handoff for the NixOS migration; generated recovery capsules remain protected until independently validated.",
+    "capability": "recovery",
+    "platforms": [
+      "windows"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "scripts/windows/new-nixos-handoff.ps1"
+    ],
+    "owns": [
+      "scripts/windows/new-nixos-handoff.ps1"
+    ],
+    "commands": [
+      "new-nixos-handoff.ps1"
+    ],
+    "startup": [],
+    "effects": [
+      "Copies selected machine and application state to the explicit handoff destination."
+    ],
+    "state_locations": [
+      "operator-selected migration capsule"
+    ],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/windows/new-nixos-handoff.ps1, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Validate capsule manifest and hashes and perform a restore rehearsal before retiring the source data.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "migration-recovery",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "windows-validation",
+    "name": "Legacy Windows helper regression checks",
+    "purpose": "Keep the PowerShell and shell regression fixtures with their owning Windows integration capability; they are validation entrypoints, not background tools.",
+    "capability": "foundation",
+    "platforms": [
+      "windows",
+      "wsl"
+    ],
+    "classification": "legacy",
+    "aliases": [],
+    "sources": [
+      "scripts/windows/tests"
+    ],
+    "owns": [
+      "scripts/windows/tests"
+    ],
+    "commands": [
+      "scripts/windows/tests/*"
+    ],
+    "startup": [],
+    "effects": [],
+    "state_locations": [],
+    "installed_locations": [],
+    "disable": "Remove or disable this component in scripts/windows/tests, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
+    "verification": {
+      "procedure": "Run the applicable test scripts on the corresponding Windows/WSL runtime.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "windows-sunshine",
+      "windows-amps"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "The native host/profile declarations determine installation and enablement. Catalog classification does not establish desired or running state."
+    }
+  },
+  {
+    "id": "maintenance-schedules",
+    "name": "Scheduled preparation and status refresh",
+    "purpose": "Define daily 09:00 metadata refresh and weekly Sunday 04:00 candidate preparation using OS user jobs. Scheduling stays disabled until both Tracer and work-Mac acceptance receipts exist. On the company Mac, deterministic Homebrew preparation remains scheduled while AI repair and catalog review require local Claude/manual action; Codex is never invoked.",
+    "capability": "foundation",
+    "platforms": [
+      "nixos",
+      "macos-managed"
+    ],
+    "classification": "supported",
+    "aliases": [],
+    "sources": [
+      "modules/home/maintenance.nix"
+    ],
+    "owns": [
+      "modules/home/maintenance.nix"
+    ],
+    "commands": [
+      "dotctl schedule daily",
+      "dotctl schedule weekly"
+    ],
+    "startup": [
+      "dotfiles-refresh.timer",
+      "dotfiles-prepare.timer",
+      "managed Mac launch agents installed only by explicit schedule enable"
+    ],
+    "effects": [
+      "After acceptance and explicit enable, prepares candidates and draft PRs but never merges, activates, restarts applications or reboots. Personal hosts can use bounded Codex repair; the company Mac preserves its Claude-only policy and reports manual review holds."
+    ],
+    "state_locations": [
+      "~/.local/state/dotfiles"
+    ],
+    "installed_locations": [],
+    "disable": "Use the scheduler disable command to stop both user timers/launch agents. Keep candidate receipts and acceptance evidence for inspection.",
+    "verification": {
+      "procedure": "Inspect schedule status and both actual-host acceptance receipts; run the scheduled actions manually before enabling timers.",
+      "last_verified": null,
+      "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
+    },
+    "relationships": [
+      "maintenance",
+      "native-manifests"
+    ],
+    "runtime": {
+      "mode": "services",
+      "units": [
+        {
+          "unit": "dotfiles-refresh.timer",
+          "scope": "user"
+        },
+        {
+          "unit": "dotfiles-prepare.timer",
+          "scope": "user"
+        }
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "disabled-until-accepted",
+      "evidence": "catalog/policy.json requires Tracer and work-Mac acceptance before explicit schedule enable."
+    }
+  },
+  {
+    "id": "codex-history-archive",
+    "name": "Local Codex conversation archive",
+    "aliases": [
+      "codex archive",
+      "history export",
+      "conversation transcripts"
+    ],
+    "purpose": "Export selected local Codex history into a private, searchable archive with raw logs, SQLite snapshots, readable transcripts, an index and checksums. It uses no Codex executable or model API, so historical data remains readable after retiring Codex on a company Mac.",
+    "capability": "recovery",
+    "platforms": [
+      "nixos",
+      "linux",
+      "macos-managed",
+      "darwin",
+      "wsl",
+      "windows",
+      "linux-generic"
+    ],
+    "classification": "unreviewed",
+    "sources": [
+      "scripts/codex/archive.py"
+    ],
+    "owns": [
+      "scripts/codex/archive.py"
+    ],
+    "commands": [
+      "python3 scripts/codex/archive.py --source ~/.codex --destination ~/Archives/codex-history"
+    ],
+    "startup": [],
+    "effects": [
+      "Copies local history, snapshots active SQLite databases and generates searchable transcripts; authentication, user settings, plugins and runtime caches are excluded.",
+      "An explicit re-export replaces an existing marked archive only after verifying the new export; old conversation contents remain private local data."
+    ],
+    "state_locations": [
+      "~/Archives/codex-history",
+      "operator-selected archive destination"
+    ],
+    "installed_locations": [],
+    "disable": "Stop invoking the manual exporter. Keep the archive protected until its exact removal is separately reviewed; retiring Codex does not retire its historical data.",
+    "verification": {
+      "procedure": "Run tests/codex-archive.py, verify the archive SHA256SUMS, inspect representative transcripts and confirm SQLite snapshot integrity. Checksums do not establish restore success.",
+      "last_verified": null,
+      "evidence": "Existing main-branch tool indexed during reconciliation; actual archive and restore status have not been inspected."
+    },
+    "relationships": [
+      "codex-history-tools",
+      "recovery-artifacts"
+    ],
+    "runtime": {
+      "mode": "manual"
+    },
+    "desired": {
+      "state": "manual",
+      "evidence": "The exporter runs only when explicitly invoked with source and destination; no background process is expected."
+    },
+    "replacement": null
+  }
+]

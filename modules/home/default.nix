@@ -1,24 +1,12 @@
 { ... }:
 {
+  # Native modules remain the configuration authority; capabilities group ownership.
+  # Existing public module paths remain valid for legacy consumers.
   imports = [
-    ./core.nix
-    ./foundation.nix
-    ./development.nix
-    ./shell.nix
-    ./git.nix
-    ./nvim.nix
-    ./neovide.nix
-    ./codex.nix
-    ./cloud.nix
-    ./terminal.nix
-    ./obs.nix
-    ./bumblebee.nix
-    ./bumblebee-resume.nix
-    ./wallpaper.nix
-    ./appearance.nix
-    ./compositors.nix
-    ./gaming.nix
-    ./razer.nix
-    ./windows.nix
+    ./capabilities/foundation.nix
+    ./capabilities/development.nix
+    ./capabilities/editor.nix
+    ./capabilities/desktop.nix
+    ./capabilities/gaming.nix
   ];
 }

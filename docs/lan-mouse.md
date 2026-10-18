@@ -12,19 +12,22 @@ specific hardware.
 
 ## macOS peer
 
-Install the matching `lan-mouse-macos-*.zip` from the project's
-[latest release](https://github.com/feschber/lan-mouse/releases/latest), move
-**Lan Mouse.app** into Applications, and run:
+The host-native `macos-managed` profile installs the architecture-matched
+**Lan Mouse v0.11.0** app from the project's official release, verifies its
+published checksum and bundle metadata, removes only the app's downloaded
+quarantine attribute, and registers a per-user login item. Apply it with:
 
 ```sh
-xattr -rd com.apple.quarantine "/Applications/Lan Mouse.app"
-open -a "Lan Mouse"
+dotctl apply macos-managed
 ```
 
-macOS must grant Lan Mouse Accessibility permission. When the desktop first
-connects, authorize its displayed TLS fingerprint in the Mac's Lan Mouse menu.
-The Mac does not need an outgoing client entry unless it should also control
-the desktop.
+On first setup, allow the requesting terminal to control System Events so it
+can add the login item. macOS must also grant Lan Mouse Accessibility
+permission and, when requested, Input Monitoring and Local Network access.
+These permissions are never bypassed by the profile. When the desktop first
+connects, compare and authorize its displayed TLS fingerprint in the Mac's Lan
+Mouse menu. The Mac does not need an outgoing client entry unless it should
+also control the desktop.
 
 On NixOS, `systemctl --user status lan-mouse` shows connection logs. The
 default emergency release chord is left Control + Shift + Super + Alt.

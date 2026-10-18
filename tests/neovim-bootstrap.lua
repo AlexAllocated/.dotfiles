@@ -35,6 +35,14 @@ end
 registry.get_all_packages = function()
 	return packages
 end
+registry.get_package = function(name)
+	for _, pkg in ipairs(packages) do
+		if pkg.name == name then
+			return pkg
+		end
+	end
+	error("Unknown package: " .. name)
+end
 registry.get_installed_packages = function()
 	assert(#tasks == 0, "read package versions before registry refresh completed")
 	return packages
@@ -69,7 +77,7 @@ local function add_package(outcome)
 	end
 	function pkg:install(opts, callback)
 		assert(not self.installing, "retried before the previous install finished")
-		assert(opts.version == "2", "retry changed the target version")
+		assert(opts.version == (self.expected or "2"), "retry changed the target version")
 		self.installs = self.installs + 1
 		self.installing = true
 		if outcome == "timeout" then
@@ -146,6 +154,43 @@ busy.installing = true
 assert(not bootstrap.update_mason_packages(1))
 assert(busy.installs == 0)
 
+-- A reviewed restore keeps its exact target even after the registry moves.
+reset()
+local pinned = add_package("success")
+pinned.version, pinned.latest, pinned.expected = "1", "99", "3"
+pinned.get_latest_version = function()
+	error("restore queried a latest version")
+end
+local original_read = bootstrap.read_mason_lock
+bootstrap.read_mason_lock = function()
+	return { ["test-tool"] = "3" }
+end
+assert(bootstrap.restore_mason_pins(1))
+assert(pinned.version == "3")
+assert(bootstrap.restore_mason_pins(1))
+assert(pinned.installs == 1)
+
+reset()
+local guarded = add_package("success")
+local original_registry_pin = bootstrap.mason_registry_pin
+bootstrap.mason_registry_pin = function()
+	return { version = "unexpected", sha256 = "unexpected" }
+end
+assert(not bootstrap.update_mason_packages(1, { ["test-tool"] = "2" }, { version = "reviewed", sha256 = "reviewed" }))
+assert(guarded.installs == 0, "installed before verifying the registry pin")
+bootstrap.mason_registry_pin = original_registry_pin
+
+reset()
+bootstrap.read_mason_lock = function()
+	error("Missing Mason version lock")
+end
+local untouched = add_package("success")
+assert(not bootstrap.restore_mason_pins(1))
+assert(untouched.installs == 0)
+
+bootstrap.read_mason_lock = function()
+	return { ["test-tool"] = "2" }
+end
 for _, outcome in ipairs({ "success", "failure" }) do
 	reset()
 	add_package(outcome)
@@ -155,5 +200,62 @@ for _, outcome in ipairs({ "success", "failure" }) do
 	bootstrap.sync_runtime()
 	assert(commands[#commands] == (outcome == "success" and "qa" or "cquit"))
 end
+
+bootstrap.read_mason_lock = original_read
+
+-- Modern Tree-sitter returns asynchronous Tasks. The command named Sync
+-- must await both operations and propagate false/timeout failures.
+local saved_vim = vim
+local created, waits
+local install_ok, update_ok = true, true
+vim = {
+	env = { DOTFILES_NVIM_PIN_UPDATE = "1", DOTFILES_NVIM_RUNTIME_SYNC = "1" },
+	fn = {
+		exists = function()
+			return 0
+		end,
+	},
+	api = {
+		nvim_create_user_command = function(_, callback)
+			created = callback
+		end,
+		nvim_list_uis = function()
+			return {}
+		end,
+	},
+}
+package.loaded["nvim-treesitter.install"] = {
+	install = function(languages)
+		assert(languages[1] == "lua", "validation omitted configured parsers")
+		return {
+			wait = function(_, timeout)
+				assert(timeout == 600000)
+				table.insert(waits, "install")
+				return install_ok
+			end,
+		}
+	end,
+	update = function()
+		return {
+			wait = function()
+				table.insert(waits, "update")
+				return update_ok
+			end,
+		}
+	end,
+}
+local spec = dofile("nvim/lua/plugins/treesitter.lua")
+spec[1].opts(nil, { ensure_installed = { "lua" } })
+waits = {}
+created({ fargs = {} })
+assert(table.concat(waits, ",") == "install,update", "parser work was not awaited")
+install_ok = false
+waits = {}
+assert(not pcall(created, { fargs = {} }), "failed parser install was accepted")
+assert(#waits == 1)
+install_ok, update_ok = true, false
+waits = {}
+assert(not pcall(created, { fargs = {} }), "failed parser update was accepted")
+vim = saved_vim
 
 print("Neovim bootstrap tests passed")

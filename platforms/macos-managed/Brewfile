@@ -45,5 +45,6 @@ brew "zsh-syntax-highlighting"
 brew "zsh-vi-mode"
 
 cask "1password-cli"
+cask "claude-code"
 cask "dotnet-sdk"
 cask "gcloud-cli"

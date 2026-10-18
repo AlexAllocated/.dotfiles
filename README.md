@@ -1,5 +1,30 @@
 # Portable personal environments
 
+## Maintenance and system map
+
+The supported daily environments are **Tracer NixOS** and the **managed work Mac**. Native Nix configuration and Brewfiles remain the source of truth. The catalog explains custom behavior and links it to its source, startup, side effects, and verification procedure.
+
+```sh
+dotctl map
+dotctl catalog slack
+dotctl inspect slack-presence
+dotctl status
+dotctl status --refresh
+dotctl patches
+dotctl storage --refresh
+```
+
+Updates are prepared separately from application:
+
+```sh
+dotctl prepare system    # isolated candidate, full checks, draft PR
+updoot                   # review one candidate, then confirm merge and application
+```
+
+Other groups are `os-release`, `drivers`, `desktop`, `editor`, and `mac`. Some changes require a manual or hardware review; a hold is reported explicitly. Your working checkout is not automatically stashed or committed. Cached status works offline; every inspection command accepts `--json`. Schedules start disabled pending acceptance on both supported hosts.
+
+See [the maintenance guide](docs/maintenance.md) for the complete command map, protected artifacts, patch retirement, and migration from the old Updoot workflow.
+
 This repository builds a consistent shell and developer environment across
 Ubuntu WSL, generic Linux, NixOS, and macOS. Nix is the primary configuration engine,
 Home Manager provides reusable user-level capabilities, and Homebrew supports
@@ -9,56 +34,45 @@ The final pre-Nix version is preserved by the `pre-nix` tag.
 
 ## Profiles
 
-| Profile         | Configuration owner         | Intended use                                  |
-| --------------- | --------------------------- | --------------------------------------------- |
-| `chev-desktop`  | NixOS + Home Manager        | Native NVIDIA gaming and development desktop  |
-| `ubuntu-wsl`    | Home Manager                | Primary Windows development environment       |
-| `linux`         | Home Manager                | Ubuntu and other Linux distributions with Nix |
-| `macos-managed` | Homebrew + repository links | Macs where `/nix` cannot be installed         |
-| `macos`         | Home Manager                | Apple Silicon Macs without nix-darwin         |
-| `darwin-macos`  | nix-darwin + Home Manager   | Personally managed Apple Silicon Macs         |
+| Profile         | Configuration owner         | Intended use                                 |
+| --------------- | --------------------------- | -------------------------------------------- |
+| `tracer`        | NixOS + Home Manager        | Supported gaming and development workstation |
+| `macos-managed` | Homebrew + repository links | Supported company Mac without Nix            |
+| `chev-desktop`  | NixOS + Home Manager        | Retained predecessor desktop configuration   |
+| `ubuntu-wsl`    | Home Manager                | Legacy Windows development compatibility     |
+| `linux`         | Home Manager                | Legacy standalone Linux compatibility        |
+| `macos`         | Home Manager                | Legacy personal Mac without nix-darwin       |
+| `darwin-macos`  | nix-darwin + Home Manager   | Legacy personal Mac with nix-darwin          |
 
 Flake outputs use `ubuntu-wsl`, `linux`, and `macos-arm64` for Home Manager.
 The shorter macOS profile names remain as compatibility aliases.
 
-`dotctl` detects the normal profile automatically, so routine maintenance is:
+On supported hosts, `dotctl` detects the native profile. Routine maintenance is:
 
 ```sh
-dotctl apply
+dotctl status
+dotctl prepare system # use mac on the managed Mac
 updoot
-dotctl doctor
+dotctl status --refresh
 ```
 
-`updoot` is an alias for `dotctl apply --update`. Updates happen in a staging
-checkout with isolated Neovim state. Before staging, local changes are saved,
-the branch is rebased onto its latest upstream, and the local changes are
-restored. Release discovery advances NixOS, Home Manager, and nix-darwin to the
-latest published stable release together, and refreshes Mango, Noctalia, and
-iloader to their latest stable releases, including iloader Git dependency hashes.
-The migration/recovery image retains its deliberate compatibility pin; advancing
-it requires capsule resume testing.
-The Linux ChatGPT desktop pin is refreshed from the official package indexes for
-both architectures; the official OpenAI `latest` channel supplies the Codex CLI
-artifact and checksum. Discovery failures, incomplete releases, and downgrades
-stop the update. Hosts without Nix retain their flake URLs and lockfile together.
-New pins are accepted only after Neovim automation and all-system Nix evaluation
-succeed. Neovim, Lazy, Mason, and Treesitter
-progress is streamed directly to the terminal. The isolated phase updates only Lazy plugin pins;
-installed Mason tools and Treesitter parsers are updated once in the persistent
-runtime after validation. Editor maintenance uses host-declared Nix/Homebrew
-runtimes without inherited Mise shims. After applying, `updoot` commits every
-outstanding change and fetches again. Any late upstream changes are rebased, validated, and
-reapplied before the current branch is pushed. `dotctl update` refreshes pins
-without applying, committing, or pushing them.
+Preparation starts from the canonical branch in a dedicated worktree, checks one
+update group, and publishes a draft PR. Updoot verifies that candidate and its CI,
+asks for confirmation, then merges and applies the exact merged source. Failed
+preparation keeps its logs and leaves the active environment alone. Use
+`dotctl retry <id>` to resume a candidate. `dotctl update <group>` is a prepare
+alias; `dotctl apply --update` is an Updoot alias.
 
-On Ubuntu WSL, apply and `updoot` also reconcile the latest Windows applications
-declared in `platforms/windows/winget.json` through WinGet. Neovide, WezTerm,
-1Password, and the Codex desktop app are managed there.
+`dotctl apply <profile>` applies a clean committed source without discovering
+new versions. Legacy profiles remain explicit compatibility operations; they do
+not participate in scheduled preparation. Ubuntu WSL application still reconciles
+the Windows applications in `platforms/windows/winget.json` through WinGet.
 
-Interactive Lazy updates write to `nvim/lazy-lock.json` in a writable
-`DOTFILES_ROOT` or `~/.dotfiles` checkout. When the Neovim module is consumed
-without a checkout, Lazy uses a writable lockfile under Neovim's state directory
-instead of the immutable Home Manager configuration.
+The `editor` group prepares and tests Lazy plugins, exact Mason versions and
+registry, and Treesitter parsers in isolated XDG directories. Accepted editor
+releases retain their source and locks; ordinary Neovim startup uses that accepted
+source. Use `dotctl prepare editor` on Tracer to propose updates. The managed Mac
+has separate locks with its existing editor policy preserved.
 
 ## Fast setup
 
@@ -69,8 +83,10 @@ git clone --filter=blob:none https://github.com/AlexAllocated/.dotfiles.git ~/.d
 cd ~/.dotfiles
 ```
 
-The first apply prompts for a machine-local Git author name and email. For
-unattended setup, set `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
+Configure your machine-local Git author identity before preparing a candidate.
+Shared behavior lives in `.gitconfig`; author name and email belong in
+`~/.config/git/identity`. Legacy profile application can prompt for missing
+identity or read `DOTFILES_GIT_NAME` and `DOTFILES_GIT_EMAIL`.
 
 ### Ubuntu WSL
 
@@ -93,12 +109,16 @@ Run `dotctl doctor` afterward. See
 [`docs/nix-wsl-rollout.md`](docs/nix-wsl-rollout.md) for Windows links and the
 optional shared Codex conversation migration.
 
-### Native chev-desktop
+### Native NixOS
 
-The native NixOS profile uses Plasma Wayland, the open NVIDIA kernel module,
-PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
-with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
-XBOOTLDR partition mounted at `/boot`.
+Tracer is the supported workstation. Apply a reviewed, committed configuration
+with `./scripts/dotctl apply tracer`; use the separate update groups above for
+routine maintenance. The older `chev-desktop` profile and its installer remain
+available for recovery and compatibility.
+
+The native profiles use the open NVIDIA kernel module, PipeWire, Steam/Proton,
+Sunshine/NVENC, WiVRn, and ALVR. Host-specific boot and storage configuration
+lives under `hosts/tracer/` and `hosts/chev-desktop/`.
 
 On `tracer`, Fantasy Grounds uses its official native Linux client. Enable it
 with `dotfiles.gaming.fantasyGrounds.enable`; the `fantasy-grounds` package is
@@ -119,27 +139,23 @@ On `chev-desktop`, ordinary local and SSH tmux commands share one system-owned
 server, so sessions survive compositor, terminal, and user-service restarts.
 Run `tmux-cheatsheet` for the local quick reference.
 
-Plasma remains the default and remote-recovery desktop. SDDM also offers niri
-and Mango sessions. Both optional compositors use Noctalia for their bar,
-launcher, notifications, and session controls. Common bindings are
+SDDM starts the `dotfiles-desktop` dispatcher, which remembers the chosen
+desktop. Niri + Noctalia is the canonical session and recovery fallback;
+Mango + Noctalia and Niri + DMS are also available. Use `desktop-switch --help`
+to inspect the supported switches. Common Noctalia bindings are
 `Super+Return` for WezTerm, `Super+Space` for the launcher,
 `Super+Shift+D` for the fallback launcher, and `Super+Shift+E` for the session
-menu. `Ctrl+Alt+Delete` safely restarts the current experimental session if the
-shell fails. Mango remaps its upstream `Super+M` quit binding to minimize the
-focused window instead. The iPad dummy uses its native 2732x2048 mode beside
-the 3440x1440 LG while streaming, and remains active when it is the only
-connected display so remote recovery cannot leave the compositor headless.
-Both connectors have Gruvbox meadow art. Niri evacuates LG workspaces to the
-dummy when the LG powers off and restores only those workspaces when it
-returns.
+menu. `Ctrl+Alt+Delete` restarts the current experimental session if the shell
+fails. Mango remaps its upstream `Super+M` quit binding to minimize the focused
+window instead. Display layout and recovery behavior are host-specific; see
+`dotctl catalog display` and [the Sunshine display policy](docs/sunshine-display-policy.md).
 First-run Noctalia settings select Gruvbox Dark and hide lock, suspend, and
 hibernate until the workstation password has been intentionally set and
 tested.
 
-Sunshine runs as one persistent system service below SDDM and every selectable
-Wayland session. It captures the DP-2 dummy through KMS and follows the dummy's
-transient KMS display number when the LG powers off or returns, so Moonlight
-remains a recovery path without requiring the physical display.
+Sunshine runs as a persistent system service and selects an available KMS
+capture output according to the host's display policy. Its fallback display
+keeps Moonlight available as a remote recovery path.
 
 Build the local-first internal installer with:
 
@@ -157,20 +173,29 @@ storage contract, operator commands, and versioned capsule format.
 
 ```sh
 cd ~/.dotfiles
-./scripts/dotctl apply macos-managed
+./scripts/dotctl prepare mac
+./scripts/updoot
 exec zsh -l
 ```
 
 The tracked `platforms/macos-managed/Brewfile` declares host software and
 `platforms/macos/Brewfile` declares shared GUI apps. Homebrew owns global tools,
-runtimes, Neovide, WezTerm, 1Password, and the Codex desktop app; Bun owns
-npm-registry CLIs such as Codex. Mise is available for project-local runtime
-versions but does not own global tools.
+runtimes, Neovide, WezTerm, 1Password, and Claude Code. This
+company profile excludes Codex desktop/CLI and AI editor extras. Mise is available
+for project-local runtime versions but does not own global tools. Personal Mac
+apps belong in `platforms/macos-personal/Brewfile`.
 
-Applying this profile removes services, containers, and host runtime files left
-by the retired macOS Docker workshop. Its home and builder volumes are preserved
-by default; set `DOTFILES_PURGE_LEGACY_DOCKER_WORKSHOP=1` for one apply to remove
-those volumes and the old local workstation image too.
+Preparation requires existing Homebrew, Git, and authenticated GitHub CLI.
+It records exact package versions, recipes and artifacts for review. Once a
+reviewed `platforms/macos-managed/review.json` is committed, plain
+`./scripts/dotctl apply macos-managed` can apply it. The existing mutable
+`wezterm@nightly` channel is reported as a manual hold; ordinary reviewed packages
+can still apply. A failed deterministic update needs local Claude/manual repair.
+
+After reviewing a committed editor revision, apply its managed variant with
+`./scripts/dotctl apply --group editor macos-managed`. See the
+[maintenance guide](docs/maintenance.md) for native host acceptance and schedules.
+Retired Docker workshop data is preserved; this workflow does not purge it.
 
 ### Linux or macOS with Nix
 
@@ -187,8 +212,9 @@ Codex desktop app for Windows and macOS; the native NixOS desktop profile also
 installs OpenAI's ChatGPT desktop app with Codex (`chatgpt` in the terminal).
 The Linux app is packaged in `packages/chatgpt-desktop.nix`, with versioned
 official downloads and SHA-256 hashes in `pins/chatgpt-desktop.json`. NixOS is
-not an officially supported upstream distro. `updoot` refreshes that pin and
-rebuilds the app; the managed Codex CLI has its own pin.
+not an officially supported upstream distro. `dotctl prepare desktop` proposes
+that pin update; Updoot applies the reviewed result. The personal Codex CLI has
+its own pin, updated by the `system` group.
 
 ## Capabilities
 
@@ -228,15 +254,13 @@ Available modules:
 - `development`: compilers, language runtimes, formatters, and build tools
 - `cloud`: Kubernetes and cloud CLIs
 - `terminal`: Alacritty, WezTerm, Konsole styling, and portable tmux
-- `compositors`: optional niri/Mango configs, shared Noctalia shell, and portable output policy
+- `compositors`: niri/Mango configs, desktop shell integrations, and portable output policy
 - `windows`: Windows-side link helper
 - `default`: the complete workstation composition
 
-`nixosModules.compositors` enables the two optional display-manager sessions
-while preserving the caller's desktop policy. `nixosModules.wsl` exposes the
-WSL host module with neutral defaults; set
-`dotfiles.wsl.user` and `dotfiles.wsl.userDescription` in the consuming NixOS
-configuration.
+`nixosModules.compositors` provides the desktop dispatcher and the Niri + Noctalia,
+Niri + DMS, and Mango + Noctalia display-manager sessions. The retained WSL
+configuration uses the standalone `homeConfigurations.ubuntu-wsl` output.
 
 Consumers set their own `home.stateVersion`, username, home directory, and Git
 identity.
@@ -269,11 +293,15 @@ Commit-addressed `sha-<commit>` tags are published alongside `latest`.
 nix develop
 nix fmt
 dotctl check
+dotctl catalog --validate
+python3 -m unittest discover -s tests -p 'test_dotctl*.py'
 ```
 
-Checks cover Nix formatting and evaluation, ShellCheck, Bash syntax, Lua syntax,
-Stylua, Python compilation, the public Home Manager module API, and container
-smoke tests in CI.
+`dotctl check` performs catalog validation and the complete native Tracer build.
+Use `dotctl check mac` on the managed Mac and `dotctl check editor` for isolated
+editor validation. Flake checks cover formatting and evaluation, ShellCheck, Bash
+and Lua syntax, Stylua, Python compilation and tests, catalog coverage, and the
+public Home Manager module API. CI also runs container smoke tests.
 
 The Ubuntu-WSL profile also reconciles the Windows side of the workstation. It
 installs or updates WezTerm, Neovide, and the official ChatGPT/Codex desktop app

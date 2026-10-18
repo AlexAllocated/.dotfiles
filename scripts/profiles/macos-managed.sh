@@ -41,6 +41,16 @@ migrate_macos_formula_sources() {
 
 migrate_macos_cask_ownership() {
 	local font_dir="$HOME/Library/Fonts"
+	if brew list --cask wezterm >/dev/null 2>&1; then
+		printf 'Migrating WezTerm from the stable cask to the official nightly cask...\n'
+		brew_noninteractive uninstall --cask wezterm
+		if ! brew_noninteractive install --cask wezterm@nightly; then
+			printf 'The nightly install failed; restoring the stable WezTerm cask...\n' >&2
+			brew_noninteractive install --cask wezterm ||
+				printf 'WezTerm could not be restored automatically; rerun the profile after Homebrew is reachable.\n' >&2
+			return 1
+		fi
+	fi
 	if ! brew list --cask font-bigblue-terminal-nerd-font >/dev/null 2>&1 &&
 		[[ -d "$font_dir" ]] &&
 		find "$font_dir" -maxdepth 1 -type f -name 'BigBlueTerm*NerdFont*.ttf' -print -quit | grep -q .; then
@@ -98,6 +108,148 @@ apply_macos_managed_links() {
 	fi
 }
 
+ensure_macos_lan_mouse_login_item() {
+	local error
+	if ! error="$(osascript \
+		-e 'set itemName to "Lan Mouse"' \
+		-e 'set appPath to "/Applications/Lan Mouse.app"' \
+		-e 'tell application "System Events"' \
+		-e 'if exists login item itemName then' \
+		-e 'set existingItem to login item itemName' \
+		-e 'if path of existingItem is not appPath then' \
+		-e 'delete existingItem' \
+		-e 'else' \
+		-e 'set hidden of existingItem to true' \
+		-e 'end if' \
+		-e 'end if' \
+		-e 'if not (exists login item itemName) then make login item at end with properties {name:itemName, path:appPath, hidden:true}' \
+		-e 'end tell' 2>&1)"; then
+		printf 'Could not configure the Lan Mouse login item: %s\n' "$error" >&2
+		printf 'Allow the requesting terminal to control System Events, then rerun dotctl apply macos-managed.\n' >&2
+		return 1
+	fi
+	printf 'Lan Mouse will start at login.\n'
+}
+
+ensure_macos_lan_mouse() (
+	local version="0.11.0"
+	local expected_build="20260612.132919"
+	local expected_identifier="de.feschber.LanMouse"
+	local target="/Applications/Lan Mouse.app"
+	local asset checksum url work archive extracted source_app
+	local current_identifier current_version current_build actual_checksum install_root backup=""
+
+	case "$(uname -m)" in
+		arm64)
+			asset="lan-mouse-macos-arm64.zip"
+			checksum="5ff9965d05be7f125b1d75b9e7259d874ec98aa086ce40012522bc25406500a9"
+			;;
+		x86_64)
+			asset="lan-mouse-macos-intel.zip"
+			checksum="d24c38ccf50061ab710826003c19d10e1243415ffa18f421d4498b2b858c8b64"
+			;;
+		*)
+			printf 'Lan Mouse v%s has no supported macOS build for %s.\n' "$version" "$(uname -m)" >&2
+			return 1
+			;;
+	esac
+
+	if [[ -e "$target" && ! -d "$target" ]]; then
+		printf 'Refusing to replace non-application path: %s\n' "$target" >&2
+		return 1
+	fi
+	if [[ -d "$target" ]]; then
+		current_identifier="$(plutil -extract CFBundleIdentifier raw -o - "$target/Contents/Info.plist" 2>/dev/null || true)"
+		if [[ "$current_identifier" != "$expected_identifier" ]]; then
+			printf 'Refusing to replace %s because its bundle identifier is %s, not %s.\n' \
+				"$target" "${current_identifier:-unknown}" "$expected_identifier" >&2
+			return 1
+		fi
+		current_version="$(plutil -extract CFBundleShortVersionString raw -o - "$target/Contents/Info.plist" 2>/dev/null || true)"
+		current_build="$(plutil -extract CFBundleVersion raw -o - "$target/Contents/Info.plist" 2>/dev/null || true)"
+	else
+		current_version=""
+		current_build=""
+	fi
+
+	if [[ "$current_version" != "$version" || "$current_build" != "$expected_build" ]]; then
+		[[ -w /Applications ]] || {
+			printf 'Installing Lan Mouse requires write access to /Applications.\n' >&2
+			return 1
+		}
+		work="$(mktemp -d /tmp/dotfiles-lan-mouse.XXXXXX)"
+		install_root=""
+		cleanup_lan_mouse_install() {
+			if [[ -n "$install_root" && "$install_root" == /Applications/.dotfiles-lan-mouse.* ]]; then
+				rm -rf "$install_root"
+			fi
+			if [[ -n "$work" && "$work" == /tmp/dotfiles-lan-mouse.* ]]; then
+				rm -rf "$work"
+			fi
+		}
+		trap cleanup_lan_mouse_install EXIT
+
+		archive="$work/$asset"
+		extracted="$work/unpacked"
+		url="https://github.com/feschber/lan-mouse/releases/download/v${version}/${asset}"
+		printf 'Installing Lan Mouse v%s from the official %s release asset...\n' "$version" "$asset"
+		curl --fail --location --output "$archive" "$url"
+		actual_checksum="$(shasum -a 256 "$archive" | awk '{print $1}')"
+		if [[ "$actual_checksum" != "$checksum" ]]; then
+			printf 'Lan Mouse archive checksum mismatch: expected %s, got %s.\n' "$checksum" "$actual_checksum" >&2
+			return 1
+		fi
+
+		mkdir -p "$extracted"
+		ditto -x -k "$archive" "$extracted"
+		source_app="$extracted/Lan Mouse.app"
+		[[ -d "$source_app" ]] || {
+			printf 'The Lan Mouse archive does not contain Lan Mouse.app.\n' >&2
+			return 1
+		}
+		[[ "$(plutil -extract CFBundleIdentifier raw -o - "$source_app/Contents/Info.plist")" == "$expected_identifier" ]] || {
+			printf 'The downloaded Lan Mouse bundle has an unexpected identifier.\n' >&2
+			return 1
+		}
+		[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$source_app/Contents/Info.plist")" == "$version" ]] || {
+			printf 'The downloaded Lan Mouse bundle has an unexpected version.\n' >&2
+			return 1
+		}
+		[[ "$(plutil -extract CFBundleVersion raw -o - "$source_app/Contents/Info.plist")" == "$expected_build" ]] || {
+			printf 'The downloaded Lan Mouse bundle has an unexpected build.\n' >&2
+			return 1
+		}
+		codesign --verify --deep --strict "$source_app"
+
+		install_root="$(mktemp -d /Applications/.dotfiles-lan-mouse.XXXXXX)"
+		ditto "$source_app" "$install_root/Lan Mouse.app"
+		codesign --verify --deep --strict "$install_root/Lan Mouse.app"
+		if [[ -d "$target" ]]; then
+			backup="$install_root/previous.app"
+			mv "$target" "$backup"
+		fi
+		if ! mv "$install_root/Lan Mouse.app" "$target"; then
+			if [[ -n "$backup" ]] && ! mv "$backup" "$target"; then
+				printf 'The previous Lan Mouse app remains recoverable at %s.\n' "$backup" >&2
+				install_root=""
+			fi
+			return 1
+		fi
+		printf 'Installed Lan Mouse v%s at %s.\n' "$version" "$target"
+		cleanup_lan_mouse_install
+		trap - EXIT
+	else
+		printf 'Lan Mouse v%s is already installed.\n' "$version"
+	fi
+
+	xattr -rd com.apple.quarantine "$target"
+	codesign --verify --deep --strict "$target"
+	ensure_macos_lan_mouse_login_item
+	if ! pgrep -x lan-mouse >/dev/null 2>&1; then
+		open -a "Lan Mouse"
+	fi
+)
+
 write_mise_config() {
 	local target="$HOME/.config/mise/config.toml"
 	mkdir -p "$(dirname "$target")"
@@ -120,6 +272,12 @@ update_brewfile_packages() {
 	done
 }
 
+update_macos_wezterm_nightly() {
+	brew list --cask wezterm@nightly >/dev/null 2>&1 || return 0
+	printf 'Updating WezTerm to the latest official nightly build...\n'
+	brew_noninteractive upgrade --cask --greedy-latest wezterm@nightly
+}
+
 install_brewfile() {
 	local brewfile="$1"
 	local bundle_args=(bundle install --file "$brewfile")
@@ -138,6 +296,7 @@ ensure_macos_desktop_apps() {
 	ensure_homebrew
 	migrate_macos_cask_ownership
 	install_brewfile "$brewfile"
+	install_brewfile "$source_root/platforms/macos-personal/Brewfile"
 	load_homebrew_shellenv
 }
 
@@ -156,22 +315,9 @@ ensure_macos_packages() {
 	if [[ "$update" == "1" ]]; then
 		update_brewfile_packages "$brewfile"
 		update_brewfile_packages "$desktop_brewfile"
+		update_macos_wezterm_nightly
 	fi
 	load_homebrew_shellenv
-}
-
-ensure_bun_codex() {
-	local update="${1:-0}"
-	local bun_bin global_bin
-	bun_bin="$(command -v bun)"
-	global_bin="$("$bun_bin" pm bin -g 2>/dev/null || printf '%s/.bun/bin\n' "$HOME")"
-	if [[ "$update" == "1" || ! -x "$global_bin/codex" ]]; then
-		printf 'Installing @openai/codex@latest with Bun...\n'
-		"$bun_bin" add --global @openai/codex@latest
-	fi
-	mkdir -p "$HOME/.local/bin"
-	ln -sfn "$global_bin/codex" "$HOME/.local/bin/codex"
-	"$global_bin/codex" --version >/dev/null
 }
 
 onepassword_agent_socket() {
@@ -335,7 +481,7 @@ apply_macos_managed() {
 	apply_macos_managed_links
 	write_mise_config
 	ensure_macos_packages "$update"
-	ensure_bun_codex "$update"
+	ensure_macos_lan_mouse
 	link_1password_agent
 	prime_neovim
 	printf 'macos-managed is ready. Open a new terminal or run: exec zsh -l\n'

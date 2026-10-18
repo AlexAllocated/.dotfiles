@@ -13,10 +13,12 @@ return {
 	opts = function(_, opts)
 		opts.PATH = "append"
 		opts.ensure_installed = opts.ensure_installed or {}
-		if vim.env.DOTFILES_NVIM_PIN_UPDATE == "1" then
-			opts.ensure_installed = {}
-		elseif not vim.tbl_contains(opts.ensure_installed, "rust-analyzer") then
+		if not vim.tbl_contains(opts.ensure_installed, "rust-analyzer") then
 			table.insert(opts.ensure_installed, "rust-analyzer")
+		end
+		if vim.env.DOTFILES_NVIM_MASON_UPDATE ~= "1" then
+			local _, registry = require("config.bootstrap").read_mason_lock()
+			opts.registries = { "github:mason-org/mason-registry@" .. registry.version }
 		end
 		opts.ui = vim.tbl_deep_extend("force", opts.ui or {}, {
 			border = "rounded",
@@ -38,10 +40,15 @@ return {
 			end, 100)
 		end)
 		registry.refresh(function()
-			for _, tool in ipairs(opts.ensure_installed) do
+			local ok, pins = pcall(require("config.bootstrap").read_mason_lock)
+			if not ok then
+				vim.notify(pins, vim.log.levels.WARN)
+				return
+			end
+			for tool, version in pairs(pins) do
 				local package = registry.get_package(tool)
 				if not package:is_installed() and not package:is_installing() then
-					package:install()
+					package:install({ version = version })
 				end
 			end
 		end)

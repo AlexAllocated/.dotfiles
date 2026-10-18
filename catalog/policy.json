@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "canonical_branch": "main",
+  "remote": "origin",
+  "metadata_stale_hours": 48,
+  "repair_passes": 2,
+  "disposable_retention_days": 30,
+  "machines": {
+    "tracer": {
+      "platforms": [
+        "nixos",
+        "linux"
+      ],
+      "classification": "supported",
+      "owns": [
+        "system",
+        "os-release",
+        "drivers",
+        "desktop",
+        "editor"
+      ]
+    },
+    "work-mac": {
+      "platforms": [
+        "macos-managed"
+      ],
+      "classification": "supported",
+      "owns": [
+        "mac"
+      ]
+    },
+    "legacy": {
+      "platforms": [
+        "windows",
+        "wsl",
+        "darwin",
+        "linux-generic"
+      ],
+      "classification": "legacy",
+      "owns": []
+    }
+  },
+  "artifact_roots": [
+    "~/Backups",
+    "~/migration-recovery",
+    "~/save-recovery",
+    "~/.local/share/dotfiles",
+    "~/.backup_dotfiles",
+    "~/Archives/codex-history"
+  ],
+  "schedules": {
+    "enabled": false,
+    "daily": "09:00",
+    "weekly": "Sun 04:00",
+    "requires_acceptance": [
+      "tracer",
+      "work-mac"
+    ]
+  },
+  "driver_policy": {
+    "channel": "new-feature",
+    "reason": "Tracer pins a tested NVIDIA branch for Galactic Racer D3D12; branch changes need separate build and game verification."
+  },
+  "required_checks": [
+    "flake (ubuntu-24.04)",
+    "flake (macos-15)"
+  ]
+}

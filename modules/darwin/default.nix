@@ -46,7 +46,10 @@
       "font-bigblue-terminal-nerd-font"
       "gcloud-cli"
       "neovide-app"
-      "wezterm"
+      {
+        name = "wezterm@nightly";
+        greedy = true;
+      }
     ];
   };
 

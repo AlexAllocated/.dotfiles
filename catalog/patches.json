@@ -1,0 +1,1862 @@
+[
+  {
+    "id": "patch-alvr-linux-stripped-compositor-pose-scan",
+    "owner": "vr-integration",
+    "kind": "local",
+    "source": "patches/alvr-linux-stripped-compositor-pose-scan.patch",
+    "source_paths": [
+      "patches/alvr-linux-stripped-compositor-pose-scan.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Find validated headset poses in compositor-owned stack frames after SteamVR strips private symbols.",
+    "upstream": {
+      "url": "https://github.com/alvr-org/ALVR",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build ALVR without this patch, start the current SteamVR compositor and measure pose latency/error 303 on the actual headset.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-alvr-linux-zero-pose-fallback",
+    "owner": "vr-integration",
+    "kind": "local",
+    "source": "patches/alvr-linux-zero-pose-fallback.patch",
+    "source_paths": [
+      "patches/alvr-linux-zero-pose-fallback.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Use the latest valid pose when the Linux capture layer sends a zero pose, avoiding progressively stale frame timing.",
+    "upstream": {
+      "url": "https://github.com/alvr-org/ALVR",
+      "tracking": "manual",
+      "issue": "https://github.com/alvr-org/ALVR/pull/3342"
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build ALVR without this patch, start the current SteamVR compositor and measure pose latency/error 303 on the actual headset.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-alvr-steamvr-2.16-compositor-name",
+    "owner": "vr-integration",
+    "kind": "local",
+    "source": "patches/alvr-steamvr-2.16-compositor-name.patch",
+    "source_paths": [
+      "patches/alvr-steamvr-2.16-compositor-name.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Keep the compositor process named vrcompositor so SteamVR 2.16 accepts it instead of reporting error 303.",
+    "upstream": {
+      "url": "https://github.com/alvr-org/ALVR",
+      "tracking": "manual",
+      "issue": "https://github.com/alvr-org/ALVR/pull/3348"
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build ALVR without this patch, start the current SteamVR compositor and measure pose latency/error 303 on the actual headset.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-flameshot-v14-nix-dependencies",
+    "owner": "flameshot",
+    "kind": "local",
+    "source": "patches/flameshot-v14-nix-dependencies.patch",
+    "source_paths": [
+      "patches/flameshot-v14-nix-dependencies.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Use Nix-provided build dependencies rather than fetching bundled dependencies during the Flameshot build.",
+    "upstream": {
+      "url": "https://github.com/flameshot-org/flameshot",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Flameshot without this patch and capture every target monitor, including the 175% iPad output with nonzero origin; verify overlay, toolbar and saved pixels.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-flameshot-v14-nonzero-origin",
+    "owner": "flameshot",
+    "kind": "local",
+    "source": "patches/flameshot-v14-nonzero-origin.patch",
+    "source_paths": [
+      "patches/flameshot-v14-nonzero-origin.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Compute capture bounds correctly when the selected monitor has a nonzero logical origin.",
+    "upstream": {
+      "url": "https://github.com/flameshot-org/flameshot",
+      "tracking": "manual",
+      "issue": "https://github.com/flameshot-org/flameshot/pull/4735"
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Flameshot without this patch and capture every target monitor, including the 175% iPad output with nonzero origin; verify overlay, toolbar and saved pixels.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-flameshot-v14-wayland-app-id",
+    "owner": "flameshot",
+    "kind": "local",
+    "source": "patches/flameshot-v14-wayland-app-id.patch",
+    "source_paths": [
+      "patches/flameshot-v14-wayland-app-id.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Publish the expected Wayland application ID before the capture window is mapped.",
+    "upstream": {
+      "url": "https://github.com/flameshot-org/flameshot",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Flameshot without this patch and capture every target monitor, including the 175% iPad output with nonzero origin; verify overlay, toolbar and saved pixels.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-flameshot-v14-wayland-overlay",
+    "owner": "flameshot",
+    "kind": "local",
+    "source": "patches/flameshot-v14-wayland-overlay.patch",
+    "source_paths": [
+      "patches/flameshot-v14-wayland-overlay.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Bind the capture window to the selected Wayland output before fullscreen mapping and keep overlay geometry local.",
+    "upstream": {
+      "url": "https://github.com/flameshot-org/flameshot",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Flameshot without this patch and capture every target monitor, including the 175% iPad output with nonzero origin; verify overlay, toolbar and saved pixels.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-libxrandr-hotplug-output-query",
+    "owner": "wine-display-sync",
+    "kind": "local",
+    "source": "patches/libxrandr-hotplug-output-query.patch",
+    "source_paths": [
+      "patches/libxrandr-hotplug-output-query.patch",
+      "packages/libxrandr-hotplug.nix"
+    ],
+    "reason": "Return a recoverable failure when an XRandR output disappears between resource and output queries.",
+    "upstream": {
+      "url": "https://gitlab.freedesktop.org/xorg/lib/libxrandr",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run tests/xrandr-hotplug-query.c against the unpatched candidate and verify a live Wine display disconnect does not kill the client.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/libxrandr-hotplug.nix::libxrandr.overrideAttrs (old: {"
+    ]
+  },
+  {
+    "id": "patch-mango-subsurface-window-capture",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/mango-subsurface-window-capture.patch",
+    "source_paths": [
+      "patches/mango-subsurface-window-capture.patch",
+      "lib/mango-package.nix"
+    ],
+    "reason": "Capture the complete window scene including subsurfaces rather than a single surface.",
+    "upstream": {
+      "url": "https://github.com/mangowm/mango",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Mango without this patch; share an animated window with subsurfaces over PipeWire and verify continuous repaint and cleanup.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "lib/mango-package.nix::mango.overrideAttrs (old: {"
+    ]
+  },
+  {
+    "id": "patch-mango-window-capture-repaint",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/mango-window-capture-repaint.patch",
+    "source_paths": [
+      "patches/mango-window-capture-repaint.patch",
+      "lib/mango-package.nix"
+    ],
+    "reason": "Keep captured windows repainting and clean up capture trackers when sessions end.",
+    "upstream": {
+      "url": "https://github.com/mangowm/mango",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Mango without this patch; share an animated window with subsurfaces over PipeWire and verify continuous repaint and cleanup.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "lib/mango-package.nix::mango = inputs.mango.packages.${system}.mango.override { inherit scenefx; };"
+    ]
+  },
+  {
+    "id": "patch-niri-floating-above-fullscreen",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/niri-floating-above-fullscreen.patch",
+    "source_paths": [
+      "patches/niri-floating-above-fullscreen.patch",
+      "modules/nixos/compositors.nix"
+    ],
+    "reason": "Allow opted-in floating windows above fullscreen clients while preserving input and visibility semantics.",
+    "upstream": {
+      "url": "https://github.com/niri-wm/niri",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Niri without this patch; run renderer/fullscreen tests and tests/test_niri_fullscreen.py, then verify affected fullscreen, floating, animation and streamed-output behavior live.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-niri-virtual-presentation-feedback",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/niri-virtual-presentation-feedback.patch",
+    "source_paths": [
+      "patches/niri-virtual-presentation-feedback.patch",
+      "modules/nixos/compositors.nix"
+    ],
+    "reason": "Acknowledge completed visible virtual-output capture frames so Chromium retains fullscreen on streamed outputs.",
+    "upstream": {
+      "url": "https://github.com/niri-wm/niri",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Niri without this patch; run renderer/fullscreen tests and tests/test_niri_fullscreen.py, then verify affected fullscreen, floating, animation and streamed-output behavior live.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-niri-window-rule-open-animation",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/niri-window-rule-open-animation.patch",
+    "source_paths": [
+      "patches/niri-window-rule-open-animation.patch",
+      "modules/nixos/compositors.nix"
+    ],
+    "reason": "Allow window rules to disable opening animation for selected applications.",
+    "upstream": {
+      "url": "https://github.com/niri-wm/niri",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Niri without this patch; run renderer/fullscreen tests and tests/test_niri_fullscreen.py, then verify affected fullscreen, floating, animation and streamed-output behavior live.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-noctalia-focus-existing-windows",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/noctalia-focus-existing-windows.patch",
+    "source_paths": [
+      "patches/noctalia-focus-existing-windows.patch",
+      "modules/home/compositors.nix"
+    ],
+    "reason": "Resolve foreign-toplevel app/title identifiers against Niri metadata when focusing existing windows.",
+    "upstream": {
+      "url": "https://github.com/noctalia-dev/noctalia-shell",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Noctalia without this patch and exercise the affected focus/audio/GPU/notification behavior in the actual active shell.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/home/compositors.nix::inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs"
+    ]
+  },
+  {
+    "id": "patch-noctalia-hidden-audio-nodes",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/noctalia-hidden-audio-nodes.patch",
+    "source_paths": [
+      "patches/noctalia-hidden-audio-nodes.patch",
+      "modules/home/compositors.nix"
+    ],
+    "reason": "Honor hidden PipeWire nodes so implementation-only audio buses do not clutter user-facing controls.",
+    "upstream": {
+      "url": "https://github.com/noctalia-dev/noctalia-shell",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Noctalia without this patch and exercise the affected focus/audio/GPU/notification behavior in the actual active shell.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-noctalia-nixos-nvml",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/noctalia-nixos-nvml.patch",
+    "source_paths": [
+      "patches/noctalia-nixos-nvml.patch",
+      "modules/home/compositors.nix"
+    ],
+    "reason": "Find NVML through the active NixOS driver path when the normal library lookup fails.",
+    "upstream": {
+      "url": "https://github.com/noctalia-dev/noctalia-shell",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Noctalia without this patch and exercise the affected focus/audio/GPU/notification behavior in the actual active shell.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-noctalia-wezterm-notifications",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/noctalia-wezterm-notifications.patch",
+    "source_paths": [
+      "patches/noctalia-wezterm-notifications.patch",
+      "modules/home/compositors.nix"
+    ],
+    "reason": "Normalize WezTerm ordinary notifications and provide focus actions without changing genuinely critical senders.",
+    "upstream": {
+      "url": "https://github.com/noctalia-dev/noctalia-shell",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Noctalia without this patch and exercise the affected focus/audio/GPU/notification behavior in the actual active shell.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-scenefx-xrgb8888-screencopy",
+    "owner": "desktop-compositors",
+    "kind": "local",
+    "source": "patches/scenefx-xrgb8888-screencopy.patch",
+    "source_paths": [
+      "patches/scenefx-xrgb8888-screencopy.patch",
+      "lib/mango-package.nix"
+    ],
+    "reason": "Advertise a PipeWire/WebRTC-compatible 32-bit format instead of NVIDIA-preferred 24-bit BGR readback.",
+    "upstream": {
+      "url": "https://github.com/wlrfx/scenefx",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Mango/SceneFX without the patch and negotiate a real PipeWire screen share on the NVIDIA workstation.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "lib/mango-package.nix::scenefx = inputs.mango.inputs.scenefx.packages.${system}.default.overrideAttrs (old: {"
+    ]
+  },
+  {
+    "id": "patch-sunshine-linux-kms-connector-and-stream-hook",
+    "owner": "sunshine",
+    "kind": "local",
+    "source": "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
+    "source_paths": [
+      "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Accept stable DRM connector names and notify display policy before encoder probing and after the final client disconnects.",
+    "upstream": {
+      "url": "https://github.com/LizardByte/Sunshine",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Build Sunshine without this patch, run tests/test_sunshine_display_policy.py, stream from two clients, and verify stable capture plus final-client display restoration.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::(pkgs.sunshine.override {",
+      "modules/nixos/desktop.nix::}).overrideAttrs"
+    ]
+  },
+  {
+    "id": "patch-vesktop-discord-deep-links",
+    "owner": "desktop-integration",
+    "kind": "local",
+    "source": "patches/vesktop-discord-deep-links.patch",
+    "source_paths": [
+      "patches/vesktop-discord-deep-links.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Open Discord deep links in both first-launch and existing-instance paths.",
+    "upstream": {
+      "url": "https://github.com/Vencord/Vesktop",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run tests/test_vesktop_links.mjs on the unpatched candidate; open a Discord link with Vesktop closed and already running.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::vesktopWithDeepLinks = pkgs.vesktop.overrideAttrs (old: {"
+    ]
+  },
+  {
+    "id": "patch-wine-sni-bridge-niri",
+    "owner": "wine-tray",
+    "kind": "local",
+    "source": "patches/wine-sni-bridge-niri.patch",
+    "source_paths": [
+      "patches/wine-sni-bridge-niri.patch",
+      "packages/wine-sni-bridge.nix"
+    ],
+    "reason": "Keep the XEmbed host invisible and input-transparent while presenting Wine tray icons on Niri.",
+    "upstream": {
+      "url": "https://github.com/waliori/wine-sni-bridge",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run tests/test_wine_tray_menu.py and tests/test_wine_tray_host.py against the unpatched package, then verify the actual desktop tray and safe recovery action.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-wine-sni-bridge-recovery-menu",
+    "owner": "wine-tray",
+    "kind": "local",
+    "source": "patches/wine-sni-bridge-recovery-menu.patch",
+    "source_paths": [
+      "patches/wine-sni-bridge-recovery-menu.patch",
+      "packages/wine-sni-bridge.nix"
+    ],
+    "reason": "Add prefix-scoped Battle.net recovery actions to the Wayland tray menu.",
+    "upstream": {
+      "url": "https://github.com/waliori/wine-sni-bridge",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run tests/test_wine_tray_menu.py and tests/test_wine_tray_host.py against the unpatched package, then verify the actual desktop tray and safe recovery action.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-xwayland-satellite-fixed-dpi",
+    "owner": "xwayland-display",
+    "kind": "local",
+    "source": "patches/xwayland-satellite-fixed-dpi.patch",
+    "source_paths": [
+      "patches/xwayland-satellite-fixed-dpi.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Allow a validated fixed global DPI without clobbering per-surface scaling.",
+    "upstream": {
+      "url": "https://github.com/Supreeeme/xwayland-satellite",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run candidate Xwayland Satellite library tests, then move a fullscreen Wine app between differently scaled outputs and verify physical size, primary output and pointer motion without re-entry.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-xwayland-satellite-fractional-size",
+    "owner": "xwayland-display",
+    "kind": "local",
+    "source": "patches/xwayland-satellite-fractional-size.patch",
+    "source_paths": [
+      "patches/xwayland-satellite-fractional-size.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Round fullscreen physical dimensions so fractionally scaled Wine games retain exact native pixel size.",
+    "upstream": {
+      "url": "https://github.com/Supreeeme/xwayland-satellite",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run candidate Xwayland Satellite library tests, then move a fullscreen Wine app between differently scaled outputs and verify physical size, primary output and pointer motion without re-entry.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::xwayland-satellite = prev.xwayland-satellite.overrideAttrs (oldAttrs: {"
+    ]
+  },
+  {
+    "id": "patch-xwayland-satellite-output-dpi",
+    "owner": "xwayland-display",
+    "kind": "local",
+    "source": "patches/xwayland-satellite-output-dpi.patch",
+    "source_paths": [
+      "patches/xwayland-satellite-output-dpi.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Keep per-surface preferred scale changes from incorrectly changing global output DPI.",
+    "upstream": {
+      "url": "https://github.com/Supreeeme/xwayland-satellite",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run candidate Xwayland Satellite library tests, then move a fullscreen Wine app between differently scaled outputs and verify physical size, primary output and pointer motion without re-entry.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-xwayland-satellite-pointer-scale",
+    "owner": "xwayland-display",
+    "kind": "local",
+    "source": "patches/xwayland-satellite-pointer-scale.patch",
+    "source_paths": [
+      "patches/xwayland-satellite-pointer-scale.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Use the current surface scale during pointer motion after an output move, without requiring pointer re-entry.",
+    "upstream": {
+      "url": "https://github.com/Supreeeme/xwayland-satellite",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run candidate Xwayland Satellite library tests, then move a fullscreen Wine app between differently scaled outputs and verify physical size, primary output and pointer motion without re-entry.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "patch-xwayland-satellite-stable-primary",
+    "owner": "xwayland-display",
+    "kind": "local",
+    "source": "patches/xwayland-satellite-stable-primary.patch",
+    "source_paths": [
+      "patches/xwayland-satellite-stable-primary.patch",
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Keep XRandR primary output stable with an explicit preference and deterministic fallback.",
+    "upstream": {
+      "url": "https://github.com/Supreeeme/xwayland-satellite",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
+      "regression": "Run candidate Xwayland Satellite library tests, then move a fullscreen Wine app between differently scaled outputs and verify physical size, primary output and pointer motion without re-entry.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "referenced by native configuration; conditional host selection is not runtime proof",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "niri-adaptive-fork",
+    "owner": "desktop-compositors",
+    "kind": "fork",
+    "source": "modules/nixos/compositors.nix",
+    "source_paths": [
+      "modules/nixos/compositors.nix"
+    ],
+    "reason": "Use the selected Niri fork for adaptive streaming virtual-output support.",
+    "upstream": {
+      "url": "https://github.com/willybarret/niri",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Upstream Niri with the same adaptive output and capture behavior.",
+      "regression": "Build upstream without the fork and exercise a live adaptive Sunshine session, capture cleanup and compositor tests.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/compositors.nix::niriPackage = pkgs.niri.overrideAttrs (oldAttrs: {",
+      "modules/nixos/compositors.nix::rev = \"<native value>\";"
+    ],
+    "anchor": "owner = \"willybarret\""
+  },
+  {
+    "id": "niri-fetched-virtual-output-fix",
+    "owner": "desktop-compositors",
+    "kind": "fetched",
+    "source": "modules/nixos/compositors.nix",
+    "source_paths": [
+      "modules/nixos/compositors.nix"
+    ],
+    "reason": "Carry the referenced Niri commit on the adaptive-streaming fork; its exact upstream inclusion still needs source review.",
+    "upstream": {
+      "url": "https://github.com/niri-wm/niri/commit/4da66421fe745aed1d6442b844ff20aa3ac7ebe6",
+      "tracking": "commit",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected Niri source containing the commit or equivalent behavior.",
+      "regression": "Inspect the upstream commit, build without the fetched patch and rerun renderer cleanup plus a real adaptive streaming session.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [],
+    "anchor": "4da66421fe745aed1d6442b844ff20aa3ac7ebe6.patch"
+  },
+  {
+    "id": "niri-fetched-upstream-range",
+    "owner": "desktop-compositors",
+    "kind": "fetched",
+    "source": "modules/nixos/compositors.nix",
+    "source_paths": [
+      "modules/nixos/compositors.nix"
+    ],
+    "reason": "Apply the pinned upstream comparison range to the non-adaptive Niri branch; individual fixes require review before dropping the range.",
+    "upstream": {
+      "url": "https://github.com/niri-wm/niri/compare/dd1c3bcb9f1ef416df33ffa22d1d9bcee1398e7d...2ab59b90d55afbbe362a63e2a061afe4b524d8c4",
+      "tracking": "commit",
+      "issue": null
+    },
+    "removal": {
+      "target": "A selected Niri revision containing this range or validated replacements.",
+      "regression": "Review the range, build without it and exercise non-adaptive fullscreen, capture and output switching.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [],
+    "anchor": "2ab59b90d55afbbe362a63e2a061afe4b524d8c4.diff"
+  },
+  {
+    "id": "nvidia-driver-pin",
+    "owner": "tracer-host",
+    "kind": "pin",
+    "source": "hosts/tracer/default.nix",
+    "source_paths": [
+      "hosts/tracer/default.nix"
+    ],
+    "reason": "Pin the newer NVIDIA branch to avoid Galactic Racer D3D12 startup hangs on 595.71.05 without moving the entire Nixpkgs input.",
+    "upstream": {
+      "url": "https://www.nvidia.com/en-us/drivers/unix/",
+      "tracking": "manual",
+      "issue": "https://github.com/ValveSoftware/Proton/issues/10228"
+    },
+    "removal": {
+      "target": "A channel-provided driver that passes the affected game and desktop checks.",
+      "regression": "Build the complete host, load the candidate driver with explicit reboot approval if needed, verify nvidia-smi and launch Galactic Racer plus streaming.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "hosts/tracer/default.nix::version = \"<native value>\";"
+    ],
+    "anchor": "hardware.nvidia.package"
+  },
+  {
+    "id": "codex-cli-pin",
+    "owner": "codex-tooling",
+    "kind": "pin",
+    "source": "pins/codex.json",
+    "source_paths": [
+      "pins/codex.json",
+      "packages/codex.nix"
+    ],
+    "reason": "Select verified Codex release artifacts for each supported native platform.",
+    "upstream": {
+      "url": "https://github.com/openai/codex/releases",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A native package source at the chosen release with equivalent platform behavior.",
+      "regression": "Build the selected package and verify codex --version and platform command resolution; user config must remain untouched.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "chatgpt-desktop-pin",
+    "owner": "chatgpt-desktop",
+    "kind": "pin",
+    "source": "pins/chatgpt-desktop.json",
+    "source_paths": [
+      "pins/chatgpt-desktop.json",
+      "packages/chatgpt-desktop.nix"
+    ],
+    "reason": "Pin verified official Linux desktop assets rather than rely on an unmanaged application updater.",
+    "upstream": {
+      "url": "https://developers.openai.com/docs/linux/linux-app",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Equivalent native packaging of the selected official release.",
+      "regression": "Build the package, run install checks and open the actual app with existing local state.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "chatgpt-nix-runtime-fixes",
+    "owner": "chatgpt-desktop",
+    "kind": "inline",
+    "source": "packages/chatgpt-desktop.nix",
+    "source_paths": [
+      "packages/chatgpt-desktop.nix",
+      "packages/chatgpt-desktop/patch-bundled-copy.py",
+      "packages/chatgpt-desktop/bundled-copy.cjs"
+    ],
+    "reason": "Resolve ldd from the Nix closure, repair mutable bundled-plugin staging copies and point the desktop entry at the wrapped launcher.",
+    "upstream": {
+      "url": "https://developers.openai.com/docs/linux/linux-app",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Vendor or Nixpkgs packaging with equivalent NixOS runtime and mutable copy behavior.",
+      "regression": "Run tests/chatgpt-watcher.cjs and tests/chatgpt-bundled-copy.cjs against a build without the rewrites, then verify plugin staging in the actual app.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/chatgpt-desktop.nix::postPatch = ''",
+      "packages/chatgpt-desktop.nix::substituteInPlace app-source/node_modules/@parcel/watcher/node_modules/detect-libc/lib/filesystem.js \\",
+      "packages/chatgpt-desktop.nix::substituteInPlace \"$out/share/applications/chatgpt.desktop\" \\"
+    ],
+    "anchor": "postPatch"
+  },
+  {
+    "id": "battlenet-proton-pin",
+    "owner": "battlenet",
+    "kind": "pin",
+    "source": "pins/battlenet-proton.json",
+    "source_paths": [
+      "pins/battlenet-proton.json",
+      "packages/battlenet-proton.nix",
+      "scripts/gaming/stage-battlenet-proton.py"
+    ],
+    "reason": "Use a verified Steam Proton runtime snapshot and scoped patched XRandR libraries instead of mutating the game prefix during runtime setup.",
+    "upstream": {
+      "url": "https://github.com/ValveSoftware/Proton",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reproducible upstream runtime with stable Battle.net single-instance and display hotplug behavior.",
+      "regression": "Stage a fresh verified runtime, run prefix and topology regressions, launch Battle.net and a game, and verify hotplug and safe force-close.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "davinci-resolve-pin",
+    "owner": "davinci-resolve",
+    "kind": "pin",
+    "source": "pins/davinci-resolve.json",
+    "source_paths": [
+      "pins/davinci-resolve.json",
+      "packages/davinci-resolve.nix"
+    ],
+    "reason": "Select the vendor release and repair its Nix FHS environment with legacy libcrypt and the required support directory.",
+    "upstream": {
+      "url": "https://www.blackmagicdesign.com/support/family/davinci-resolve-and-fusion",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Nixpkgs Resolve packaging matching this release and runtime behavior.",
+      "regression": "Build without the override using the required vendor archive and open a representative project with GPU acceleration.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/davinci-resolve.nix::davinci-resolve.override {",
+      "packages/davinci-resolve.nix::(stdenv.mkDerivation args).overrideAttrs (old: {"
+    ]
+  },
+  {
+    "id": "iloader-cargo-pin",
+    "owner": "iloader",
+    "kind": "pin",
+    "source": "pins/iloader-cargo.json",
+    "source_paths": [
+      "pins/iloader-cargo.json",
+      "packages/iloader.nix"
+    ],
+    "reason": "Provide verified Cargo git dependency hashes for the selected iLoader release.",
+    "upstream": {
+      "url": "https://github.com/nab138/iloader",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "An upstream Nix package containing the correct Cargo lock hashes.",
+      "regression": "Build iLoader on the actual target architecture and verify device discovery.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/iloader.nix::iloader.overrideAttrs (old: {"
+    ]
+  },
+  {
+    "id": "wine-sni-bridge-pin",
+    "owner": "wine-tray",
+    "kind": "pin",
+    "source": "packages/wine-sni-bridge.nix",
+    "source_paths": [
+      "packages/wine-sni-bridge.nix"
+    ],
+    "reason": "Package the selected Wine tray bridge revision with local tray visibility and recovery integration.",
+    "upstream": {
+      "url": "https://github.com/waliori/wine-sni-bridge",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "An upstream package with equivalent tray behavior and recovery integration.",
+      "regression": "Run the Xvfb/D-Bus tray tests without the pin and verify live tray behavior.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/wine-sni-bridge.nix::version = \"<native value>\";",
+      "packages/wine-sni-bridge.nix::rev = \"<native value>\";"
+    ],
+    "anchor": "rev ="
+  },
+  {
+    "id": "obs-branch-output-pin",
+    "owner": "obs",
+    "kind": "pin",
+    "source": "packages/obs-branch-output/default.nix",
+    "source_paths": [
+      "packages/obs-branch-output/default.nix"
+    ],
+    "reason": "Pin the branch-output plugin used for independent source and scene recording outputs.",
+    "upstream": {
+      "url": "https://github.com/OPENSPHERE-Inc/branch-output",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Native packaging at a version validated with the selected OBS release.",
+      "regression": "Build against the selected OBS and make a private branch-output recording.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/obs-branch-output/default.nix::version = \"<native value>\";",
+      "packages/obs-branch-output/default.nix::rev = \"<native value>\";"
+    ],
+    "anchor": "rev ="
+  },
+  {
+    "id": "bumblebee-preview-pin",
+    "owner": "bumblebee-desktop",
+    "kind": "pin",
+    "source": "packages/bumblebee-desktop.nix",
+    "source_paths": [
+      "packages/bumblebee-desktop.nix"
+    ],
+    "reason": "Install the specific Linux preview AppImage and content hash while the application is experimental.",
+    "upstream": {
+      "url": "https://github.com/AlexAllocated/bumblebee-desktop/releases",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A validated stable package replacing this preview.",
+      "regression": "Build and launch the replacement, verify existing local application state and test a private stream.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/bumblebee-desktop.nix::version = \"<native value>\";"
+    ],
+    "anchor": "src ="
+  },
+  {
+    "id": "curseforge-appimage-pin",
+    "owner": "curseforge",
+    "kind": "pin",
+    "source": "packages/curseforge.nix",
+    "source_paths": [
+      "packages/curseforge.nix"
+    ],
+    "reason": "Pin the Linux AppImage content and repair its desktop launcher; the vendor latest URL itself is mutable.",
+    "upstream": {
+      "url": "https://www.curseforge.com/download/app",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Native package with a stable versioned source and working desktop launcher.",
+      "regression": "Build the pinned source and open the actual client to verify game/add-on discovery.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/curseforge.nix::version = \"<native value>\";",
+      "packages/curseforge.nix::substituteInPlace $out/share/applications/curseforge.desktop \\"
+    ],
+    "anchor": "src ="
+  },
+  {
+    "id": "fantasy-grounds-installer-pin",
+    "owner": "fantasy-grounds",
+    "kind": "pin",
+    "source": "packages/fantasy-grounds.nix",
+    "source_paths": [
+      "packages/fantasy-grounds.nix"
+    ],
+    "reason": "Keep the selected vendor bootstrap installer and mutable application wrapper available on NixOS.",
+    "upstream": {
+      "url": "https://www.fantasygrounds.com/home/home.php",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Supported native packaging with equivalent updater and campaign-data behavior.",
+      "regression": "Build, install into a disposable user data location and test the client without modifying existing campaign data.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/fantasy-grounds.nix::version = \"<native value>\";",
+      "packages/fantasy-grounds.nix::version = \"<native value>\";::occurrence-2"
+    ],
+    "anchor": "installer ="
+  },
+  {
+    "id": "amps-nvidia-afx-pin",
+    "owner": "amps",
+    "kind": "pin",
+    "source": "packages/amps/nvidia-linux.nix",
+    "source_paths": [
+      "packages/amps/nvidia-linux.nix"
+    ],
+    "reason": "Provide the native NVIDIA AFX runtime and LADSPA adapter supporting the workstation GPU.",
+    "upstream": {
+      "url": "https://github.com/arzvaak/linux-broadcast",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A supported upstream runtime/package with the same GPU and effect behavior.",
+      "regression": "Run AMPS NVIDIA integration checks and compare real microphone effect output and GPU initialization.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "packages/amps/nvidia-linux.nix::version = \"<native value>\";"
+    ],
+    "anchor": "src ="
+  },
+  {
+    "id": "windows-sunshine-fork-pin",
+    "owner": "windows-sunshine",
+    "kind": "fork",
+    "source": "platforms/windows/sunshine-fork.json",
+    "source_paths": [
+      "platforms/windows/sunshine-fork.json"
+    ],
+    "reason": "Preserve the custom Windows external-audio Sunshine build and its separately pending adaptive-display branch; source metadata does not establish deployment.",
+    "upstream": {
+      "url": "https://github.com/AlexAllocated/Sunshine",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Upstream Sunshine with equivalent external audio and validated display-session behavior.",
+      "regression": "Run legacy fork guards and sign-in/display tests, then verify a real Windows stream and pairing identity before replacement.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "legacy declaration; Windows deployment unknown",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": []
+  },
+  {
+    "id": "razer-hid-fork-pin",
+    "owner": "razer-profiles",
+    "kind": "fork",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Pin the Razer HID helper fork used for direct onboard profile operations.",
+    "upstream": {
+      "url": "https://github.com/AlexAllocated/razerqdhid",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Upstream support for the actual device features used by the profile controls.",
+      "regression": "Run onboard/profile regression tests and read back each intended hardware setting on the actual device.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::rev = \"<native value>\";"
+    ],
+    "anchor": "razerQdHidSource"
+  },
+  {
+    "id": "lan-mouse-release-pin",
+    "owner": "lan-mouse",
+    "kind": "pin",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Use Lan Mouse 0.11 for authenticated peers and multi-client configuration while the selected Nixpkgs version lags; retain its build.rs behavior.",
+    "upstream": {
+      "url": "https://github.com/feschber/lan-mouse",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Nixpkgs Lan Mouse with the required release and build script.",
+      "regression": "Build the native package without the override and verify authentication and handoff with both peers.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::lanMouse = pkgs.lan-mouse.overrideAttrs (_oldAttrs: rec {",
+      "modules/nixos/desktop.nix::version = \"<native value>\";::occurrence-2",
+      "modules/nixos/desktop.nix::rev = \"<native value>\";::occurrence-2",
+      "modules/nixos/desktop.nix::prePatch = \"\";"
+    ],
+    "anchor": "lanMouse ="
+  },
+  {
+    "id": "flameshot-release-pin",
+    "owner": "flameshot",
+    "kind": "pin",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Use Flameshot 14 for per-monitor Wayland capture instead of the older global-coordinate editor.",
+    "upstream": {
+      "url": "https://github.com/flameshot-org/flameshot",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Nixpkgs packaging with the required capture architecture and local fixes.",
+      "regression": "Build without the version override and verify capture on every scaled output.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::flameshot = prev.flameshot.overrideAttrs (_oldAttrs: {",
+      "modules/nixos/desktop.nix::version = \"<native value>\";",
+      "modules/nixos/desktop.nix::tag = \"<native value>\";"
+    ],
+    "anchor": "flameshot ="
+  },
+  {
+    "id": "alvr-adb-path",
+    "owner": "vr-integration",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Replace ALVR’s implicit adb lookup with the declared Nix Android-tools executable.",
+    "upstream": {
+      "url": "https://github.com/alvr-org/ALVR",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Upstream packaging that resolves adb in its runtime closure.",
+      "regression": "Build ALVR without the substitution and verify headset discovery with adb outside the caller PATH.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::alvr = prev.alvr.overrideAttrs (oldAttrs: {",
+      "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''",
+      "modules/nixos/desktop.nix::substituteInPlace alvr/adb/src/commands.rs \\"
+    ],
+    "anchor": "substituteInPlace alvr/adb/src/commands.rs"
+  },
+  {
+    "id": "steamvr-runtime-libraries",
+    "owner": "vr-integration",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Expose current NSS/NSPR to Steam’s FHS environment because SteamVR 2.16 CEF requires newer libraries than the legacy Scout runtime carries.",
+    "upstream": {
+      "url": "https://github.com/NixOS/nixpkgs",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Steam/SteamVR packaging whose runtime selects compatible NSS without this override.",
+      "regression": "Launch the SteamVR dashboard from the unmodified candidate and verify CEF and headset behavior.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::steam = prev.steam.override {"
+    ],
+    "anchor": "steam = prev.steam.override"
+  },
+  {
+    "id": "firefox-schema-wrapper",
+    "owner": "desktop-integration",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Restore GTK/GSettings schema roots omitted by the newer Firefox wrapper so native Wayland text and popup menus render correctly.",
+    "upstream": {
+      "url": "https://github.com/NixOS/nixpkgs",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A Firefox wrapper exporting the required schemas.",
+      "regression": "Build without the wrapper argument override; verify toolbar text, menus and fractional scaling in the actual native Wayland browser.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::firefox = prev.firefox.overrideAttrs (oldAttrs: {"
+    ],
+    "anchor": "firefox = prev.firefox.overrideAttrs"
+  },
+  {
+    "id": "portal-grim-compression",
+    "owner": "desktop-integration",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Disable PNG compression for temporary portal captures to avoid slow monitor picking on large desktops.",
+    "upstream": {
+      "url": "https://github.com/emersion/xdg-desktop-portal-wlr",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Portal capture that remains responsive without the custom grim wrapper.",
+      "regression": "Build without the wrapper and time actual monitor-picker capture on the large multi-monitor desktop.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::xdg-desktop-portal-wlr = prev.xdg-desktop-portal-wlr.override {"
+    ],
+    "anchor": "xdg-desktop-portal-wlr ="
+  },
+  {
+    "id": "ipad-digital-edid",
+    "owner": "ipad-display",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Make the generated dummy-adapter EDID digital and remove invalid standard timings before producing the iPad resolution.",
+    "upstream": {
+      "url": "https://github.com/akatrevorjay/edid-generator",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "EDID generation with equivalent digital metadata and valid 2732x2048 timings.",
+      "regression": "Run edid-decode checks on the unmodified candidate and verify the actual dummy adapter exposes and streams the intended mode.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {",
+      "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''::occurrence-2",
+      "modules/nixos/desktop.nix::substituteInPlace edid.S \\"
+    ],
+    "anchor": "ipadEdidFirmware"
+  },
+  {
+    "id": "durable-tmux-cgroups",
+    "owner": "durable-tmux",
+    "kind": "inline",
+    "source": "modules/nixos/durable-tmux.nix",
+    "source_paths": [
+      "modules/nixos/durable-tmux.nix",
+      "modules/home/terminal.nix",
+      "modules/nixos/migration-tools.nix"
+    ],
+    "reason": "Disable tmux cgroups so panes do not end up in transient graphical user-manager scopes during logout.",
+    "upstream": {
+      "url": "https://github.com/tmux/tmux",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A tmux/session architecture preserving the same server and pane processes through graphical logout.",
+      "regression": "Build without --disable-cgroups, attach a test pane and verify it survives real graphical logout.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/home/terminal.nix::durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {",
+      "modules/nixos/durable-tmux.nix::durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {",
+      "modules/nixos/migration-tools.nix::durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {"
+    ],
+    "anchor": "--disable-cgroups"
+  },
+  {
+    "id": "umu-prefix-environment",
+    "owner": "battlenet",
+    "kind": "inline",
+    "source": "modules/home/gaming.nix",
+    "source_paths": [
+      "modules/home/gaming.nix"
+    ],
+    "reason": "Share the prefix’s /tmp Wine server, clear the misparsed IANA TZ value, and prevent opportunistic runtime downloads on ordinary launch.",
+    "upstream": {
+      "url": "https://github.com/Open-Wine-Components/umu-launcher",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Upstream runtime behavior that preserves one Wine server, correct local time and explicit-only maintenance.",
+      "regression": "Build without the override; launch Battle.net twice, check server identity, in-game local time and absence of implicit downloads.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/home/gaming.nix::gamingUmu = pkgs.umu-launcher.override {"
+    ],
+    "anchor": "gamingUmu ="
+  },
+  {
+    "id": "qbittorrent-theme-pin",
+    "owner": "desktop-integration",
+    "kind": "pin",
+    "source": "modules/home/core.nix",
+    "source_paths": [
+      "modules/home/core.nix"
+    ],
+    "reason": "Pin the selected Gruvbox qBittorrent UI theme.",
+    "upstream": {
+      "url": "https://github.com/MahdiMirzadeh/qbittorrent",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A maintained native theme package or intentionally selected replacement.",
+      "regression": "Open qBittorrent with the replacement and verify legibility and layout.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [],
+    "anchor": "qbittorrentGruvboxTheme"
+  },
+  {
+    "id": "qbittorrent-search-plugin-pin",
+    "owner": "desktop-integration",
+    "kind": "pin",
+    "source": "modules/home/core.nix",
+    "source_paths": [
+      "modules/home/core.nix"
+    ],
+    "reason": "Pin the search-plugin repository so the selected plugins are reproducible instead of copied from mutable upstream.",
+    "upstream": {
+      "url": "https://github.com/qbittorrent/search-plugins",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reviewed newer plugin revision or maintained native package.",
+      "regression": "Compare selected plugin inventory and exercise the intended search functions without downloading content.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/home/core.nix::rev = \"<native value>\";"
+    ],
+    "anchor": "qbittorrentSearchPlugins"
+  },
+  {
+    "id": "game-bootstrap-pins",
+    "owner": "gaming-launchers",
+    "kind": "pin",
+    "source": "modules/home/gaming.nix",
+    "source_paths": [
+      "modules/home/gaming.nix"
+    ],
+    "reason": "Pin the Guild Wars 2 and Battle.net installer hashes while copying bootstrap installers into writable prefixes for vendor self-updates.",
+    "upstream": {
+      "url": "https://www.guildwars2.com/en/",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Equivalent stable and verified installer sources with tested launch behavior.",
+      "regression": "Verify both source hashes, test bootstrap in disposable prefixes, and confirm existing game prefixes remain untouched.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [],
+    "anchor": "guildWars2Installer and battleNetInstaller"
+  },
+  {
+    "id": "migration-nixpkgs-pin",
+    "owner": "migration-recovery",
+    "kind": "pin",
+    "source": "flake.nix",
+    "source_paths": [
+      "flake.nix"
+    ],
+    "reason": "Preserve the migration toolchain revision independently of routine workstation updates. The exact original hold needs review before changing it.",
+    "upstream": {
+      "url": "https://github.com/NixOS/nixpkgs/commit/421eebfd0ec7bccd4abe826ce62d7e6e83129493",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A replacement toolchain that can validate and restore existing migration capsules.",
+      "regression": "Build rescue/migration tools with the replacement and rehearse a capsule restore in isolation.",
+      "requires_live": false
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "flake.nix::migration-nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";"
+    ],
+    "anchor": "migration-nixpkgs.url"
+  },
+  {
+    "id": "nvidia-afx-nixpkgs-pin",
+    "owner": "amps",
+    "kind": "pin",
+    "source": "flake.nix",
+    "source_paths": [
+      "flake.nix"
+    ],
+    "reason": "Preserve the Nixpkgs revision selected for NVIDIA AFX build/runtime compatibility separately from the system channel.",
+    "upstream": {
+      "url": "https://github.com/NixOS/nixpkgs/commit/ecc58f32d1069a3e3f8a991e2233d365689f748d",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "Current native packaging passing the AFX integration and actual audio checks.",
+      "regression": "Build the AFX runtime from the replacement and run AMPS NVIDIA tests plus a real microphone test.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "flake.nix::nvidia-afx-nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";"
+    ],
+    "anchor": "nvidia-afx-nixpkgs.url"
+  },
+  {
+    "id": "desktop-release-inputs",
+    "owner": "desktop-compositors",
+    "kind": "pin",
+    "source": "flake.nix",
+    "source_paths": [
+      "flake.nix"
+    ],
+    "reason": "Track explicit Mango and Noctalia releases independently from the stable operating-system channel.",
+    "upstream": {
+      "url": "https://github.com/noctalia-dev/noctalia-shell/releases",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reviewed newer release or native channel package preserving current custom desktop behavior.",
+      "regression": "Build Mango and Noctalia, run patch regressions and verify the active desktop before promotion.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "flake.nix::url = \"github:mangowm/mango/<native ref>\";",
+      "flake.nix::url = \"github:noctalia-dev/noctalia-shell/<native ref>\";"
+    ],
+    "anchor": "mango/noctalia inputs"
+  },
+  {
+    "id": "platform-release-inputs",
+    "owner": "native-manifests",
+    "kind": "pin",
+    "source": "flake.nix",
+    "source_paths": [
+      "flake.nix"
+    ],
+    "reason": "Keep stable NixOS, Home Manager and nix-darwin release families coherent while routine updates remain inside the selected release.",
+    "upstream": {
+      "url": "https://nixos.org/download/",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A separately reviewed stable OS release with compatible Home Manager and Darwin branches.",
+      "regression": "Build all declared outputs, activate the complete intended host and perform actual host acceptance; never change stateVersion as an update.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "flake.nix::nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";",
+      "flake.nix::nixpkgs-unstable.url = \"github:NixOS/nixpkgs/<native ref>\";",
+      "flake.nix::url = \"github:nix-community/home-manager/<native ref>\";",
+      "flake.nix::url = \"github:nix-darwin/nix-darwin/<native ref>\";"
+    ],
+    "anchor": "nixpkgs/home-manager/nix-darwin inputs"
+  },
+  {
+    "id": "iloader-release-input",
+    "owner": "iloader",
+    "kind": "pin",
+    "source": "flake.nix",
+    "source_paths": [
+      "flake.nix",
+      "packages/iloader.nix",
+      "pins/iloader-cargo.json"
+    ],
+    "reason": "Select the iLoader release corresponding to the Cargo dependency pin.",
+    "upstream": {
+      "url": "https://github.com/nab138/iloader/releases",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reviewed newer iLoader release with matching dependency hashes.",
+      "regression": "Build the candidate on the target platform and verify intended device discovery.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "flake.nix::iloader.url = \"github:nab138/iloader/<native ref>\";"
+    ],
+    "anchor": "iloader.url"
+  },
+  {
+    "id": "secure-boot-input",
+    "owner": "tracer-host",
+    "kind": "pin",
+    "source": "flake.nix",
+    "source_paths": [
+      "flake.nix"
+    ],
+    "reason": "Lock Lanzaboote for the optional secure-boot path; enabling it requires separately enrolled machine-local keys.",
+    "upstream": {
+      "url": "https://github.com/nix-community/lanzaboote",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reviewed lock update with compatible boot signing behavior.",
+      "regression": "Build the actual host and verify generated boot artifacts; live secure-boot validation requires an explicitly approved reboot.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "flake.nix::url = \"github:nix-community/lanzaboote/<native ref>\";"
+    ],
+    "anchor": "lanzaboote input"
+  },
+  {
+    "id": "plex-nvidia-wrapper",
+    "owner": "desktop-integration",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix"
+    ],
+    "reason": "Select the XCB/GLX NVIDIA runtime for Plex Desktop on this workstation.",
+    "upstream": {
+      "url": "https://github.com/NixOS/nixpkgs",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A Plex package that opens and renders correctly with the default runtime environment.",
+      "regression": "Build without the environment override and verify playback plus desktop scaling in the actual client.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared; selected target and runtime not yet verified",
+    "last_reviewed": null,
+    "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
+    "review_surfaces": [
+      "modules/nixos/desktop.nix::(plex-desktop.override {"
+    ],
+    "anchor": "plex-desktop.override"
+  },
+  {
+    "id": "wezterm-mac-nightly-channel",
+    "owner": "terminal",
+    "kind": "pin",
+    "source": "platforms/macos/Brewfile",
+    "source_paths": [
+      "platforms/macos/Brewfile",
+      "modules/darwin/default.nix",
+      "scripts/profiles/macos-managed.sh"
+    ],
+    "reason": "Preserve the existing shared/personal Mac choice of official WezTerm nightly. The original rationale is not documented beside the declaration and needs review; a mutable latest artifact is an explicit maintenance hold, not a reproducible version pin.",
+    "upstream": {
+      "url": "https://github.com/wezterm/wezterm/releases",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reviewed stable release or immutable nightly artifact preserving the required terminal behavior.",
+      "regression": "Launch WezTerm on the actual managed/personal Mac, check configuration, rendering, key bindings and shell integration, then verify the selected package identity.",
+      "requires_live": true
+    },
+    "classification": "unreviewed",
+    "review_state": "unknown",
+    "enabled": "declared in shared Mac Brewfile and personal nix-darwin configuration; live installation not yet verified",
+    "last_reviewed": null,
+    "evidence": "Existing main-branch channel choice retained; mutable nightly releases are held for explicit artifact review.",
+    "review_surfaces": []
+  }
+]
