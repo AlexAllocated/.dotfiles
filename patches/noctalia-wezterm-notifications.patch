@@ -1,8 +1,8 @@
 --- a/src/dbus/notification/notification_service.cpp
 +++ b/src/dbus/notification/notification_service.cpp
-@@ -401,8 +401,29 @@
+@@ -416,8 +416,29 @@
        const std::string& summary, const std::string& body, const std::vector<std::string>& actions,
-       const std::map<std::string, sdbus::Variant>& hints, int32_t expire_timeout
+       const std::map<std::string, sdbus::Variant>& hints, int32_t expire_timeout, const std::string& sender
    ) {
 -    const int32_t timeout = normalizeNotifyExpireTimeout(expire_timeout);
 -    const auto sanitizedActions = sanitizeNotifyActions(actions);
@@ -32,16 +32,16 @@
  
      return manager.addOrReplace(
          NotificationRequest{
-@@ -410,7 +431,7 @@
-             .appName = StringUtils::truncateUtf8(app_name, kMaxStringLen),
+@@ -426,7 +447,7 @@
              .summary = StringUtils::truncateUtf8(summary, kMaxStringLen),
              .body = StringUtils::sanitizeMarkup(StringUtils::truncateUtf8(body, kMaxStringLen)),
+             .sender = sender,
 -            .urgency = notifyUrgencyFromHints(hints),
 +            .urgency = urgency,
              .timeout = timeout,
              .origin = NotificationOrigin::External,
              .transient = notifyTransientFromHints(hints),
-@@ -418,7 +439,7 @@
+@@ -434,7 +455,7 @@
              .icon = notifyIcon(app_name, app_icon, hints),
              .imageData = notifyImageDataFromHints(hints),
              .category = notifyCategoryFromHints(hints),

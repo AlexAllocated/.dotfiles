@@ -142,7 +142,7 @@
             python3 -m unittest discover -s tests -p 'test_battlenet_force_close.py'
             python3 -m unittest discover -s tests -p 'test_battlenet_settings.py'
             python3 -m unittest discover -s tests -p 'test_wow_display_settings.py'
-            python3 -m unittest discover -s tests -p 'test_chatgpt_supervisor.py'
+            python3 -m unittest discover -s tests -p 'test_chatgpt*.py'
             python3 scripts/windows/configure-codex.py --self-test
             python3 scripts/codex/canonicalize-home.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null

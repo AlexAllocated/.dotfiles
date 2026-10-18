@@ -9,12 +9,18 @@ async function main() {
 	assert.equal(process.argv.length, 3, "Expected exactly one main bundle");
 	const bundlePath = path.resolve(process.argv[2]);
 	const source = await fs.readFile(bundlePath, "utf8");
-	const start = source.indexOf("async function Tne(e,t){");
-	const end = source.indexOf("async function vs(e){", start);
+	// Locate the reviewed operation by its role, independently of minifier names.
+	const copies = [...source.matchAll(/async function (?<name>[\w$]+)\([\w$]+,[\w$]+\)\{if\((?<platform>[\w$]+)\.default\.platform===`darwin`\)\{await [\w$]+\(`\/usr\/bin\/ditto`,\[`--noqtn`,/g)];
+	assert.equal(copies.length, 1, "Expected exactly one bundled-plugin copy function");
+	const start = copies[0].index;
+	const end = source.indexOf("async function ", start + 1);
 	assert(start >= 0 && end > start, "Bundled-plugin copy function must remain identifiable");
-	const copy = vm.runInNewContext(`(${source.slice(start, end)})`, {
-		P: { default: { platform: "linux" } },
-		b: { default: fs },
+	const copySource = source.slice(start, end);
+	const filesystem = copySource.match(/await (?<name>[\w$]+)\.default\.cp\(/)?.groups.name;
+	assert(filesystem, "Bundled-plugin filesystem must remain identifiable");
+	const copy = vm.runInNewContext(`(${copySource})`, {
+		[copies[0].groups.platform]: { default: { platform: "linux" } },
+		[filesystem]: { default: fs },
 		require: createRequire(bundlePath)
 	});
 	const { makeDirectoryWritable } = createRequire(bundlePath)("./bundled-copy.cjs");
@@ -81,9 +87,15 @@ async function main() {
 
 		// The executor uses a separate copy path, then rewrites .mcp.json.
 		// Also recover runtime directories left read-only by an older build.
-		const executorStart = source.indexOf("async function Yc(");
-		const executorEnd = source.indexOf("async function Xc(", executorStart);
+		const executors = [...source.matchAll(/async function (?<name>[\w$]+)\(\{executorPluginRoot:[\w$]+,resourcesPath:[\w$]+\}\)\{let [\w$]+=await (?<resolve>[\w$]+)\(/g)];
+		assert.equal(executors.length, 1, "Expected exactly one executor-plugin copy function");
+		const executorStart = executors[0].index;
+		const executorEnd = source.indexOf("async function ", executorStart + 1);
 		assert(executorStart >= 0 && executorEnd > executorStart);
+		const executorFunction = source.slice(executorStart, executorEnd);
+		const executorPath = executorFunction.match(/\.command=(?<name>[\w$]+)\.default\.join\(/)?.groups.name;
+		const host = executorFunction.match(/CODEX_APP_TOOLS_CALLER_HOST_ID:(?<name>[\w$]+)\.(?<id>[\w$]+)/)?.groups;
+		assert(executorPath && host, "Executor path and caller host must remain identifiable");
 		const executorSource = path.join(temporary, "executor-source");
 		await fs.mkdir(path.join(executorSource, ".codex-plugin"), { recursive: true });
 		for (const name of [".mcp.json", ".codex-plugin/plugin.json", "executable"]) {
@@ -92,14 +104,18 @@ async function main() {
 		}
 		await fs.chmod(path.join(executorSource, ".codex-plugin"), 0o555);
 		await fs.chmod(executorSource, 0o555);
-		const executorCopy = vm.runInNewContext(`(${source.slice(executorStart, executorEnd)})`, {
-			Zc: async () => ({ cwd: executorSource, command: path.join(executorSource, "executable") }),
-			b: { default: fs },
-			S: { default: path },
-			r: { An: "test-host" },
+		const makeExecutorCopy = (descriptor) => vm.runInNewContext(`(${executorFunction})`, {
+			[executors[0].groups.resolve]: async () => descriptor(),
+			[filesystem]: { default: fs },
+			[executorPath]: { default: path },
+			[host.name]: { [host.id]: "test-host" },
 			process: { platform: "linux" },
 			require: createRequire(bundlePath)
 		});
+		const executorCopy = makeExecutorCopy(() => ({ cwd: executorSource, command: path.join(executorSource, "executable") }));
+		const unavailableRoot = path.join(temporary, "unavailable-executor");
+		assert.equal(await makeExecutorCopy(() => null)({ executorPluginRoot: unavailableRoot }), null);
+		await assert.rejects(fs.stat(unavailableRoot), { code: "ENOENT" });
 		const executorRoot = path.join(temporary, "executor");
 		await fs.cp(executorSource, executorRoot, { recursive: true, verbatimSymlinks: true });
 		for (let attempt = 0; attempt < 2; attempt++) {
@@ -109,13 +125,27 @@ async function main() {
 			assert.equal(definition.mcpServers.codex_app.env.CODEX_APP_TOOLS_CALLER_HOST_ID, "test-host");
 			assert.equal(await mode(path.join(executorRoot, ".mcp.json")), 0o644);
 		}
+		// Fresh executor copies must preserve links without chmod-ing their targets.
+		await fs.chmod(executorSource, 0o755);
+		for (const name of ["external-directory", "external-file", "internal-file", "dangling"]) {
+			await fs.symlink(await fs.readlink(path.join(original, name)), path.join(executorSource, name));
+		}
+		await fs.chmod(executorSource, 0o555);
+		const linkedExecutorRoot = path.join(temporary, "executor-with-links");
+		assert.equal(await executorCopy({ executorPluginRoot: linkedExecutorRoot }), linkedExecutorRoot);
+		for (const name of ["external-directory", "external-file", "internal-file", "dangling"]) {
+			assert.equal(await fs.readlink(path.join(linkedExecutorRoot, name)), await fs.readlink(path.join(executorSource, name)));
+		}
 		assert.equal(await mode(path.join(original, ".mcp.json")), 0o444);
+		assert.equal(await mode(path.join(executorSource, ".mcp.json")), 0o444);
+		assert.equal(await mode(outside), 0o555);
+		assert.equal(await mode(path.join(outside, "untouched")), 0o444);
 
 		const linkedRoot = path.join(temporary, "linked-root");
 		await fs.symlink(outside, linkedRoot);
 		await assert.rejects(makeDirectoryWritable(linkedRoot));
 		assert.equal(await mode(outside), 0o555);
-		console.log("Desktop bundled-plugin copy: read-only source, rewrite, cleanup, symlink boundaries, and copy failure passed.");
+		console.log("Desktop bundled-plugin copy: read-only source, rewrite, cleanup, symlink boundaries, unavailable executor, and copy failure passed.");
 	} finally {
 		// Test fixture cleanup deliberately includes the read-only source and sentinel.
 		await makeDirectoryWritable(temporary);
