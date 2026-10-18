@@ -4732,5 +4732,10 @@
     "type": "declaration",
     "anchor": "ap = workstation.systemd.services.hostapd;",
     "owner": "native-manifests"
+  },
+  "nvim/lua/config/plugin_pins.lua": {
+    "source": "nvim/lua/config/plugin_pins.lua",
+    "type": "source",
+    "owner": "neovim"
   }
 }

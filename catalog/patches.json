@@ -1858,5 +1858,36 @@
     "last_reviewed": null,
     "evidence": "Existing main-branch channel choice retained; mutable nightly releases are held for explicit artifact review.",
     "review_surfaces": []
+  },
+  {
+    "id": "lazy-reviewed-lock-restore",
+    "owner": "neovim",
+    "kind": "runtime-override",
+    "source": "nvim/lua/config/plugin_pins.lua",
+    "source_paths": [
+      "nvim/lua/config/plugin_pins.lua",
+      "nvim/lua/config/lazy.lua",
+      "nvim/lua/config/bootstrap.lua",
+      "nvim/lazy-lock.json",
+      "nvim/lazy-lock.macos-managed.json",
+      "tests/neovim-bootstrap.lua"
+    ],
+    "reason": "Lazy normally rewrites its lock during staged plugin installation, which can drop not-yet-loaded specs or record newer installed HEADs. Protect reviewed lock contents during startup/restore and bootstrap Lazy itself at the selected commit.",
+    "upstream": {
+      "url": "https://github.com/folke/lazy.nvim",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "A reviewed Lazy revision with native immutable-lock restore across imported specs and an equivalently pinned bootstrap, without this runtime override.",
+      "regression": "Remove the override in an isolated candidate; run tests/neovim-bootstrap.lua and fresh personal plus managed-profile restores. Assert byte-identical locks and every installed plugin HEAD, including Lazy. Repeat ordinary startup on both native hosts; only explicit prepare may write new pins.",
+      "requires_live": true
+    },
+    "classification": "supported",
+    "review_state": "required",
+    "enabled": "Loaded by the Neovim configuration for ordinary startup and restore; explicit preparation may update pins.",
+    "last_reviewed": null,
+    "evidence": "Added after isolated restore rewrote accepted locks and the Lazy bootstrap lacked its reviewed commit. Removal or replacement by upstream behavior has not been validated.",
+    "review_surfaces": []
   }
 ]

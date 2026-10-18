@@ -317,8 +317,16 @@ function M.prepare_runtime()
 	vim.cmd(ok and "qa" or "cquit")
 end
 
+function M.verify_plugin_pins()
+	local ok, err = pcall(require("config.plugin_pins").verify)
+	if not ok then
+		vim.api.nvim_err_writeln(err)
+	end
+	return ok
+end
+
 function M.sync_runtime()
-	local plugins_ok = run_automation({ "Lazy! restore" })
+	local plugins_ok = run_automation({ "Lazy! restore" }) and M.verify_plugin_pins()
 	local mason_ok = plugins_ok and M.restore_mason_pins()
 	local query_links_ok = mason_ok and M.repair_treesitter_query_links()
 	local treesitter_ok = query_links_ok and run_automation({ "TSUpdateSync" })

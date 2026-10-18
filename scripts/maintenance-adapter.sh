@@ -78,8 +78,9 @@ LINKS
 		[[ "$DOTFILES_PROFILE" != macos-managed ]] || lock_suffix=".macos-managed"
 		export DOTFILES_NVIM_AUTOMATION=1
 		export DOTFILES_NVIM_PIN_UPDATE=1 DOTFILES_NVIM_RUNTIME_SYNC=1
+		export DOTFILES_NVIM_PLUGIN_UPDATE=0
 		export DOTFILES_NVIM_MASON_UPDATE=0
-		[[ "$ACTION" != editor-prepare ]] || export DOTFILES_NVIM_MASON_UPDATE=1
+		[[ "$ACTION" != editor-prepare ]] || export DOTFILES_NVIM_MASON_UPDATE=1 DOTFILES_NVIM_PLUGIN_UPDATE=1
 		export NVIM_APPNAME=nvim
 		export DOTFILES_LAZYVIM_JSON="$REPO_ROOT/nvim/lazyvim.json"
 		export DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/nvim/lazy-lock$lock_suffix.json"

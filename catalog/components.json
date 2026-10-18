@@ -586,7 +586,9 @@
       "vi"
     ],
     "startup": [],
-    "effects": [],
+    "effects": [
+      "Bootstrap Lazy at its reviewed commit; preserve reviewed plugin locks during startup and restore. Only explicit candidate preparation may rewrite pins, and restore verifies installed plugin Git HEADs against the selected lock."
+    ],
     "state_locations": [
       "~/.local/share/nvim",
       "~/.cache/nvim",
@@ -598,7 +600,7 @@
     ],
     "disable": "Remove or disable this component in modules/home/nvim.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Run Neovim bootstrap/profile tests and isolated restore for each profile, then open normal Neovim after explicit activation and verify it selects the applied release. On the managed Mac confirm AI extras and Nix-dependent Mason tooling stay excluded.",
+      "procedure": "Run Neovim bootstrap/profile and pin-protection regressions, then isolated fresh restores for both profiles. Verify lockfiles are byte-identical after restore and every installed plugin HEAD matches its reviewed commit, including Lazy itself. Open normal Neovim after explicit activation and verify it selects the applied release. On the managed Mac confirm AI extras and Nix-dependent Mason tooling stay excluded.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },

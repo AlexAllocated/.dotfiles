@@ -52,7 +52,8 @@ class StatusTests(unittest.TestCase):
         self.assertIn('timed out', observation['error'])
         self.assertTrue(status.stale(observation['observed_at']))
         self.ctx.save('status.json', {'observed_at': now(), 'upstream': {'tool': observation}})
-        cached = status.cached(self.ctx)
+        with patch.object(status.platform, 'system', return_value='Linux'):
+            cached = status.cached(self.ctx)
         self.assertFalse(cached['stale'])
         self.assertTrue(cached['upstream']['tool']['stale'])
         self.assertEqual(cached['next_step'], 'dotctl status --refresh')
@@ -110,7 +111,9 @@ class StatusTests(unittest.TestCase):
             'root': {'inputs': {'nixpkgs': 'nixpkgs'}},
             'nixpkgs': {'original': {'type': 'github', 'owner': 'NixOS', 'repo': 'nixpkgs', 'ref': 'nixos-26.05'}},
             'transitive': {'original': {'type': 'github', 'owner': 'Other', 'repo': 'Other'}}}}))
-        self.assertEqual(set(status.providers(self.ctx)), {'os-release', 'nvidia', 'kernel', 'codex', 'input:nixpkgs'})
+        with patch.object(status.platform, 'system', return_value='Linux'):
+            providers = status.providers(self.ctx)
+        self.assertEqual(set(providers), {'os-release', 'nvidia', 'kernel', 'codex', 'input:nixpkgs'})
 
     def test_version_summary_separates_policy_upstream_and_running_driver(self):
         result = status.version_summary({'local': {'nvidia_installed': '615.71.09', 'nvidia_loaded': '595.71.05'},
@@ -152,7 +155,8 @@ class StatusTests(unittest.TestCase):
         package = data / 'nvim/mason/packages/yaml-language-server'
         package.mkdir(parents=True)
         (package / 'mason-receipt.json').write_text('{"source":{"id":"pkg:npm/yaml-language-server@1.24.0"}}')
-        with patch.dict(status.os.environ, {'XDG_DATA_HOME': str(data)}), \
+        with patch.object(status.platform, 'system', return_value='Linux'), \
+             patch.dict(status.os.environ, {'XDG_DATA_HOME': str(data)}), \
              patch.object(status, 'run', side_effect=AssertionError('editor was launched')):
             result = status.editor_local(self.ctx)['mason'][0]
         self.assertEqual(result['declared_version'], '1.25.0')

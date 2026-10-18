@@ -191,6 +191,9 @@ assert(untouched.installs == 0)
 bootstrap.read_mason_lock = function()
 	return { ["test-tool"] = "2" }
 end
+bootstrap.verify_plugin_pins = function()
+	return true
+end
 for _, outcome in ipairs({ "success", "failure" }) do
 	reset()
 	add_package(outcome)

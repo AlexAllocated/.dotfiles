@@ -96,12 +96,12 @@ class Adapters(unittest.TestCase):
         self.write('nvim/lazy-lock.json', {})
         self.write('nvim/mason-lock.json', {'schema_version': 1, 'packages': {}})
         with patch.object(adapters, '_shell') as shell:
-            adapters.apply(self.ctx, 'editor', self.root, self.work)
-            adapters.apply(self.ctx, 'editor', self.root, self.work)
+            adapters.apply(self.ctx, 'editor', self.root, self.work, profile='tracer')
+            adapters.apply(self.ctx, 'editor', self.root, self.work, profile='tracer')
         self.assertEqual(shell.call_count, 1)
         self.write('nvim/mason-lock.json', {'schema_version': 1, 'packages': {'tool': '2'}})
         with self.assertRaisesRegex(adapters.AdapterHold, 'pins changed'):
-            adapters.apply(self.ctx, 'editor', self.root, self.work)
+            adapters.apply(self.ctx, 'editor', self.root, self.work, profile='tracer')
 
     def test_editor_validation_rejects_source_change_outside_locks(self):
         for variant in ('tracer', 'macos-managed'):
@@ -119,7 +119,7 @@ class Adapters(unittest.TestCase):
         self.ctx.save('active-editor.json', previous)
         with patch.object(adapters, '_shell', side_effect=RuntimeError('download interrupted')):
             with self.assertRaisesRegex(RuntimeError, 'download interrupted'):
-                adapters.apply(self.ctx, 'editor', self.root, self.work)
+                adapters.apply(self.ctx, 'editor', self.root, self.work, profile='tracer')
         self.assertEqual(self.ctx.load('active-editor.json'), previous)
         self.assertEqual(read(self.work / 'adapter-apply.json')['status'], 'failed')
 
@@ -133,7 +133,7 @@ class Adapters(unittest.TestCase):
         (nvim / 'init.lua').write_text((source / 'nvim/init.lua').read_text())
         (nvim / 'lua/config/lazy.lua').write_text('vim.fn.writefile({vim.g.dotfiles_editor_root}, vim.env.DOTCTL_CAPTURE)')
         with patch.object(adapters, '_shell'):
-            adapters.apply(self.ctx, 'editor', self.root, self.work)
+            adapters.apply(self.ctx, 'editor', self.root, self.work, profile='tracer')
         capture = Path(self.tmp.name) / 'selected.txt'
         initial = Path(self.tmp.name) / 'initial-init.lua'
         initial.write_text((source / 'nvim/init.lua').read_text())
@@ -149,6 +149,59 @@ class Adapters(unittest.TestCase):
     def test_runtime_under_source_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'outside'):
             adapters.prepare(self.ctx, 'editor', self.root, self.root / 'temp')
+
+    @unittest.skipUnless(shutil.which('nvim'), 'native Neovim is needed to exercise reviewed plugin pins')
+    def test_plugin_bootstrap_and_restore_keep_older_reviewed_commits(self):
+        # Real Git history makes the reviewed pin differ from both HEAD and
+        # stable. No external repository or network is needed in the Nix check.
+        plugin = Path(self.tmp.name) / 'plugin-origin'
+        plugin.mkdir()
+        subprocess.run(['git', 'init', '-q', plugin], check=True)
+        commits = []
+        for contents in ('reviewed', 'newer'):
+            (plugin / 'version').write_text(contents)
+            subprocess.run(['git', '-C', plugin, 'add', 'version'], check=True)
+            subprocess.run(['git', '-C', plugin, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                            'commit', '-qm', contents], check=True)
+            commits.append(subprocess.check_output(['git', '-C', plugin, 'rev-parse', 'HEAD'], text=True).strip())
+        subprocess.run(['git', '-C', plugin, 'branch', 'stable'], check=True)
+        lock = Path(self.tmp.name) / 'reviewed.json'
+        # Deliberately nonstandard whitespace proves byte preservation.
+        original = json.dumps({'first': {'commit': commits[0], 'branch': 'main'},
+                               'later-import': {'commit': commits[0], 'branch': 'main'}}, indent=3).encode()
+        lock.write_bytes(original)
+        destination = Path(self.tmp.name) / 'fresh-plugin'
+        script = Path(self.tmp.name) / 'verify.lua'
+        module = Path(__file__).resolve().parents[1] / 'nvim/lua/config/plugin_pins.lua'
+        script.write_text('''
+local pins = dofile(vim.env.DOTCTL_PIN_MODULE)
+pins.bootstrap(vim.env.DOTCTL_PLUGIN_DEST, vim.env.DOTCTL_REVIEWED_COMMIT, vim.env.DOTCTL_PLUGIN_ORIGIN)
+assert(vim.fn.readfile(vim.env.DOTCTL_PLUGIN_DEST .. '/version')[1] == 'reviewed')
+-- Reproduce Lazy's destructive first-round writer and missing later spec.
+local lock = { update = function() error('original lock writer must not run') end }
+package.loaded['lazy.manage.lock'] = lock
+pins.protect(vim.env.DOTCTL_REVIEWED_LOCK)
+lock.update()
+assert(lock.get({name='later-import'}).commit == vim.env.DOTCTL_REVIEWED_COMMIT)
+assert(not pcall(lock.get, {name='unreviewed-plugin'}))
+package.loaded['lazy.core.config'] = {plugins={first={
+  dir=vim.env.DOTCTL_PLUGIN_DEST, _={installed=true}
+}}}
+assert(pins.verify())
+vim.fn.system({'git', '-C', vim.env.DOTCTL_PLUGIN_DEST, 'checkout', '--detach', vim.env.DOTCTL_NEWER_COMMIT})
+assert(vim.v.shell_error == 0)
+local ok, err = pcall(pins.verify)
+assert(not ok and tostring(err):find('differs from reviewed commit', 1, true))
+''')
+        env = {**os.environ, 'DOTCTL_PIN_MODULE': str(module), 'DOTCTL_PLUGIN_DEST': str(destination),
+               'DOTCTL_PLUGIN_ORIGIN': str(plugin), 'DOTCTL_REVIEWED_COMMIT': commits[0],
+               'DOTCTL_NEWER_COMMIT': commits[1], 'DOTCTL_REVIEWED_LOCK': str(lock),
+               'XDG_STATE_HOME': str(Path(self.tmp.name) / 'xdg-state'),
+               'XDG_DATA_HOME': str(Path(self.tmp.name) / 'xdg-data'),
+               'XDG_CACHE_HOME': str(Path(self.tmp.name) / 'xdg-cache')}
+        subprocess.run(['nvim', '--headless', '-u', 'NONE', '-i', 'NONE', '-l', script], env=env,
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        self.assertEqual(lock.read_bytes(), original)
 
     def test_nix_activation_cannot_escape_controller_gate(self):
         with self.assertRaisesRegex(adapters.AdapterHold, 'controller receipt'):
@@ -230,7 +283,7 @@ class Adapters(unittest.TestCase):
         self.assertEqual(brew.call_count, 2)
 
     def test_acceptance_reads_installed_receipts_and_parser_revisions(self):
-        self.write('nvim/lazy-lock.json', {'example': {'commit': 'abc'}})
+        self.write('nvim/lazy-lock.json', {'example': {'commit': 'abc'}, 'disabled-plugin': {'commit': 'def'}})
         self.write('nvim/mason-lock.json', {'packages': {'cmakelang': '0.6.13'}})
         live = Path(self.tmp.name) / 'live'
         validation = Path(self.tmp.name) / 'validated'
@@ -241,17 +294,25 @@ class Adapters(unittest.TestCase):
             (runtime / 'site/parser-info').mkdir(parents=True)
             (runtime / 'site/parser-info/lua.revision').write_text('revision-a')
             (runtime / 'site/queries/lua').mkdir(parents=True)
+        manifest = {'schema_version': 1, 'lock_sha256': adapters.digest(self.root / 'nvim/lazy-lock.json'),
+                    'plugins': {'example': 'abc'}, 'inactive': ['disabled-plugin']}
+        atomic(validation / 'dotfiles-plugin-pins.json', manifest)
         (live / 'site/parser').mkdir()
         (live / 'site/parser/lua.so').write_bytes(b'compiled parser')
         with patch.object(adapters, 'run', return_value=result('abc')):
             evidence = adapters._installed_editor_evidence(self.root, validation, live)
             self.assertEqual(evidence['mason']['cmakelang'], '0.6.13')
+            self.assertEqual(evidence['inactive_plugins'], ['disabled-plugin'])
             (live / 'site/parser-info/lua.revision').write_text('old-revision')
             with self.assertRaisesRegex(adapters.AdapterHold, 'parser lua differs'):
                 adapters._installed_editor_evidence(self.root, validation, live)
         with patch.object(adapters, 'run', return_value=result('old-commit')):
             with self.assertRaisesRegex(adapters.AdapterHold, 'plugin example differs'):
                 adapters._installed_editor_evidence(self.root, validation, live)
+        manifest['lock_sha256'] = 'stale'
+        atomic(validation / 'dotfiles-plugin-pins.json', manifest)
+        with self.assertRaisesRegex(adapters.AdapterHold, 'no matching active-plugin evidence'):
+            adapters._installed_editor_evidence(self.root, validation, live)
 
     def test_shell_editor_preparation_does_not_inherit_live_xdg(self):
         # Execute the real shell boundary with a fake Neovim runtime recorder.
@@ -269,7 +330,7 @@ class Adapters(unittest.TestCase):
         nvim.chmod(0o755)
         # Hide nix to avoid the existing host-runtime path preference; purpose
         # here is XDG isolation, not shell tool discovery.
-        for executable in ('bash', 'dirname', 'mkdir', 'ln', 'uname', 'python3'):
+        for executable in ('bash', 'dirname', 'mkdir', 'ln', 'readlink', 'uname', 'python3'):
             location = __import__('shutil').which(executable)
             (binary / executable).symlink_to(location)
         env = {**os.environ, 'PATH': str(binary), 'CAPTURE': str(capture),
@@ -282,6 +343,10 @@ class Adapters(unittest.TestCase):
             self.assertEqual(observed[key], str(self.work / child))
         self.assertEqual(observed['DOTFILES_ROOT'], str(self.root))
         self.assertEqual(observed['DOTFILES_NVIM_PIN_UPDATE'], '1')
+        self.assertEqual(observed['DOTFILES_NVIM_PLUGIN_UPDATE'], '1')
+        subprocess.run([str(binary / 'bash'), self.root / 'scripts/maintenance-adapter.sh', 'editor-check',
+                        self.root, self.work, 'tracer'], env=env, check=True)
+        self.assertEqual(read(capture)['DOTFILES_NVIM_PLUGIN_UPDATE'], '0')
 
 
 if __name__ == '__main__':

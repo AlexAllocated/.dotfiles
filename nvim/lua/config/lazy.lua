@@ -1,22 +1,6 @@
 local managed_macos = require("config.profile").managed_macos
 local lock_name = managed_macos and "lazy-lock.macos-managed.json" or "lazy-lock.json"
 
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not (vim.uv or vim.loop).fs_stat(lazypath) then
-	local lazyrepo = "https://github.com/folke/lazy.nvim.git"
-	local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
-	if vim.v.shell_error ~= 0 then
-		vim.api.nvim_echo({
-			{ "Failed to clone lazy.nvim:\n", "ErrorMsg" },
-			{ out, "WarningMsg" },
-			{ "\nPress any key to exit..." },
-		}, true, {})
-		vim.fn.getchar()
-		os.exit(1)
-	end
-end
-vim.opt.rtp:prepend(lazypath)
-
 local function resolve_lockfile()
 	local configured = vim.env.DOTFILES_NVIM_AUTOMATION == "1" and vim.env.DOTFILES_NVIM_LOCKFILE or nil
 	if configured ~= nil and configured ~= "" then
@@ -29,6 +13,16 @@ local function resolve_lockfile()
 	local tracked = vim.fs.joinpath(root, lock_name)
 	assert(vim.fn.filereadable(tracked) == 1, "Missing accepted Neovim lock: " .. tracked)
 	return tracked
+end
+
+local lockfile = resolve_lockfile()
+local pins = vim.json.decode(table.concat(vim.fn.readfile(lockfile), "\n"))
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local plugin_pins = require("config.plugin_pins")
+plugin_pins.bootstrap(lazypath, assert(pins["lazy.nvim"], "Missing lazy.nvim pin").commit)
+vim.opt.rtp:prepend(lazypath)
+if not (vim.env.DOTFILES_NVIM_AUTOMATION == "1" and vim.env.DOTFILES_NVIM_PLUGIN_UPDATE == "1") then
+	plugin_pins.protect(lockfile)
 end
 
 local function resolve_lazyvim_json()
@@ -60,7 +54,7 @@ if managed_macos then
 end
 
 require("lazy").setup({
-	lockfile = resolve_lockfile(),
+	lockfile = lockfile,
 	ui = {
 		border = "rounded",
 	},

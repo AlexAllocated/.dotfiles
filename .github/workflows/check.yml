@@ -23,4 +23,4 @@ jobs:
          - uses: cachix/install-nix-action@v31
            with:
               extra_nix_config: experimental-features = nix-command flakes
-         - run: nix flake check
+         - run: nix flake check --print-build-logs

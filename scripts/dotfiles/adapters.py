@@ -382,15 +382,24 @@ def _installed_editor_evidence(candidate, validation_data, live_data, profile=No
     """Inspect persisted runtime identity without loading or repairing Neovim."""
     evidence = {'plugins': {}, 'mason': {}, 'parsers': {}, 'queries': []}
     plugin_lock, mason_lock = editor_locks(profile)
-    for name, lock in read(Path(candidate) / plugin_lock).items():
+    reviewed = read(Path(candidate) / plugin_lock)
+    manifest = read(validation_data / 'dotfiles-plugin-pins.json', {})
+    if manifest.get('schema_version') != 1 or manifest.get('lock_sha256') != digest(Path(candidate) / plugin_lock):
+        raise AdapterHold('Isolated editor check produced no matching active-plugin evidence')
+    active = manifest.get('plugins', {})
+    if set(active) | set(manifest.get('inactive', [])) != set(reviewed):
+        raise AdapterHold('Isolated editor plugin evidence does not cover the reviewed lock')
+    for name, expected in active.items():
+        if reviewed[name]['commit'] != expected:
+            raise AdapterHold(f'Isolated editor plugin {name} differs from the reviewed commit')
         directory = live_data / 'lazy' / name
         if not directory.is_dir():
             raise AdapterHold(f'Live editor plugin {name} is missing; apply the reviewed editor candidate')
         actual = run(['git', '-C', directory, 'rev-parse', 'HEAD']).stdout.strip()
-        expected = lock['commit']
         if actual != expected:
             raise AdapterHold(f'Live editor plugin {name} differs from its reviewed commit')
         evidence['plugins'][name] = actual
+    evidence['inactive_plugins'] = manifest.get('inactive', [])
     pins = read(Path(candidate) / mason_lock)['packages']
     for name, expected in pins.items():
         receipt = read(live_data / 'mason/packages' / name / 'mason-receipt.json')
