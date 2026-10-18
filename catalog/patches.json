@@ -502,9 +502,10 @@
     "source": "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
     "source_paths": [
       "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
-      "modules/nixos/desktop.nix"
+      "modules/nixos/desktop.nix",
+      "tests/sunshine-patch.py"
     ],
-    "reason": "Accept stable DRM connector names and notify display policy before encoder probing and after the final client disconnects.",
+    "reason": "Require exact active DRM connector selection without a wrong-monitor fallback, and notify display policy before encoder probing and after the final client disconnects.",
     "upstream": {
       "url": "https://github.com/LizardByte/Sunshine",
       "tracking": "manual",
@@ -512,7 +513,7 @@
     },
     "removal": {
       "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
-      "regression": "Build Sunshine without this patch, run tests/test_sunshine_display_policy.py, stream from two clients, and verify stable capture plus final-client display restoration.",
+      "regression": "Build Sunshine with tests/sunshine-patch.py checking the actual patched source, run tests/test_sunshine_display_policy.py, then stream from two clients and verify stable capture plus final-client display restoration. For an upstream removal candidate, repeat without the local patch, retain these behavior assertions and port source extraction if upstream function boundaries change; a successful build or matching connector names alone is insufficient.",
       "requires_live": true
     },
     "classification": "unreviewed",
@@ -522,7 +523,8 @@
     "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
     "review_surfaces": [
       "modules/nixos/desktop.nix::(pkgs.sunshine.override {",
-      "modules/nixos/desktop.nix::}).overrideAttrs"
+      "modules/nixos/desktop.nix::}).overrideAttrs",
+      "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''::occurrence-2"
     ]
   },
   {
@@ -1472,7 +1474,7 @@
     "evidence": "Source declaration indexed. No claim that upstream contains the fix or that removal passed validation.",
     "review_surfaces": [
       "modules/nixos/desktop.nix::ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {",
-      "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''::occurrence-2",
+      "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''::occurrence-3",
       "modules/nixos/desktop.nix::substituteInPlace edid.S \\"
     ],
     "anchor": "ipadEdidFirmware"

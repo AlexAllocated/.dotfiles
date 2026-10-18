@@ -4737,5 +4737,11 @@
     "source": "nvim/lua/config/plugin_pins.lua",
     "type": "source",
     "owner": "neovim"
+  },
+  "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''::occurrence-3": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "postPatch = (oldAttrs.postPatch or \"\") + ''",
+    "owner": "desktop-integration"
   }
 }

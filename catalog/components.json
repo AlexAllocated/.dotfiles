@@ -1353,11 +1353,13 @@
     "aliases": [],
     "sources": [
       "scripts/nixos/sunshine-display-policy.py",
-      "patches/sunshine-linux-kms-connector-and-stream-hook.patch"
+      "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
+      "tests/sunshine-patch.py"
     ],
     "owns": [
       "scripts/nixos/sunshine-display-policy.py",
-      "patches/sunshine-linux-kms-connector-and-stream-hook.patch"
+      "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
+      "tests/sunshine-patch.py"
     ],
     "commands": [
       "sunshine",
@@ -1375,7 +1377,7 @@
     "installed_locations": [],
     "disable": "Remove or disable this component in scripts/nixos/sunshine-display-policy.py, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Run display-policy tests, connect a real streaming client, verify capture and audio, then disconnect the final client and confirm local displays recover.",
+      "procedure": "Build Sunshine to run the source-bound C++ patch checks, run display-policy tests, connect two real streaming clients, verify capture and audio, then disconnect the final client and confirm local displays recover.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },

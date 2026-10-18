@@ -1,96 +1,185 @@
 --- a/src/platform/linux/kmsgrab.cpp
 +++ b/src/platform/linux/kmsgrab.cpp
-@@ -246,0 +247,9 @@
-+    std::string connector_name(std::uint32_t type, std::uint32_t index) {
-+      const char *type_name = drmModeGetConnectorTypeName(type);
-+      if (type_name == nullptr) {
-+        return {};
-+      }
-+
-+      return std::string {type_name} + "-" + std::to_string(index);
+@@ -1002,7 +1002,7 @@
+      */
+     static int64_t map_display_name_to_monitor_index(const std::string_view &display_name) {
+       // Handle (legacy) monitor index strings by converting them to integer
+-      if (display_name.empty() || std::ranges::all_of(display_name, ::isdigit)) {
++      if (display_name.empty() || std::ranges::all_of(display_name, [](unsigned char c) { return std::isdigit(c); })) {
+         return util::from_view(display_name);
+       }
+       // display_name is a connector name (not empty and containing non-digits)
+@@ -1014,8 +1014,24 @@
+           }
+         }
+       }
+-      BOOST_LOG(warning) << "Couldn't map '"sv << display_name << "' to a monitor index. Falling back to first monitor in list (index=0).";
+-      return 0;  // Fallback to first index if nothing can be matched
++      BOOST_LOG(error) << "Couldn't map '"sv << display_name << "' to a monitor index. Refusing to capture another display.";
++      return -1;
 +    }
 +
-@@ -478 +487 @@
--          auto index = ++conn_type_count[conn->connector_type];
-+          auto index = conn->connector_type_id;
-@@ -614 +623,6 @@
--        int monitor_index = util::from_view(display_name);
-+        const bool numeric_name = !display_name.empty() && std::all_of(
-+          display_name.begin(),
-+          display_name.end(),
-+          [](unsigned char character) { return std::isdigit(character); }
-+        );
-+        int monitor_index = numeric_name ? util::from_view(display_name) : -1;
-@@ -659 +673,13 @@
++    // Match names against the current plane, not an inactive connector's default
++    // monitor_index. Numeric indexes remain supported for legacy clients.
++    static bool monitor_matches_display(const std::string_view &display_name, int64_t monitor_index, int monitor,
++                                        const std::vector<connector_t> &connectors, std::uint32_t crtc_id) {
++      const bool numeric_name = display_name.empty() || std::ranges::all_of(
++        display_name, [](unsigned char c) { return std::isdigit(c); }
++      );
++      if (numeric_name) {
++        return monitor == monitor_index;
++      }
++      return std::ranges::any_of(connectors, [&](const connector_t &connector) {
++        return connector.crtc_id != 0 && connector.crtc_id == crtc_id &&
++               display_name == std::format("{}-{}", drmModeGetConnectorTypeName(connector.type), connector.index);
++      });
+     }
+ 
+     /**
+@@ -1044,6 +1060,9 @@
+         delay = ::video::capture_frame_interval(config);
+ 
+         int monitor_index = map_display_name_to_monitor_index(display_name);
++        if (monitor_index < 0) {
++          return -1;
++        }
+         int monitor = 0;
+ 
+         fs::path card_dir {"/dev/dri"sv};
+@@ -1088,7 +1107,9 @@
+               continue;
+             }
+ 
 -            if (monitor != monitor_index) {
-+            std::string active_connector_name;
 +            kms::conn_type_count_t selection_conn_type_count;
-+            for (const auto &connector : card.monitors(selection_conn_type_count)) {
-+              if (connector.crtc_id == plane->crtc_id) {
-+                active_connector_name = kms::connector_name(connector.type, connector.index);
-+                break;
-+              }
-+            }
-+
-+            const bool selected = numeric_name ?
-+                                    monitor == monitor_index :
-+                                    active_connector_name == display_name;
-+            if (!selected) {
-@@ -1710,0 +1737 @@
-+          display_names.emplace_back(kms::connector_name(it->second.type, it->second.index));
-@@ -1718 +1745,4 @@
--        display_names.emplace_back(std::to_string(count++));
-+        if (it == std::end(crtc_to_monitor)) {
++            if (!monitor_matches_display(display_name, monitor_index, monitor,
++                                         card.monitors(selection_conn_type_count), plane->crtc_id)) {
+               ++monitor;
+               continue;
+             }
+@@ -2247,7 +2268,11 @@
+         kms::env_height = std::max(kms::env_height, (int) (crtc->y + crtc->height));
+ 
+         kms::print(plane.get(), fb.get(), crtc.get());
+-        display_names.emplace_back(std::format("{}-{}", drmModeGetConnectorTypeName(it->second.type), it->second.index));
++        if (it != std::end(crtc_to_monitor)) {
++          display_names.emplace_back(std::format("{}-{}", drmModeGetConnectorTypeName(it->second.type), it->second.index));
++        } else {
 +          display_names.emplace_back(std::to_string(count));
 +        }
-+        ++count;
+         count++;
+       }
+ 
 --- a/src/nvhttp.cpp
 +++ b/src/nvhttp.cpp
-@@ -826,0 +827 @@
+@@ -1332,6 +1332,7 @@
+     print_req<SunshineHTTPS>(request);
+ 
+     pt::ptree tree;
 +    bool streaming_prepared {false};
-@@ -840,0 +842,4 @@
+     bool revert_display_configuration {false};
+     auto g = util::fail_guard([&]() {
+       std::ostringstream data;
+@@ -1346,6 +1347,10 @@
+ 
+       if (revert_display_configuration) {
+         display_device::revert_configuration();
++      }
 +
 +      if (streaming_prepared) {
 +        platf::streaming_will_stop();
-+      }
-@@ -873,0 +879,8 @@
+       }
+     });
+ 
+@@ -1385,6 +1390,14 @@
+       // the moment. This should be done before probing encoders as it could
+       // change the active displays.
+       display_device::configure_display(config::video, *launch_session);
++
 +      streaming_prepared = true;
 +      if (!platf::streaming_will_prepare(launch_session->width, launch_session->height, launch_session->fps)) {
 +        tree.put("root.<xmlattr>.status_code", 503);
 +        tree.put("root.<xmlattr>.status_message", "Failed to prepare the host display for streaming");
 +        tree.put("root.gamesession", 0);
-+
 +        return;
 +      }
-@@ -927,0 +941 @@
+ 
+       // Probe encoders again before streaming to ensure our chosen
+       // encoder matches the active GPU (which could have changed
+@@ -1434,6 +1447,7 @@
+     tree.put("root.gamesession", 1);
+ 
+     rtsp_stream::launch_session_raise(launch_session);
 +    streaming_prepared = false;
-@@ -936,0 +951 @@
+ 
+     // Stream was started successfully, we will revert the config when the app or session terminates
+     revert_display_configuration = false;
+@@ -1450,6 +1464,7 @@
+     print_req<SunshineHTTPS>(request);
+ 
+     pt::ptree tree;
 +    bool streaming_prepared {false};
-@@ -946,0 +962,4 @@
+     auto g = util::fail_guard([&]() {
+       std::ostringstream data;
+ 
+@@ -1460,6 +1475,10 @@
+       pt::write_xml(data, tree);
+       response->write(data.str());
+       response->close_connection_after_response = true;
 +
 +      if (streaming_prepared) {
 +        platf::streaming_will_stop();
 +      }
-@@ -979,0 +999,8 @@
+     });
+ 
+     auto current_appid = proc::proc.running();
+@@ -1497,6 +1516,14 @@
+       // the moment. This should be done before probing encoders as it could
+       // change the active displays.
+       display_device::configure_display(config::video, *launch_session);
++
 +      streaming_prepared = true;
 +      if (!platf::streaming_will_prepare(launch_session->width, launch_session->height, launch_session->fps)) {
-+        tree.put("root.resume", 0);
 +        tree.put("root.<xmlattr>.status_code", 503);
 +        tree.put("root.<xmlattr>.status_message", "Failed to prepare the host display for streaming");
-+
++        tree.put("root.resume", 0);
 +        return;
 +      }
-@@ -1021,0 +1049 @@
+ 
+       // Probe encoders again before streaming to ensure our chosen
+       // encoder matches the active GPU (which could have changed
+@@ -1535,6 +1562,7 @@
+     tree.put("root.resume", 1);
+ 
+     rtsp_stream::launch_session_raise(launch_session);
 +    streaming_prepared = false;
+   }
+ 
+   /**
 --- a/src/platform/common.h
 +++ b/src/platform/common.h
-@@ -629,0 +630 @@
+@@ -975,6 +975,7 @@
+   void enable_mouse_keys();
+ 
+   // Allow OS-specific actions to be taken to prepare for streaming
 +  bool streaming_will_prepare(int width, int height, int fps);
+   void streaming_will_start();
+   void streaming_will_stop();
+ 
 --- a/src/platform/linux/misc.cpp
 +++ b/src/platform/linux/misc.cpp
-@@ -11,0 +12 @@
+@@ -15,6 +15,7 @@
+ // standard includes
+ #include <array>
+ #include <cerrno>
 +#include <cstdlib>
-@@ -411,0 +413,28 @@
+ #include <cstring>
+ #include <fstream>
+ #include <iomanip>
+@@ -562,6 +563,34 @@
+     // Unimplemented
+   }
+ 
 +  bool streaming_will_prepare(int width, int height, int fps) {
 +    const char *command = std::getenv("SUNSHINE_STREAM_START_COMMAND");
 +    if (command == nullptr || *command == '\0') {
@@ -119,7 +208,13 @@
 +    return true;
 +  }
 +
-@@ -417 +432,8 @@
+   /**
+    * @brief Apply Linux platform state before streaming starts.
+    */
+@@ -573,7 +602,14 @@
+    * @brief Restore Linux platform state after streaming stops.
+    */
+   void streaming_will_stop() {
 -    // Nothing to do
 +    const char *command = std::getenv("SUNSHINE_STREAM_STOP_COMMAND");
 +    if (command == nullptr || *command == '\0') {
@@ -129,11 +224,26 @@
 +    if (const int status = std::system(command); status != 0) {
 +      BOOST_LOG(warning) << "Stream-stop command exited with status ["sv << status << ']';
 +    }
+   }
+ 
+   /**
 --- a/src/rtsp.cpp
 +++ b/src/rtsp.cpp
-@@ -29,0 +30 @@
+@@ -27,6 +27,7 @@
+ #include "input.h"
+ #include "logging.h"
+ #include "network.h"
 +#include "platform/common.h"
-@@ -514,0 +516,3 @@
+ #include "rtsp.h"
+ #include "stream.h"
+ #include "sync.h"
+@@ -608,6 +609,9 @@
+           auto discarded = launch_event.pop(0s);
+           if (discarded) {
+             BOOST_LOG(debug) << "Event timeout: "sv << discarded->unique_id;
 +            if (session_count() == 0) {
 +              platf::streaming_will_stop();
 +            }
+           }
+         }
+       });
