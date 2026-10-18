@@ -18,6 +18,7 @@ spec.loader.exec_module(processes)
 
 
 class ForceCloseTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux procfs and pidfd signaling")
     def test_real_force_close_preserves_other_game_and_its_watcher(self):
         with tempfile.TemporaryDirectory() as temporary:
             prefix = Path(temporary) / "pfx"
@@ -114,6 +115,7 @@ class ForceCloseTests(unittest.TestCase):
             candidates[3] = processes.Process(4, "1", name, active)
             self.assertEqual({p.pid for p in processes.idle_session_targets({old, active}, candidates)}, {1, 2, 6, 8})
 
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux procfs and pidfd signaling")
     def test_pidfd_kills_target_and_rejects_a_stale_identity(self):
         child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
         try:
@@ -129,6 +131,7 @@ class ForceCloseTests(unittest.TestCase):
                 child.kill()
                 child.wait(timeout=5)
 
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux procfs and pidfd signaling")
     def test_real_exited_leader_with_live_threads_is_detected_and_killed(self):
         code = ("import ctypes,threading,time\n"
                 "threading.Thread(target=lambda:time.sleep(30)).start()\n"
