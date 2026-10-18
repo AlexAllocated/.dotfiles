@@ -1,17 +1,15 @@
-diff --git a/src/core/flameshot.cpp b/src/core/flameshot.cpp
-index d439968..9659486 100644
---- a/src/core/flameshot.cpp
-+++ b/src/core/flameshot.cpp
-@@ -172,3 +172,11 @@ CaptureWidget* Flameshot::gui(const CaptureRequest& req)
- #else
--        m_captureWindow->showFullScreen();
-+        // The capture widget already has the selected output's exact geometry.
-+        // Requesting compositor fullscreen makes tiling compositors insert it
-+        // into their normal layout before presenting it. A regular Wayland
-+        // toplevel lets the compositor keep it as an instant floating overlay.
-+        if (QGuiApplication::platformName() == QStringLiteral("wayland")) {
-+            m_captureWindow->show();
-+        } else {
-+            m_captureWindow->showFullScreen();
-+        }
- //        m_captureWindow->show(); // For CaptureWidget Debugging under Linux
+diff --git a/src/widgets/capture/capturewidget.cpp b/src/widgets/capture/capturewidget.cpp
+--- a/src/widgets/capture/capturewidget.cpp
++++ b/src/widgets/capture/capturewidget.cpp
+@@ -186,6 +186,11 @@ CaptureWidget::CaptureWidget(const CaptureRequest& req,
+         if (selectedScreen == nullptr) {
+             selectedScreen = QGuiApplication::primaryScreen();
+         }
++        // Set the output before creating the native window. move() alone
++        // cannot select an output on Wayland, and windowHandle() can still
++        // be null here. showFullScreen() must cover the selected output,
++        // including the area reserved for panels.
++        setScreen(selectedScreen);
+         QRect screenGeom = selectedScreen->geometry();
+         move(screenGeom.topLeft());
+         resize(screenGeom.size());

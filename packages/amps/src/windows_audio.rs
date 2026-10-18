@@ -18,8 +18,6 @@ use cpal::{
 	Device, Sample, SampleFormat, SampleRate, Stream, StreamConfig, SupportedStreamConfig,
 };
 use crossbeam_queue::ArrayQueue;
-use df::tract::{DfParams, DfTract, RuntimeParams};
-use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 use wasapi::{DeviceEnumerator, Direction as WasapiDirection, Role as WasapiRole};
@@ -32,7 +30,7 @@ use crate::{
 	master_volume::MasterVolumeBridge,
 	nvidia_afx::NvidiaAfx,
 	patch_destinations, patch_sources, BusSummary, Config, EndpointSummary, GraphSnapshot,
-	MeterReading, PatchConnection, SuppressionBackend, SuppressionTransition,
+	MeterReading, PatchConnection,
 };
 
 const SAMPLE_RATE: u32 = 48_000;
@@ -51,126 +49,10 @@ const PROCESSED_MIC_TELEMETRY_STALE_AFTER: Duration = Duration::from_millis(250)
 const ENDPOINT_HISTORY_LIMIT: usize = 8;
 const PREFERRED_ENDPOINT_RECHECK_INTERVAL: Duration = Duration::from_secs(2);
 const NVIDIA_AFX_LABEL: &str = "NVIDIA AFX (RTX)";
-const DEEPFILTER_LABEL: &str = "DeepFilterNet3";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ActiveSuppressionStatus {
 	engine: String,
-}
-
-enum SuppressionProcessor {
-	Nvidia(NvidiaAfx),
-	DeepFilter {
-		model: Box<DfTract>,
-		input: Array2<f32>,
-		output: Array2<f32>,
-	},
-}
-
-impl SuppressionProcessor {
-	fn new(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
-		match config.engine.as_str() {
-			"nvidia_afx" => Self::nvidia(config),
-			"deepfilternet3" => Self::deep_filter(config),
-			other => bail!("unsupported suppression engine {other:?}"),
-		}
-	}
-
-	fn nvidia(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
-		let processor = NvidiaAfx::new(crate::suppression_intensity(config))?;
-		Ok(Self::Nvidia(processor))
-	}
-
-	fn deep_filter(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
-		let runtime = RuntimeParams::default_with_ch(1)
-			.with_atten_lim(config.attenuation_limit_db)
-			.with_post_filter(config.post_filter_beta);
-		let mut model = Box::new(
-			DfTract::new(DfParams::default(), &runtime)
-				.context("could not initialize the embedded DeepFilterNet3 model")?,
-		);
-		if model.sr != SAMPLE_RATE as usize {
-			bail!(
-				"DeepFilterNet requires {} Hz but AMPS is fixed at {SAMPLE_RATE} Hz",
-				model.sr
-			);
-		}
-		let input = Array2::zeros((1, model.hop_size));
-		let mut output = Array2::zeros((1, model.hop_size));
-		model
-			.process(input.view(), output.view_mut())
-			.context("could not warm up DeepFilterNet3")?;
-		Ok(Self::DeepFilter {
-			model,
-			input,
-			output,
-		})
-	}
-
-	fn label(&self) -> &'static str {
-		match self {
-			Self::Nvidia(_) => NVIDIA_AFX_LABEL,
-			Self::DeepFilter { .. } => DEEPFILTER_LABEL,
-		}
-	}
-
-	fn frame_samples(&self) -> usize {
-		match self {
-			Self::Nvidia(processor) => processor.frame_samples(),
-			Self::DeepFilter { model, .. } => model.hop_size,
-		}
-	}
-
-	fn backend(&self) -> SuppressionBackend {
-		match self {
-			Self::Nvidia(_) => SuppressionBackend::Nvidia,
-			Self::DeepFilter { .. } => SuppressionBackend::DeepFilter,
-		}
-	}
-
-	fn update_parameters(&mut self, config: &crate::NoiseSuppressionConfig) -> Result<()> {
-		match self {
-			Self::Nvidia(_) => {
-				bail!("NVIDIA AFX parameter changes require a Clean Mic processor rebuild")
-			}
-			Self::DeepFilter { model, .. } => {
-				model.set_atten_lim(config.attenuation_limit_db);
-				model.set_pf_beta(config.post_filter_beta);
-				Ok(())
-			}
-		}
-	}
-
-	fn startup_silence(&self) -> usize {
-		match self {
-			Self::Nvidia(_) => 0,
-			Self::DeepFilter { model, .. } => {
-				model.fft_size - model.hop_size + model.lookahead * model.hop_size
-			}
-		}
-	}
-
-	fn process(&mut self, input_frame: &[f32], output_frame: &mut [f32]) -> Result<()> {
-		match self {
-			Self::Nvidia(processor) => processor.process(input_frame, output_frame),
-			Self::DeepFilter {
-				model,
-				input,
-				output,
-			} => {
-				for (destination, source) in input.iter_mut().zip(input_frame) {
-					*destination = *source;
-				}
-				model
-					.process(input.view(), output.view_mut())
-					.context("DeepFilterNet3 inference failed")?;
-				for (destination, source) in output_frame.iter_mut().zip(output.iter()) {
-					*destination = *source;
-				}
-				Ok(())
-			}
-		}
-	}
 }
 
 #[derive(Clone, Copy)]
@@ -531,14 +413,6 @@ fn read_active_suppression() -> Option<String> {
 		.map(|status| status.engine)
 }
 
-fn configured_suppression_label(engine: &str) -> &'static str {
-	match engine {
-		"nvidia_afx" => NVIDIA_AFX_LABEL,
-		"deepfilternet3" => DEEPFILTER_LABEL,
-		_ => "Unknown",
-	}
-}
-
 fn physical_state_path() -> Result<PathBuf> {
 	let app_data = std::env::var_os("APPDATA")
 		.ok_or_else(|| anyhow!("APPDATA is unavailable; cannot persist physical audio selections"))?;
@@ -857,7 +731,7 @@ pub(crate) fn doctor(config: &Config) -> Result<()> {
 	println!(
 		"  Suppression:     {}",
 		if config.noise_suppression.enabled {
-			configured_suppression_label(&config.noise_suppression.engine)
+			NVIDIA_AFX_LABEL
 		} else {
 			"disabled"
 		}
@@ -879,7 +753,7 @@ pub(crate) fn benchmark(config: &Config, seconds: u32) -> Result<()> {
 	if seconds == 0 || seconds > 300 {
 		bail!("benchmark duration must be between 1 and 300 seconds");
 	}
-	let mut processor = SuppressionProcessor::new(&config.noise_suppression)?;
+	let mut processor = NvidiaAfx::new(crate::suppression_intensity(&config.noise_suppression))?;
 	let frame_samples = processor.frame_samples();
 	let mut input = vec![0.0_f32; frame_samples];
 	let mut output = vec![0.0_f32; frame_samples];
@@ -903,7 +777,7 @@ pub(crate) fn benchmark(config: &Config, seconds: u32) -> Result<()> {
 	let realtime = Duration::from_secs(seconds as u64);
 	println!(
 		"{} processed {seconds}s of noisy audio in {:.3}s.",
-		processor.label(),
+		NVIDIA_AFX_LABEL,
 		elapsed.as_secs_f64()
 	);
 	println!(
@@ -1028,11 +902,9 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 	let engine_online = process_is_running("amps.exe")?;
 	let suppression = if config.noise_suppression.enabled {
 		if engine_online {
-			read_active_suppression().unwrap_or_else(|| {
-				configured_suppression_label(&config.noise_suppression.engine).to_string()
-			})
+			read_active_suppression().unwrap_or_else(|| NVIDIA_AFX_LABEL.to_string())
 		} else {
-			configured_suppression_label(&config.noise_suppression.engine).to_string()
+			NVIDIA_AFX_LABEL.to_string()
 		}
 	} else {
 		"Bypassed".to_string()
@@ -2331,11 +2203,7 @@ impl FilterReceipt {
 		self.token == target.token && self.config == target.config
 	}
 }
-fn publish_filter_receipt(
-	path: &Path,
-	target: &FilterTarget,
-	processor: &Option<SuppressionProcessor>,
-) {
+fn publish_filter_receipt(path: &Path, target: &FilterTarget, processor: &Option<NvidiaAfx>) {
 	let config = &target.config;
 	let receipt = FilterReceipt {
 		token: target.token.clone(),
@@ -2561,7 +2429,7 @@ fn run_suppression(
 		}
 	});
 	let mut active_config = active_target.config.clone();
-	let mut processor = create_suppression_processor(&active_config, &clean);
+	let mut processor = create_suppression_processor(&active_config);
 	publish_filter_receipt(config_path, &active_target, &processor);
 	let mut telemetry = ProcessedMicPublisher::new();
 	let mut input_frame = Vec::new();
@@ -2579,7 +2447,7 @@ fn run_suppression(
 						let updated = target.config.clone();
 						revision = observed_revision;
 						if updated != active_config || (updated.enabled && processor.is_none()) {
-							reconfigure_suppression(&mut processor, &active_config, &updated, &clean);
+							reconfigure_suppression(&mut processor, &updated);
 							active_config = updated;
 						}
 						active_target = target;
@@ -2634,24 +2502,16 @@ fn run_suppression(
 	Ok(())
 }
 
-fn create_suppression_processor(
-	config: &crate::NoiseSuppressionConfig,
-	clean: &ArrayQueue<f32>,
-) -> Option<SuppressionProcessor> {
+fn create_suppression_processor(config: &crate::NoiseSuppressionConfig) -> Option<NvidiaAfx> {
 	if !config.enabled {
 		publish_active_suppression("Bypassed");
 		info!("Clean Mic suppression bypassed");
 		return None;
 	}
-	let mut processor = match SuppressionProcessor::new(config) {
+	let mut processor = match NvidiaAfx::new(crate::suppression_intensity(config)) {
 		Ok(processor) => processor,
 		Err(error) => {
-			let label = if config.engine == "nvidia_afx" {
-				"NVIDIA AFX error · mic bypassed"
-			} else {
-				"Suppression error · mic bypassed"
-			};
-			publish_active_suppression(label);
+			publish_active_suppression("NVIDIA AFX error · mic bypassed");
 			error!(
 				error = %format!("{error:#}"),
 				"Clean Mic suppression could not initialize; preserving an unfiltered passthrough without rebuilding playback buses"
@@ -2670,66 +2530,25 @@ fn create_suppression_processor(
 		);
 		return None;
 	}
-	for _ in 0..processor.startup_silence() {
-		push_latest(clean, 0.0);
-	}
-	publish_active_suppression(processor.label());
+	publish_active_suppression(NVIDIA_AFX_LABEL);
 	info!(
-		backend = processor.label(),
+		backend = NVIDIA_AFX_LABEL,
 		frame_samples, "GPU-capable Clean Mic worker ready"
 	);
 	Some(processor)
 }
 
 fn reconfigure_suppression(
-	processor: &mut Option<SuppressionProcessor>,
-	current: &crate::NoiseSuppressionConfig,
+	processor: &mut Option<NvidiaAfx>,
 	updated: &crate::NoiseSuppressionConfig,
-	clean: &ArrayQueue<f32>,
 ) {
-	let transition = crate::suppression_transition(
-		current,
-		updated,
-		processor.as_ref().map(SuppressionProcessor::backend),
+	// NVIDIA does not reliably apply intensity changes after loading a model.
+	// Rebuild only Clean Mic; playback buses and their streams stay alive.
+	info!(
+		intensity = crate::suppression_intensity(updated),
+		"reconfiguring NVIDIA Clean Mic suppression"
 	);
-	match transition {
-		SuppressionTransition::Bypass => {
-			*processor = None;
-			publish_active_suppression("Bypassed");
-			info!("hot-reloaded Clean Mic suppression bypass");
-		}
-		SuppressionTransition::UpdateInPlace => {
-			let Some(active_processor) = processor.as_mut() else {
-				*processor = create_suppression_processor(updated, clean);
-				return;
-			};
-			match active_processor.update_parameters(updated) {
-				Ok(()) => {
-					publish_active_suppression(active_processor.label());
-					info!(
-						backend = active_processor.label(),
-						intensity = crate::suppression_intensity(updated),
-						"hot-reloaded Clean Mic suppression parameters"
-					);
-				}
-				Err(error) => {
-					error!(
-						error = %format!("{error:#}"),
-						"could not hot-reload Clean Mic suppression parameters; rebuilding only its processor"
-					);
-					*processor = create_suppression_processor(updated, clean);
-				}
-			}
-		}
-		SuppressionTransition::Rebuild => {
-			info!(
-				engine = updated.engine,
-				intensity = crate::suppression_intensity(updated),
-				"rebuilding only the Clean Mic suppression processor"
-			);
-			*processor = create_suppression_processor(updated, clean);
-		}
-	}
+	*processor = create_suppression_processor(updated);
 }
 
 fn suppression_revision(

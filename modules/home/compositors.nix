@@ -14,6 +14,10 @@ let
     else
       config.dotfiles.source;
   noctaliaPackage = config.programs.noctalia.package;
+  wineSniBridge = pkgs.callPackage ../../packages/wine-sni-bridge.nix { };
+  battleNetForceClose = pkgs.callPackage ../../packages/battlenet-force-close.nix {
+    prefix = "${config.xdg.dataHome}/Steam/steamapps/compatdata/${toString config.dotfiles.gaming.battleNet.appId}/pfx";
+  };
   screenshotDirectory = "${config.home.homeDirectory}/Pictures/Screenshots";
   dmsPackage = pkgs.dms-shell;
   noctaliaFocusPatch = pkgs.writeText "noctalia-focus-existing-windows.patch" (
@@ -61,7 +65,11 @@ let
   renderNiriOutput =
     name: output:
     let
-      layoutOverrides = lib.optional (output.niriGaps != null) "gaps ${toString output.niriGaps};";
+      layoutOverrides =
+        lib.optional (output.niriGaps != null) "gaps ${toString output.niriGaps};"
+        ++ lib.optional (output.niriDefaultColumnWidth != null) (
+          "default-column-width { proportion ${toString output.niriDefaultColumnWidth}; }"
+        );
       body = lib.concatStringsSep "\n" (
         (
           if !output.enable then
@@ -71,7 +79,9 @@ let
               lib.optional (output.mode != null) "  mode ${builtins.toJSON output.mode}"
               ++ [ "  scale ${toString output.scale}" ]
               ++ lib.optional output.focusAtStartup "  focus-at-startup"
-              ++ lib.optional output.variableRefreshRate "  variable-refresh-rate"
+              ++ lib.optional output.variableRefreshRate (
+                "  variable-refresh-rate" + lib.optionalString output.niriVrrOnDemand " on-demand=true"
+              )
               ++ lib.optional (output.position != null) (
                 "  position x=${toString output.position.x} y=${toString output.position.y}"
               )
@@ -255,10 +265,12 @@ let
 
   niriFollowPrimaryOutput = pkgs.writeShellApplication {
     name = "dotfiles-niri-follow-primary-output";
+    extraShellCheckFlags = [ "--external-sources" ];
     runtimeInputs = [
       pkgs.coreutils
       pkgs.jq
       pkgs.niri
+      pkgs.xrandr
       noctaliaPackage
     ];
     text = ''
@@ -364,6 +376,8 @@ let
         fi
       }
 
+      source ${../../scripts/nixos/x11-primary.sh}
+
       while true; do
         outputs="$(niri msg --json outputs 2>/dev/null)" || {
           sleep 1
@@ -376,6 +390,12 @@ let
 
         primary="$(resolve_output "$primary_selector" "$outputs")"
         fallback="$(resolve_output "$fallback_selector" "$outputs")"
+        # Adaptive Sunshine uses a virtual output instead of the old physical
+        # dummy's make/model identifier. Follow the display actually captured.
+        if jq -e '.Moonlight.current_mode != null and .Moonlight.logical != null' \
+          <<<"$outputs" >/dev/null; then
+          fallback=Moonlight
+        fi
 
         if [[ -n "$primary" && "$assigned_primary" != "$primary" ]] \
           && noctalia msg wallpaper-set "$primary" "$primary_wallpaper" >/dev/null 2>&1; then
@@ -418,6 +438,11 @@ let
         fi
       fi
 
+        if [[ "$current_state" == on ]]; then
+          # A fast disconnect/reconnect can fit between two Niri snapshots.
+          # Verify the cached X11 primary too; only write when it drifted.
+          restore_x11_primary "$primary" || true
+        fi
         if [[ "$last_state" == off && "$current_state" == on ]]; then
           if [[ -s "$anchors_file" ]] && jq -e 'type == "array"' "$anchors_file" >/dev/null 2>&1; then
             anchors="$(<"$anchors_file")"
@@ -620,6 +645,13 @@ in
       description = "Configure optional Wayland compositor and desktop-shell experiments.";
     };
 
+    niriRenderDrmDevice = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/dev/dri/nvidia-render";
+      description = "Stable DRM render-device path for Niri; null uses automatic GPU selection.";
+    };
+
     outputs = lib.mkOption {
       default = { };
       description = "Portable output policy rendered into each compositor configuration.";
@@ -664,10 +696,21 @@ in
               default = false;
               description = "Whether Niri should keep variable refresh rate enabled on this output.";
             };
+            niriVrrOnDemand = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = "Enable Niri VRR only while a window with the variable-refresh-rate rule is visible.";
+            };
             niriGaps = lib.mkOption {
               type = lib.types.nullOr lib.types.number;
               default = null;
               description = "Optional Niri gaps override in logical pixels for this output.";
+            };
+            niriDefaultColumnWidth = lib.mkOption {
+              type = lib.types.nullOr lib.types.number;
+              default = null;
+              example = 0.5;
+              description = "Default Niri column width as a fraction of this output's available width.";
             };
           };
         }
@@ -703,6 +746,7 @@ in
       settings = {
         system.monitor.gpu_poll_seconds = 2.0;
         shell = {
+          time_format = "%-I:%M %p";
           telemetry_enabled = false;
           # Noctalia sessions use the small compositor-specific service below.
           polkit_agent = false;
@@ -748,6 +792,10 @@ in
           ];
         };
         widget = {
+          clock = {
+            type = "clock";
+            format = "%-I:%M %p";
+          };
           network = {
             type = "network";
             show_label = false;
@@ -928,6 +976,12 @@ in
       // Output policy is generated from dotfiles.compositors.outputs.
       ${niriOutputs}
 
+      ${lib.optionalString (cfg.niriRenderDrmDevice != null) ''
+        debug {
+          render-drm-device ${builtins.toJSON cfg.niriRenderDrmDevice}
+        }
+      ''}
+
       spawn-at-startup ${builtins.toJSON (lib.getExe startDesktopShell)}
       spawn-at-startup ${builtins.toJSON (lib.getExe startPolkitAgent)}
 
@@ -1019,6 +1073,23 @@ in
       };
     };
 
+    systemd.user.services.dotfiles-xembed-tray = {
+      Unit = {
+        Description = "Expose Wine and other XEmbed tray icons to the desktop shell";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+        ConditionEnvironment = "DISPLAY";
+      };
+      Service = {
+        ExecStart = lib.getExe wineSniBridge;
+        Environment = lib.optional config.dotfiles.gaming.battleNet.enable "WINE_SNI_BATTLENET_RESET=${lib.getExe battleNetForceClose}";
+        Restart = "on-failure";
+        RestartSec = 2;
+        Slice = "session.slice";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
     systemd.user.services.flameshot = {
       Unit = {
         Description = "Flameshot screenshot service";
@@ -1057,7 +1128,11 @@ in
       assertion =
         builtins.match "^[A-Za-z0-9 ._+#-]+$" name != null
         && (output.mode == null || builtins.match "^[0-9]+x[0-9]+(@[0-9.]+)?$" output.mode != null)
-        && (output.niriGaps == null || output.niriGaps >= 0);
+        && (output.niriGaps == null || output.niriGaps >= 0)
+        && (
+          output.niriDefaultColumnWidth == null
+          || (output.niriDefaultColumnWidth > 0 && output.niriDefaultColumnWidth <= 1)
+        );
       message = "dotfiles.compositors.outputs.${name} has an unsafe output identity, mode, or Niri layout value";
     }) cfg.outputs;
   };

@@ -32,13 +32,22 @@ dotctl doctor
 `updoot` is an alias for `dotctl apply --update`. Updates happen in a staging
 checkout with isolated Neovim state. Before staging, local changes are saved,
 the branch is rebased onto its latest upstream, and the local changes are
-restored. The official OpenAI `latest` channel is resolved to a versioned Codex
-artifact and checksum, and new pins are accepted only after Neovim automation
-and all-system Nix evaluation succeed. Neovim, Lazy, Mason, and Treesitter
+restored. Release discovery advances NixOS, Home Manager, and nix-darwin to the
+latest published stable release together, and refreshes Mango, Noctalia, and
+iloader to their latest stable releases, including iloader Git dependency hashes.
+The migration/recovery image retains its deliberate compatibility pin; advancing
+it requires capsule resume testing.
+The Linux ChatGPT desktop pin is refreshed from the official package indexes for
+both architectures; the official OpenAI `latest` channel supplies the Codex CLI
+artifact and checksum. Discovery failures, incomplete releases, and downgrades
+stop the update. Hosts without Nix retain their flake URLs and lockfile together.
+New pins are accepted only after Neovim automation and all-system Nix evaluation
+succeed. Neovim, Lazy, Mason, and Treesitter
 progress is streamed directly to the terminal. The isolated phase updates only Lazy plugin pins;
 installed Mason tools and Treesitter parsers are updated once in the persistent
-runtime after validation. After applying, `updoot` commits every outstanding
-change and fetches again. Any late upstream changes are rebased, validated, and
+runtime after validation. Editor maintenance uses host-declared Nix/Homebrew
+runtimes without inherited Mise shims. After applying, `updoot` commits every
+outstanding change and fetches again. Any late upstream changes are rebased, validated, and
 reapplied before the current branch is pushed. `dotctl update` refreshes pins
 without applying, committing, or pushing them.
 
@@ -90,6 +99,15 @@ The native NixOS profile uses Plasma Wayland, the open NVIDIA kernel module,
 PipeWire, Steam/Proton, Sunshine/NVENC, WiVRn, and ALVR. It uses systemd-boot
 with the existing Windows EFI partition mounted at `/efi` and a separate 2 GiB
 XBOOTLDR partition mounted at `/boot`.
+
+On `tracer`, Fantasy Grounds uses its official native Linux client. Enable it
+with `dotfiles.gaming.fantasyGrounds.enable`; the `fantasy-grounds` package is
+also available directly from the flake. Nix pins the bootstrap installer and
+runtime dependencies, and the vendor updater maintains the writable client in
+`~/.smiteworks/fantasygrounds`. Open **Fantasy Grounds** from the app launcher
+to finish account setup and download the client and content. Use **Fantasy
+Grounds Updater** or `fantasy-grounds --update` for subsequent updates. Campaigns,
+content, and account settings remain local and are preserved across Nix changes.
 
 WezTerm is the default terminal and Alacritty remains installed as the fast,
 minimal alternative. Both use the BigBlueTerm Nerd Font and Gruvbox Dark
@@ -169,8 +187,8 @@ Codex desktop app for Windows and macOS; the native NixOS desktop profile also
 installs OpenAI's ChatGPT desktop app with Codex (`chatgpt` in the terminal).
 The Linux app is packaged in `packages/chatgpt-desktop.nix`, with versioned
 official downloads and SHA-256 hashes in `pins/chatgpt-desktop.json`. NixOS is
-not an officially supported upstream distro. Desktop app updates require
-refreshing that pin and rebuilding; the managed Codex CLI has its own pin.
+not an officially supported upstream distro. `updoot` refreshes that pin and
+rebuilds the app; the managed Codex CLI has its own pin.
 
 ## Capabilities
 

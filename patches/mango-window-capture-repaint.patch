@@ -1,16 +1,21 @@
-diff --git a/src/mango.c b/src/mango.c
---- a/src/mango.c
-+++ b/src/mango.c
-@@ -5328,15 +5328,25 @@ void printstatus(enum ipc_watch_type type) {
+--- a/src/manage/misc.c
++++ b/src/manage/misc.c
+@@ -1,4 +1,5 @@
+ #include "mango/manage/misc.h"
++#include "mango/animation/common.h"
+ #include "mango/common/log.h"
+ #include "mango/common/server.h"
+ #include "mango/common/util.h"
+@@ -565,16 +566,26 @@
  void handle_session_destroy(struct wl_listener *listener, void *data) {
  	struct capture_session_tracker *tracker =
  		wl_container_of(listener, tracker, session_destroy);
 +	struct wlr_ext_image_capture_source_v1 *source = tracker->session->source;
- 	active_capture_count--;
+ 	server.active_capture_count--;
  	wl_list_remove(&tracker->session_destroy.link);
  
  	Client *c = NULL;
- 	wl_list_for_each(c, &clients, link) {
+ 	wl_list_for_each(c, &server.clients, link) {
 +		if (c->image_capture_source == source && !c->iskilling && c->mon &&
 +			c->scene && c->scene->node.enabled && VISIBLEON(c, c->mon)) {
 +			/* Restore the physical output as this surface's frame-pacing
@@ -25,6 +30,6 @@ diff --git a/src/mango.c b/src/mango.c
  	}
  
 +	request_fresh_all_monitors();
- 	wlr_log(WLR_DEBUG, "Capture session ended, active count: %d",
- 			active_capture_count);
+ 	mango_error(true, WLR_DEBUG, "Capture session ended, active count: %d",
+ 				server.active_capture_count);
  	free(tracker);

@@ -244,13 +244,11 @@ captures the remembered physical input, runs it through the explicitly selected
 noise processor, and writes the isolated Clean Mic source into its VAC render
 endpoint. OBS consumes it directly; the two conversation mixes consume it through
 their independent patch routes.
-The console offers NVIDIA Audio Effects on the RTX GPU and the embedded CPU
-DeepFilterNet3 model without silently switching between them. NVIDIA AFX is
-downloaded from NVIDIA and verified by version, SHA-256, and
-Authenticode signer; its proprietary runtime is not committed here. The tracked
-50% default is passed directly as the NVIDIA intensity ratio. On the
-DeepFilterNet3 processor it maps to a 20 dB attenuation limit with the optional
-post-filter disabled so quiet syllables are less likely to be erased.
+The console uses NVIDIA Audio Effects on the RTX GPU for microphone noise
+suppression. On Windows, NVIDIA AFX is downloaded from NVIDIA and verified by
+version, SHA-256, and Authenticode signer; its proprietary runtime is not
+committed here. The tracked 50% default is passed directly as the NVIDIA
+intensity ratio. Suppression can be bypassed without changing the audio routes.
 
 ## Signal graph
 
@@ -272,7 +270,7 @@ flowchart LR
    voiceAi[ChatGPT / Codex playback] --> chatgptRender[AMPS AI Audio<br/>VAC render]
    chatgptRender --> chatgptCapture[AMPS AI Audio<br/>VAC capture]
 
-   mic[Selected physical microphone] --> denoise[AMPS<br/>NVIDIA AFX or DeepFilterNet3]
+   mic[Selected physical microphone] --> denoise[AMPS<br/>NVIDIA AFX]
    denoise --> micRender[AMPS Clean Mic<br/>VAC render]
    micRender --> micCapture[AMPS Clean Mic<br/>VAC capture]
    micCapture --> commsSend[AMPS Comms Mic]
@@ -323,7 +321,7 @@ The former static SVG and separate patch matrix are removed. It provides:
 - connect, reconnect, disconnect, and engine-acknowledged Undo/Redo;
 - keyboard/touch port menus, visible focus, reduced motion, and optional interface sounds;
 - live meters, main device selectors, and temporary Quest/Moonlight override indicators;
-- NVIDIA RTX or DeepFilterNet3 selection, intensity, bypass, and temporary Clean Mic monitoring.
+- NVIDIA RTX noise suppression, intensity, bypass, and temporary Clean Mic monitoring.
 
 All control families share the locally bundled Trek interaction sounds: button
 and keyboard activation, selectors, toggles, sliders, node/wire selection and
@@ -426,15 +424,15 @@ buses and Clean Mic endpoints. When the Quest session ends, AMPS restores
 the most recent available physical input and output from its machine-local
 history.
 
-The operations console can select NVIDIA AFX, DeepFilterNet3, or bypass
-suppression entirely. Intensity is a 0–100% NVIDIA ratio; on
-DeepFilterNet3 it maps to a 0–40 dB maximum attenuation range, so the tracked
-20 dB default appears as 50%. Changes are hot-reloaded by the supervised Clean
-Mic processor while the Game, Comms, and Media streams remain live.
-Intensity changes update DeepFilterNet3 in place. NVIDIA AFX is recreated so
-the newly requested ratio is guaranteed to reach its loaded model; this rebuild
-is isolated to the Clean Mic worker and does not interrupt playback buses.
-Backend and bypass changes are likewise isolated to that worker. The choice is stored in
+The operations console controls NVIDIA AFX noise suppression and can bypass it
+entirely. Intensity is a 0–100% NVIDIA ratio. The legacy `attenuation_limit_db`
+configuration field remains a 0–40 scale for compatibility with existing saved
+settings, so the tracked value of 20 appears as 50%.
+Changes are hot-reloaded by the supervised Clean Mic processor while the Game,
+Comms, and Media streams remain live. On Windows, NVIDIA AFX is recreated so the
+newly requested ratio reaches its loaded model; this rebuild is isolated to the
+Clean Mic worker and does not interrupt playback buses. Bypass changes are
+likewise isolated to that worker. The choice is stored in
 `%APPDATA%\AMPS\controls.toml`, separate from the declarative base graph,
 so a later dotfiles reconciliation does not erase it.
 
@@ -520,7 +518,7 @@ An acknowledgement timeout is an **unknown outcome**: refresh status before
 retrying, rather than assuming the edit failed. Live device/hotplug, Bluetooth,
 Quest/Moonlight, and game/stream soak tests remain distinct from the isolated
 browser checks. Linux provides native PipeWire routing, metering, spatial
-processing, NVIDIA AFX and DeepFilterNet filtering, and temporary microphone
+processing, NVIDIA AFX filtering, and temporary microphone
 monitoring. Freely insertable DSP remains future work.
 
 On NixOS, `dotfiles.amps` runs the engine as a system service under the configured

@@ -88,9 +88,9 @@ pub fn project(
 		),
 		(
 			"noise_filter",
-			"Noise Suppression",
+			"NVIDIA Noise Suppression",
 			"processor",
-			"Fixed microphone stage · select to adjust",
+			"RTX GPU · select to adjust intensity",
 			Some("processed-mic"),
 			true,
 			true,

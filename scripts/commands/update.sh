@@ -1,36 +1,31 @@
 #!/usr/bin/env bash
 
-run_neovim_automation() {
-	if command_exists mise && ! is_nixos && [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
-		local nvim_xdg_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
-		local nvim_xdg_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-		local nvim_xdg_data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-		local nvim_xdg_state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
-
-		# The update candidate gives Neovim an isolated XDG environment. Keep
-		# those paths away from Mise itself so it can read the persistent trust
-		# database, then restore them only for the Neovim child process.
-		env \
-			-u XDG_CACHE_HOME \
-			-u XDG_CONFIG_HOME \
-			-u XDG_DATA_HOME \
-			-u XDG_STATE_HOME \
-			mise exec -C "$REPO_ROOT" -- \
-			env \
-			XDG_CACHE_HOME="$nvim_xdg_cache_home" \
-			XDG_CONFIG_HOME="$nvim_xdg_config_home" \
-			XDG_DATA_HOME="$nvim_xdg_data_home" \
-			XDG_STATE_HOME="$nvim_xdg_state_home" \
-			nvim "$@"
-		return
+run_neovim_automation() (
+	local entry automation_path="" inherited_path="$PATH"
+	# Editor maintenance uses the host-declared runtimes, even when invoked
+	# from a project shell or an old session with Mise shims ahead of Nix/Brew.
+	while [[ -n "$inherited_path" ]]; do
+		entry="${inherited_path%%:*}"
+		if [[ "$inherited_path" == *:* ]]; then
+			inherited_path="${inherited_path#*:}"
+		else
+			inherited_path=""
+		fi
+		case "$entry" in
+			*/mise/shims | */mise/installs/* | "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/shims | "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/installs/*) continue ;;
+		esac
+		[[ -z "$entry" ]] || automation_path="${automation_path:+$automation_path:}$entry"
+	done
+	if command_exists nix; then
+		for entry in "$HOME/.nix-profile/bin" "/etc/profiles/per-user/$(id -un)/bin"; do
+			[[ ! -d "$entry" ]] || automation_path="$entry:$automation_path"
+		done
+	elif [[ "$(uname -s)" == "Darwin" ]] && command_exists brew; then
+		automation_path="$(brew --prefix)/bin:$automation_path"
 	fi
-
-	# NixOS and Ubuntu-WSL profiles already declare Neovim and all of its
-	# build-time helpers through Nix/Home Manager.
-	# Entering the repository's Mise environment here would install duplicate
-	# upstream runtimes just to refresh a lockfile.
+	export PATH="$automation_path"
 	nvim "$@"
-}
+)
 
 stage_repo() {
 	local destination="$1"
@@ -142,7 +137,7 @@ validate_update_candidate() {
 accept_candidate_locks() {
 	local candidate="$1"
 	local path
-	for path in flake.lock nvim/lazy-lock.json pins/codex.json; do
+	for path in flake.nix flake.lock nvim/lazy-lock.json pins/codex.json pins/chatgpt-desktop.json pins/iloader-cargo.json; do
 		if [[ -f "$candidate/$path" ]]; then
 			cp "$candidate/$path" "$REPO_ROOT/$path"
 		fi
@@ -180,10 +175,18 @@ prepare_update_candidate() {
 	local candidate="$1"
 	local work="$2"
 	stage_repo "$candidate"
+	require_command python3
+	if command_exists nix; then
+		python3 "$REPO_ROOT/scripts/updates/releases.py" "$candidate"
+	else
+		printf 'Nix is unavailable; leaving flake URLs and lockfile unchanged.\n'
+		python3 "$REPO_ROOT/scripts/updates/releases.py" "$candidate" --skip-flake
+	fi
 	update_codex_candidate "$candidate" "$work"
 	if command_exists nix; then
 		printf 'Refreshing flake inputs in a staging checkout...\n'
 		nix flake update --flake "path:$candidate"
+		python3 "$REPO_ROOT/scripts/updates/releases.py" "$candidate" --iloader-cargo
 	fi
 	update_neovim_candidate "$candidate" "$work"
 	validate_update_candidate "$candidate"

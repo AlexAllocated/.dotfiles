@@ -1,8 +1,7 @@
-diff --git a/src/dbus/notification/notification_service.cpp b/src/dbus/notification/notification_service.cpp
-index 1323a77..9121ad0 100644
 --- a/src/dbus/notification/notification_service.cpp
 +++ b/src/dbus/notification/notification_service.cpp
-@@ -342,4 +342,25 @@ namespace notification_dbus {
+@@ -401,8 +401,29 @@
+       const std::string& summary, const std::string& body, const std::vector<std::string>& actions,
        const std::map<std::string, sdbus::Variant>& hints, int32_t expire_timeout
    ) {
 -    const int32_t timeout = normalizeNotifyExpireTimeout(expire_timeout);
@@ -30,15 +29,20 @@ index 1323a77..9121ad0 100644
 +        desktopEntry = "org.wezfurlong.wezterm";
 +      }
 +    }
-@@ -352,6 +373,6 @@ namespace notification_dbus {
-             .summary = StringUtils::sanitizeMarkup(StringUtils::truncateUtf8(summary, kMaxStringLen)),
+ 
+     return manager.addOrReplace(
+         NotificationRequest{
+@@ -410,7 +431,7 @@
+             .appName = StringUtils::truncateUtf8(app_name, kMaxStringLen),
+             .summary = StringUtils::truncateUtf8(summary, kMaxStringLen),
              .body = StringUtils::sanitizeMarkup(StringUtils::truncateUtf8(body, kMaxStringLen)),
 -            .urgency = notifyUrgencyFromHints(hints),
 +            .urgency = urgency,
              .timeout = timeout,
              .origin = NotificationOrigin::External,
              .transient = notifyTransientFromHints(hints),
-@@ -361,6 +382,6 @@ namespace notification_dbus {
+@@ -418,7 +439,7 @@
+             .icon = notifyIcon(app_name, app_icon, hints),
              .imageData = notifyImageDataFromHints(hints),
              .category = notifyCategoryFromHints(hints),
 -            .desktopEntry = notifyDesktopEntryFromHints(hints),

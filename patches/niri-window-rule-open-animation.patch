@@ -17,16 +17,22 @@ index abcd7d1..0aaebd7 100644
 +
 +    /// Whether the window should use the compositor's opening animation.
 +    pub open_animation: Option<bool>,
-@@ -259,0 +263,4 @@ impl ResolvedWindowRules {
+@@ -262,6 +265,10 @@ impl ResolvedWindowRules {
+                 if let Some(x) = rule.open_focused {
+                     resolved.open_focused = Some(x);
+                 }
 +
 +                if let Some(x) = rule.open_animation {
 +                    resolved.open_animation = Some(x);
 +                }
+
+                 if let Some(x) = rule.on_xdg_activate {
+                     resolved.on_xdg_activate = Some(x);
 diff --git a/src/handlers/compositor.rs b/src/handlers/compositor.rs
 index 61f3e69..94a978e 100644
 --- a/src/handlers/compositor.rs
 +++ b/src/handlers/compositor.rs
-@@ -195,2 +195,3 @@ impl CompositorHandler for State {
+@@ -195,3 +195,4 @@ impl CompositorHandler for State {
                      self.remove_default_dmabuf_pre_commit_hook(surface);
                      let hook = add_mapped_toplevel_pre_commit_hook(toplevel);
 +                    let animate_open = rules.open_animation != Some(false);

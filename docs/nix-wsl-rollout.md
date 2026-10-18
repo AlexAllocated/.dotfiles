@@ -67,7 +67,7 @@ The Windows integration builds the private Rust `AMPS` utility, installs
 its tracked graph configuration into `%APPDATA%\AMPS`, and runs it at
 interactive logon. Game, Comms, and Music use VAC Lines 1-3; Game is the normal
 Windows output and Comms is its communications output. The selected physical
-Windows microphone is processed by DeepFilterNet3 and published as Clean Mic
+Windows microphone is processed by NVIDIA AFX and published as Clean Mic
 on Line 4, which is the normal and communications input. Selecting a physical
 input or output updates the machine-local hardware endpoint and AMPS then
 restores the virtual Windows defaults. Unassigned applications therefore land

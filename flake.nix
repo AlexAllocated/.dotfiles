@@ -4,7 +4,11 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Recovery capsule resume compatibility is checked against this exact input.
     migration-nixpkgs.url = "github:NixOS/nixpkgs/421eebfd0ec7bccd4abe826ce62d7e6e83129493";
+    # Retain the deployed NVIDIA AFX runtime while its upstream artifact host
+    # redirects in a loop. Refresh this build pin once downloads work again.
+    nvidia-afx-nixpkgs.url = "github:NixOS/nixpkgs/ecc58f32d1069a3e3f8a991e2233d365689f748d";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -25,16 +29,16 @@
     # stable workstation base. Mango's modern socket protocol is shared by
     # both shell experiments below.
     mango = {
-      url = "github:mangowm/mango/0.15.4";
+      url = "github:mangowm/mango/0.17.5";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     noctalia = {
-      url = "github:noctalia-dev/noctalia-shell/v5.0.0-beta.3";
+      url = "github:noctalia-dev/noctalia-shell/v5.2.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    iloader.url = "github:nab138/iloader/v2.3.3";
+    iloader.url = "github:nab138/iloader/v2.3.5";
   };
 
   outputs =
@@ -120,11 +124,19 @@
               bash "scripts/nixos/$script.sh" --help >/dev/null
             done
             bash tests/dotctl.bash
+            bash tests/x11-primary.bash
             lua tests/neovim-bootstrap.lua
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
-            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py
+            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py scripts/updates/*.py
+            python3 -m unittest discover -s tests -p 'test_release_updates.py'
             python3 -m unittest discover -s tests -p 'test_sunshine_display_policy.py'
+            python3 -m unittest discover -s tests -p 'test_wine_display_dpi.py'
+            python3 -m unittest discover -s tests -p 'test_wine_session.py'
+            python3 -m unittest discover -s tests -p 'test_wine_display_topology.py'
+            python3 -m unittest discover -s tests -p 'test_battlenet_force_close.py'
+            python3 -m unittest discover -s tests -p 'test_battlenet_settings.py'
+            python3 -m unittest discover -s tests -p 'test_wow_display_settings.py'
             python3 -m unittest discover -s tests -p 'test_chatgpt_supervisor.py'
             python3 scripts/windows/configure-codex.py --self-test
             python3 scripts/codex/canonicalize-home.py --self-test
@@ -190,6 +202,8 @@
         nvim = ./modules/home/nvim.nix;
         neovide = ./modules/home/neovide.nix;
         codex = ./modules/home/codex.nix;
+        bumblebee = ./modules/home/bumblebee.nix;
+        bumblebee-resume = ./modules/home/bumblebee-resume.nix;
         cloud = ./modules/home/cloud.nix;
         terminal = ./modules/home/terminal.nix;
         wallpaper = ./modules/home/wallpaper.nix;
@@ -364,6 +378,9 @@
           };
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          bumblebee-desktop = pkgs.callPackage ./packages/bumblebee-desktop.nix { };
+          curseforge = pkgs.callPackage ./packages/curseforge.nix { };
+          fantasy-grounds = pkgs.callPackage ./packages/fantasy-grounds.nix { };
           chev-installer-iso = self.nixosConfigurations.chev-installer.config.system.build.isoImage;
           tracer-rescue-iso = self.nixosConfigurations.tracer-rescue.config.system.build.isoImage;
           tracer-remote-rescue-iso =
@@ -507,6 +524,14 @@
           quality = mkQualityCheck pkgs toolPkgs;
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          obs-migration-and-sunshine-policy =
+            pkgs.runCommand "obs-migration-and-sunshine-policy-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
+              ''
+                export PYTHONDONTWRITEBYTECODE=1
+                python -m unittest discover -s ${self}/tests -p 'test_obs_migration.py'
+                python -m unittest discover -s ${self}/tests -p 'test_sunshine_display_policy.py'
+                touch "$out"
+              '';
           home-module-api = mkModuleApiCheck pkgs pkgs.stdenv.hostPlatform.system;
           razer-profiles =
             pkgs.runCommand "razer-profiles-tests"
@@ -608,9 +633,8 @@
                 "disabled"
             } = enabled
             test ${
-              nixpkgs.lib.escapeShellArg
-                self.nixosConfigurations.tracer.config.boot.initrd.luks.devices."tracer-root".device
-            } = /dev/disk/by-partlabel/TRACER_CRYPT
+              nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.fileSystems."/".device
+            } = /dev/disk/by-label/TRACER_NIX
             test ${
               nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer-rescue.config.fileSystems."/home".device
             } = /dev/disk/by-partlabel/TRACER_RESCUE_DATA

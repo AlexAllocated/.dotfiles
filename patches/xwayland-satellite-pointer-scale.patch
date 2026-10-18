@@ -1,0 +1,112 @@
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -647,7 +647,6 @@
+                 };
+ 
+                 let server = state.world.get::<&WlPointer>(target).unwrap();
+-                cmd.insert(target, (*scale,));
+ 
+                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
+                 let mut do_enter = || {
+@@ -722,20 +721,26 @@
+                 if !handle_pending_enter(target, state, "motion") {
+                     return;
+                 }
+-                {
++                let surface = {
+                     let Ok(surface) = state.world.get::<&CurrentSurface>(target) else {
+                         warn!("could not motion on surface: stale surface");
+                         return;
+                     };
+-                    if let CurrentSurface::Decoration(parent) = &*surface {
+-                        decoration::handle_pointer_motion(state, *parent, surface_x, surface_y);
+-                        return;
++                    match &*surface {
++                        CurrentSurface::Decoration(parent) => {
++                            decoration::handle_pointer_motion(state, *parent, surface_x, surface_y);
++                            return;
++                        }
++                        CurrentSurface::Xwayland(surface) => *surface,
+                     }
+-                }
+-                let (server, scale) = state
+-                    .world
+-                    .query_one_mut::<(&WlPointer, &SurfaceScaleFactor)>(target)
+-                    .unwrap();
++                };
++                // A window can change scale beneath the pointer without another
++                // enter. Use its current viewport scale rather than an enter-time copy.
++                let Ok(scale) = state.world.get::<&SurfaceScaleFactor>(surface) else {
++                    warn!("could not motion on surface: stale scale");
++                    return;
++                };
++                let server = state.world.get::<&WlPointer>(target).unwrap();
+                 trace!(
+                     target: "pointer_position",
+                     "pointer motion {} {}",
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -3423,3 +3423,47 @@
+     }
+ }
+ 
++
++#[test]
++fn pointer_coordinates_follow_surface_scale_without_reenter() {
++    use wayland_client::protocol::wl_pointer::Event as PointerEvent;
++
++    let mut f = TestFixture::new_pre_connect(|testwl| {
++        testwl.enable_fractional_scale();
++    });
++    let comp = f.compositor();
++    let pointer = TestObject::<WlPointer>::from_request(&comp.seat.obj, wl_seat::Request::GetPointer {});
++    let (_, desktop) = f.new_output(0, 0);
++    let (_, tablet) = f.new_output(3440, 0);
++    let (_, id) = f.create_toplevel(&comp, Window::new(1));
++    let fractional = f.testwl.get_surface_data(id).unwrap().fractional.clone().unwrap();
++    fractional.preferred_scale(120);
++    f.testwl.move_surface_to_output(id, &desktop);
++    f.run();
++    f.testwl.move_pointer_to(id, 40.0, 60.0);
++    f.run();
++    f.run();
++    pointer.data.events.lock().unwrap().clear();
++
++    // The shortcut can move a window beneath the pointer before its preferred
++    // scale arrives. Neither a scale change nor a resize requires another enter.
++    for (output, scale) in [(&tablet, 210), (&desktop, 120), (&tablet, 240), (&desktop, 120)] {
++        f.testwl.move_surface_to_output(id, output);
++        f.run();
++        fractional.preferred_scale(scale);
++        f.run();
++        f.testwl.pointer_motion(100.0, 200.0);
++        f.run();
++        f.run();
++        let events = pointer.data.events.lock().unwrap();
++        assert!(events.iter().all(|event| !matches!(event, PointerEvent::Enter { .. })));
++        let motion = events.iter().rev().find_map(|event| match event {
++            PointerEvent::Motion { surface_x, surface_y, .. } => Some((*surface_x, *surface_y)),
++            _ => None,
++        });
++        let factor = f64::from(scale) / 120.0;
++        assert_eq!(motion, Some((100.0 * factor, 200.0 * factor)));
++        drop(events);
++        pointer.data.events.lock().unwrap().clear();
++    }
++}
+--- a/testwl/src/lib.rs
++++ b/testwl/src/lib.rs
+@@ -864,6 +864,13 @@
+         self.display.flush_clients().unwrap();
+     }
+ 
++    pub fn pointer_motion(&mut self, x: f64, y: f64) {
++        let pointer = self.state.pointer.as_ref().expect("No pointer created");
++        pointer.pointer.motion(25, x, y);
++        pointer.pointer.frame();
++        self.display.flush_clients().unwrap();
++    }
++
+     pub fn new_output(&mut self) {
+         self.state.last_output_global = Some(self.dh.create_global::<State, WlOutput, _>(4, ()));
+         self.display.flush_clients().unwrap();

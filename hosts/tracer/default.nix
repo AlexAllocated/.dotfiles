@@ -24,6 +24,7 @@ in
     ../../modules/nixos/compositors.nix
     ../../modules/nixos/durable-tmux.nix
     ../../modules/nixos/chatgpt-service.nix
+    ../../modules/nixos/keyring-unlock.nix
     ../../modules/nixos/github-actions-runner.nix
     ../../modules/nixos/tracer-tools.nix
   ];
@@ -40,6 +41,18 @@ in
   };
 
   config = {
+    # Galactic Racer hangs during D3D12 startup on 595.71.05 (Proton #10228).
+    # Pin the newer driver without moving the rest of the workstation's nixpkgs.
+    # Hashes match nixpkgs' 615.71.09 new_feature driver definition.
+    hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
+      version = "615.71.09";
+      sha256_64bit = "sha256-zc7tIrvrYSSNGm3qvCWWZz46ZQFpjucayNL9wo87cP4=";
+      sha256_aarch64 = "sha256-IbekQhE7cFfmnPZaLY9NDYcF7CoNZ+2Qb7sRd4EOgWM=";
+      openSha256 = "sha256-3gByMYIwFzRaLdDG+roCEOuKRRJDrljG9AlLnRZTirM=";
+      settingsSha256 = "sha256-LK1LU8mDkM/XVRKPBtuOZh9nIP/lGFLAJnmasEX8jhg=";
+      persistencedSha256 = "sha256-qPRb+3d88+2RcpUkoBTbjIaImnQ+jX+/6p1vXcJ5geE=";
+    };
+
     assertions = [
       {
         assertion = !cfg.staticLan.enable || cfg.lanInterface != null;
@@ -61,6 +74,8 @@ in
         unifiedRazerProfiles = true;
         userDescription = "Alex";
         hostName = "tracer";
+        xwaylandPrimaryOutput = "DP-1";
+        xwaylandDpi = 96;
         cpuVendor = "amd";
         autoLogin = true;
         lanInterface = cfg.lanInterface;
@@ -98,6 +113,10 @@ in
         enable = true;
         inherit user;
       };
+      keyringUnlock = {
+        enable = true;
+        inherit user;
+      };
       amps = {
         enable = true;
         inherit user;
@@ -111,6 +130,7 @@ in
     };
 
     boot = {
+      kernelModules = [ "xpad" ];
       initrd = {
         systemd.enable = true;
         availableKernelModules = [
@@ -120,19 +140,9 @@ in
           "usb_storage"
           "xhci_pci"
         ];
-        luks.devices.tracer-root = {
-          device = "/dev/disk/by-partlabel/TRACER_CRYPT";
-          allowDiscards = true;
-          # The recovery passphrase remains enrolled, but normal boots use the
-          # PCR-bound TPM2 token created with systemd-cryptenroll.
-          crypttabExtraOpts = [ "tpm2-device=auto" ];
-        };
       };
       loader = {
-        # Unattended boots must enter the latest activated NixOS generation
-        # immediately. Hold Space during systemd-boot startup to reveal the
-        # generation menu when an explicit rollback is needed.
-        timeout = lib.mkForce 0;
+        timeout = lib.mkForce 10;
         systemd-boot.enable = lib.mkForce (!cfg.secureBoot.enable);
         efi.canTouchEfiVariables = true;
       };
@@ -324,6 +334,12 @@ in
 
     services.displayManager.defaultSession = "dotfiles-desktop";
 
+    # Match Sunshine's capture allocator even when booting with the LG off.
+    # Kernel DRM numbering changes with probe order, so identify the driver.
+    services.udev.extraRules = ''
+      SUBSYSTEM=="drm", KERNEL=="renderD*", DRIVERS=="nvidia", SYMLINK+="dri/nvidia-render"
+    '';
+
     home-manager = {
       useGlobalPkgs = true;
       useUserPackages = true;
@@ -346,6 +362,7 @@ in
         };
         dotfiles = {
           inherit profile;
+          bumblebeeResume.enable = true;
           wallpaper = {
             connector = "DP-1";
             outputMatch = "LG Electronics LG ULTRAGEAR 101NTCZMT555";
@@ -354,16 +371,25 @@ in
               outputMatch = "The Linux Foundation ipad2732 Linux #0";
             };
           };
+          compositors.niriRenderDrmDevice = "/dev/dri/nvidia-render";
           compositors.outputs = {
             "LG Electronics LG ULTRAGEAR 101NTCZMT555" = {
               mode = "3440x1440@160";
               scale = 1;
               variableRefreshRate = true;
+              # Keep idle desktop updates out of VRR's low-framerate path.
+              # Game rules opt in while a game is visible on this output.
+              niriVrrOnDemand = true;
               position = {
                 x = 0;
                 y = 0;
               };
               focusAtStartup = true;
+              niriDefaultColumnWidth = 0.5;
+            };
+            "Moonlight" = {
+              scale = 1.75;
+              niriDefaultColumnWidth = 1.0;
             };
           };
           gaming = {
@@ -372,6 +398,15 @@ in
             haloCampaignEvolved.enable = true;
             battleNet.enable = true;
             battleNet.useUmu = true;
+            # Keep the tested runtime immutable across Steam updates and Nix
+            # rollbacks. The snapshot retains the migrated Wine 11 session.
+            battleNet.protonPath = toString (pkgs.callPackage ../../packages/battlenet-proton.nix { });
+            # Diablo sizes its cache too aggressively with the full 16 GB
+            # reported. Preserve room for the desktop and active screen streams.
+            battleNet.diabloReportedVramMiB = 8192;
+            curseforge.enable = true;
+            guildWars2.enable = true;
+            fantasyGrounds.enable = true;
           };
         };
       };

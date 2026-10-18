@@ -67,9 +67,9 @@ function M.update_mason_packages(timeout_ms)
 		assert(M.wait_for_mason(timeout_ms), "Pending Mason installations did not finish")
 
 		local updates = 0
-		local pending = 0
 		local failures = {}
 		local expected = {}
+		local queue = {}
 		for _, package in ipairs(registry.get_installed_packages()) do
 			local installed = package:get_installed_version()
 			local latest = package:get_latest_version()
@@ -77,26 +77,55 @@ function M.update_mason_packages(timeout_ms)
 			if installed ~= latest then
 				assert(package:is_installable({ version = latest }), "Cannot update Mason package " .. package.name)
 				updates = updates + 1
-				pending = pending + 1
 				vim.api.nvim_echo({
 					{
 						("Updating Mason package %s: %s -> %s"):format(package.name, installed or "unknown", latest),
 					},
 				}, true, {})
-				package:install({ version = latest }, function(success, result)
+				table.insert(queue, package)
+			end
+		end
+		-- Retry only failed downloads, retaining the exact target versions. Mason
+		-- closes the install handle and cleans up staging before its callback.
+		for attempt = 1, 3 do
+			local pending = #queue
+			local retry = {}
+			for _, package in ipairs(queue) do
+				package:install({ version = expected[package] }, function(success, result)
 					if not success then
-						table.insert(failures, package.name .. ": " .. tostring(result))
+						local message = tostring(result)
+						local transient = false
+						for _, code in ipairs({ "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ECONNREFUSED" }) do
+							transient = transient or message:find(code, 1, true) ~= nil
+						end
+						if transient and attempt < 3 then
+							table.insert(retry, package)
+							vim.api.nvim_echo({
+								{
+									("Retrying Mason package %s after a network failure (attempt %d/3)"):format(
+										package.name,
+										attempt + 1
+									),
+								},
+							}, true, {})
+						else
+							table.insert(failures, package.name .. ": " .. message)
+						end
 					end
 					pending = pending - 1
 				end)
 			end
+			assert(
+				vim.wait(timeout_ms, function()
+					return pending == 0
+				end, 100),
+				"Timed out updating Mason packages"
+			)
+			if #retry == 0 then
+				break
+			end
+			queue = retry
 		end
-		assert(
-			vim.wait(timeout_ms, function()
-				return pending == 0
-			end, 100),
-			"Timed out updating Mason packages"
-		)
 		assert(#failures == 0, "Mason updates failed: " .. table.concat(failures, "; "))
 		for package, version in pairs(expected) do
 			assert(

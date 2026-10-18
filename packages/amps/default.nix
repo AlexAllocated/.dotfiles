@@ -14,7 +14,6 @@ let
         "__pycache__"
       ]);
   };
-  outputHashes."deep_filter-0.5.7-pre" = "11pgn3rxkhk11krwq7pxp03q0asbagd71ggsvhvdmnypygkwl6r7";
   frontend = pkgs.buildNpmPackage {
     pname = "amps-frontend";
     version = "0.1.0";
@@ -28,18 +27,18 @@ let
     pname = "amps";
     version = "0.1.0";
     src = source;
+    AMPS_TIMEOUT_BIN = lib.getExe' pkgs.coreutils "timeout";
     cargoLock = {
       lockFile = ./Cargo.lock;
-      inherit outputHashes;
     };
   };
   ui = pkgs.rustPlatform.buildRustPackage {
     pname = "amps-ui";
     version = "0.1.0";
     src = source;
+    AMPS_TIMEOUT_BIN = lib.getExe' pkgs.coreutils "timeout";
     cargoLock = {
       lockFile = ./ui/src-tauri/Cargo.lock;
-      inherit outputHashes;
     };
     cargoRoot = "ui/src-tauri";
     buildAndTestSubdir = "ui/src-tauri";

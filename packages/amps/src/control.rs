@@ -370,7 +370,7 @@ impl Server {
 				intensity,
 				engine,
 			} => {
-				if *intensity > 100 || !matches!(engine.as_str(), "nvidia_afx" | "deepfilternet3") {
+				if *intensity > 100 || engine != "nvidia_afx" {
 					bail!("Invalid suppression settings");
 				}
 				controls.noise_suppression = Some(NoiseSuppressionControls {

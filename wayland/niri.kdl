@@ -18,7 +18,8 @@ cursor {
 }
 
 layout {
-    gaps 48
+    // Keep PiP and other deliberately floated windows visible over games.
+    floating-above-fullscreen
     center-focused-column "on-overflow"
     always-center-single-column
 
@@ -49,20 +50,70 @@ hotkey-overlay { skip-at-startup; }
 prefer-no-csd
 screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 
+// On-demand output VRR belongs to games, rather than sparse desktop updates.
+// Steam games have numeric IDs; Battle.net games share the launcher's ID.
+window-rule {
+    match app-id=r#"^steam_app_[0-9]+$"#
+    match app-id=r#"(?i)^(wow(b|classic|classicb|-64)?|gw2-64|diabloiv|overwatch)\.exe$"#
+    match app-id="^steam_app_battlenet$" title=r#"^(World of Warcraft|Diablo IV|Overwatch( 2)?|Guild Wars 2)$"#
+    variable-refresh-rate true
+}
+
 window-rule {
     geometry-corner-radius 10
     clip-to-geometry true
 }
 window-rule {
     match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    match title="^Picture in picture$"
     open-floating true
 }
 window-rule {
-    // Keep the full-output capture editor over the current view instead of
-    // inserting a new scrolling column and animating the workspace sideways.
+    // Float the monitor picker. The capture editor requests real fullscreen
+    // on its selected output, covering the panel as well as the working area.
     match app-id=r#"^org\.flameshot\.Flameshot$"#
     open-floating true
+    // Selecting a monitor closes the picker and opens a new capture window.
+    // Give that window focus even when a fullscreen game regains focus first.
+    open-focused true
     open-animation false
+}
+window-rule {
+    // Battle.net and WoW share an Xwayland client. Keep launcher activation
+    // requests from stealing focus when returning to the game; selecting
+    // Battle.net directly still works.
+    match app-id=r#"^steam_app_(battlenet|[0-9]+)$"# title=r#"^Battle\.net$"#
+    match app-id=r#"(?i)^battle\.net\.exe$"# title=r#"^Battle\.net$"#
+    on-xdg-activate "set-urgent"
+}
+window-rule {
+    // Only the game window fills the output; leave its shader splash separate.
+    // Let Niri provide fullscreen before Wine sizes the borderless client.
+    match app-id="^steam_app_4078430$" title="^STAR WARS: Galactic Racer"
+    open-fullscreen true
+    open-floating true
+    open-animation false
+    geometry-corner-radius 0
+    clip-to-geometry false
+    focus-ring { off; }
+    shadow { off; }
+}
+window-rule {
+    // Retail and Forever share this title and Battle.net's Proton app ID.
+    // Let the compositor size borderless clients on their current output;
+    // never pin a monitor or a remembered iPad/desktop window size here.
+    match app-id=r#"^steam_app_(battlenet|[0-9]+)$"# title="^World of Warcraft$"
+    match app-id=r#"(?i)^wow(b|classic|classicb|-64)?\.exe$"# title="^World of Warcraft$"
+    // Concurrent WoW clients can activate each other through Wine when
+    // clicked. Keep focus on the window selected through the compositor.
+    on-xdg-activate "set-urgent"
+    open-fullscreen true
+    open-floating true
+    open-animation false
+    geometry-corner-radius 0
+    clip-to-geometry false
+    focus-ring { off; }
+    shadow { off; }
 }
 layer-rule {
     match namespace="^noctalia-wallpaper.*"

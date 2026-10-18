@@ -259,4 +259,34 @@ git -C "$fixture/peer" push --quiet
 [[ -d "$fixture/checkout/.git/rebase-merge" ]]
 assert_equal "saved local change" "$(git -C "$fixture/checkout" show 'stash@{0}:untracked')"
 
+# A stale, untrusted Mise shim must never service editor automation.
+mkdir -p "$fixture/mise/shims" "$fixture/runtime" "$fixture/custom-mise/shims"
+for shim_dir in "$fixture/mise/shims" "$fixture/custom-mise/shims"; do
+	printf '#!/bin/sh\nexit 99\n' >"$shim_dir/npm"
+	chmod +x "$shim_dir/npm"
+done
+printf '#!/bin/sh\nprintf "host npm\\n"\n' >"$fixture/runtime/npm"
+chmod +x "$fixture/runtime/npm"
+(
+	command_exists() { return 1; }
+	uname() { printf 'Linux\n'; }
+	nvim() { npm; }
+	MISE_DATA_DIR="$fixture/custom-mise"
+	# The automation subshell must leave the caller PATH unchanged.
+	# shellcheck disable=SC2031
+	PATH="$fixture/mise/shims:$fixture/custom-mise/shims:$fixture/runtime:$PATH"
+	assert_equal 'host npm' "$(run_neovim_automation)"
+)
+
+mkdir -p "$fixture/pins-source/pins" "$fixture/pins-target"
+for pin in flake.nix flake.lock pins/codex.json pins/chatgpt-desktop.json pins/iloader-cargo.json; do
+	printf 'validated %s\n' "$pin" >"$fixture/pins-source/$pin"
+done
+mkdir -p "$fixture/pins-target/pins"
+REPO_ROOT="$fixture/pins-target"
+accept_candidate_locks "$fixture/pins-source"
+for pin in flake.nix flake.lock pins/codex.json pins/chatgpt-desktop.json pins/iloader-cargo.json; do
+	cmp "$fixture/pins-source/$pin" "$fixture/pins-target/$pin"
+done
+
 printf 'dotctl helper tests passed\n'

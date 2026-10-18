@@ -170,9 +170,13 @@ fn load_config(state: &UiState) -> Result<amps::Config, String> {
 }
 
 #[tauri::command]
-fn graph_snapshot(state: tauri::State<'_, UiState>) -> Result<GraphSnapshot, String> {
+async fn graph_snapshot(state: tauri::State<'_, UiState>) -> Result<GraphSnapshot, String> {
 	let config = load_config(&state)?;
-	amps::graph_snapshot(&config).map_err(|error| error.to_string())
+	tauri::async_runtime::spawn_blocking(move || {
+		amps::graph_snapshot(&config).map_err(|error| error.to_string())
+	})
+	.await
+	.map_err(|error| error.to_string())?
 }
 
 #[derive(Serialize)]
@@ -184,23 +188,30 @@ struct CanvasSnapshot {
 }
 
 #[tauri::command]
-fn routing_snapshot(state: tauri::State<'_, UiState>) -> Result<CanvasSnapshot, String> {
-	let graph = graph_snapshot(state.clone())?;
-	let runtime = amps::control::status(&state.config_path).ok();
-	let patches = runtime
-		.as_ref()
-		.filter(|r| r.online && r.applied_revision.is_some())
-		.map(|r| r.patches.as_slice())
-		.unwrap_or(&graph.patches);
-	let mut topology = amps::topology::project(&graph, patches, runtime.as_ref());
-	let phone = state.phone.snapshot();
-	amps::phone::append_topology(&mut topology, &phone);
-	Ok(CanvasSnapshot {
-		graph,
-		runtime,
-		topology,
-		phone,
+async fn routing_snapshot(state: tauri::State<'_, UiState>) -> Result<CanvasSnapshot, String> {
+	let config = load_config(&state)?;
+	let path = state.config_path.clone();
+	let phone = state.phone.clone();
+	tauri::async_runtime::spawn_blocking(move || {
+		let graph = amps::graph_snapshot(&config).map_err(|error| error.to_string())?;
+		let runtime = amps::control::status(&path).ok();
+		let patches = runtime
+			.as_ref()
+			.filter(|r| r.online && r.applied_revision.is_some())
+			.map(|r| r.patches.as_slice())
+			.unwrap_or(&graph.patches);
+		let mut topology = amps::topology::project(&graph, patches, runtime.as_ref());
+		let phone = phone.snapshot();
+		amps::phone::append_topology(&mut topology, &phone);
+		Ok(CanvasSnapshot {
+			graph,
+			runtime,
+			topology,
+			phone,
+		})
 	})
+	.await
+	.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -250,8 +261,12 @@ async fn select_main_output(
 }
 
 #[tauri::command]
-fn select_main_input(endpoint_id: String) -> Result<(), String> {
-	amps::select_main_input(&endpoint_id).map_err(|error| error.to_string())
+async fn select_main_input(endpoint_id: String) -> Result<(), String> {
+	tauri::async_runtime::spawn_blocking(move || {
+		amps::select_main_input(&endpoint_id).map_err(|error| error.to_string())
+	})
+	.await
+	.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -483,7 +498,11 @@ fn main() {
 			#[cfg(not(target_os = "linux"))]
 			supervise_engine(setup_config_path.clone(), setup_engine.clone());
 			#[cfg(target_os = "linux")]
-			linux::supervise(app.handle().clone(), setup_config_path.clone(), setup_engine.clone());
+			linux::supervise(
+				app.handle().clone(),
+				setup_config_path.clone(),
+				setup_engine.clone(),
+			);
 			let show = MenuItem::with_id(app, "show", "Show AMPS", true, None::<&str>)?;
 			let restart = MenuItem::with_id(app, "restart", "Restart AMPS", true, None::<&str>)?;
 			let exit = MenuItem::with_id(app, "exit", "Exit AMPS", true, None::<&str>)?;
@@ -541,10 +560,11 @@ fn main() {
 				#[cfg(target_os = "linux")]
 				{
 					let handle = app.clone();
-					tauri::async_runtime::spawn_blocking(move || {
-						match linux::service("stop") {
-							Ok(()) => handle.exit(0),
-							Err(error) => { eprintln!("AMPS shutdown failed: {error}"); show_main(&handle); }
+					tauri::async_runtime::spawn_blocking(move || match linux::service("stop") {
+						Ok(()) => handle.exit(0),
+						Err(error) => {
+							eprintln!("AMPS shutdown failed: {error}");
+							show_main(&handle);
 						}
 					});
 					return;

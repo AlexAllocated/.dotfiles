@@ -1,0 +1,100 @@
+--- a/wine-sni-bridge.py
++++ b/wine-sni-bridge.py
+@@ -28,6 +28,7 @@
+ from gi.repository import GLib
+ from Xlib import X, display, Xatom, protocol, error
+ from Xlib.error import ConnectionClosedError
++from Xlib.ext import shape, composite
+
+ SNI_WATCHER_BUS = "org.kde.StatusNotifierWatcher"
+ SNI_WATCHER_PATH = "/StatusNotifierWatcher"
+@@ -221,12 +222,23 @@
+     def _claim_tray(self):
+         sel_atom = self._atoms["_NET_SYSTEM_TRAY_S0"]
+
++        # A real alpha-zero background stays invisible even if Xwayland
++        # repositions this override-redirect host inside a focused client.
++        # _NET_WM_WINDOW_OPACITY alone is not honored by every compositor.
++        visual = next(v.visual_id for depth in self._screen.allowed_depths
++                      if depth.depth == 32 for v in depth.visuals
++                      if v.visual_class == X.TrueColor)
++        self._tray_colormap = self._root.create_colormap(visual, X.AllocNone)
+         self._tray_window = self._root.create_window(
+             0, 0, 1, 1, 0,
+-            self._screen.root_depth, X.InputOutput, X.CopyFromParent,
++            32, X.InputOutput, visual,
++            colormap=self._tray_colormap,
++            background_pixel=0,
++            border_pixel=0,
+             event_mask=(X.StructureNotifyMask | X.SubstructureNotifyMask |
+                        X.PropertyChangeMask | X.ExposureMask),
+-            override_redirect=False
++            # Niri tiles managed utility windows even when positioned offscreen.
++            override_redirect=True
+         )
+         self._tray_window.set_wm_name("wine-sni-bridge")
+         self._tray_window.set_wm_class("wine-sni-bridge", "wine-sni-bridge")
+@@ -239,12 +251,22 @@
+             Xatom.ATOM, 32,
+             [self._display.intern_atom("_NET_WM_STATE_SKIP_TASKBAR"),
+              self._display.intern_atom("_NET_WM_STATE_SKIP_PAGER")])
++        self._tray_window.change_property(
++            self._display.intern_atom("_NET_WM_WINDOW_OPACITY"),
++            Xatom.CARDINAL, 32, [0])
+         self._tray_window.configure(x=-9999, y=-9999)
++        # Keep the offscreen XEmbed container out of keyboard and pointer focus.
++        self._tray_window.set_wm_hints(input=False, flags=1)
++        self._tray_window.shape_rectangles(shape.SO.Set, shape.SK.Input, X.Unsorted, 0, 0, [])
+         self._tray_window.map()
+         self._tray_window.change_property(
+             self._atoms["_NET_SYSTEM_TRAY_ORIENTATION"],
+             Xatom.CARDINAL, 32, [0])
+
++        # Wine needs the same ARGB visual to paint its layered icons.
++        self._tray_window.change_property(
++            self._display.intern_atom("_NET_SYSTEM_TRAY_VISUAL"),
++            Xatom.VISUALID, 32, [visual])
+         self._tray_window.set_selection_owner(sel_atom, X.CurrentTime)
+         self._display.sync()
+
+@@ -285,8 +307,10 @@
+             self._tray_window.configure(width=max(1, n * 32), height=32)
+
+             x_offset = len(self._active_icons) * 32
++            # Keep client icons alive when the bridge exits or restarts.
++            icon_win.change_save_set(X.SetModeInsert)
+             icon_win.reparent(self._tray_window, x_offset, 0)
+-            icon_win.configure(width=32, height=32)
++            icon_win.composite_redirect_window(composite.RedirectManual)
+             icon_win.map()
+             icon_win.change_attributes(
+                 event_mask=(X.StructureNotifyMask | X.PropertyChangeMask |
+@@ -348,6 +372,8 @@
+         # Fully remove from DBus so waybar drops the icon
+         try:
+             slot["sni"].remove_from_connection()
++            # Release its BusName reference before closing the connection.
++            del slot["sni"]
+         except Exception:
+             pass
+         try:
+@@ -393,18 +419,7 @@
+         sni = slot["sni"]
+
+         try:
+-            # Try _NET_WM_ICON first
+-            icon_prop = icon_win.get_full_property(
+-                self._atoms["_NET_WM_ICON"], Xatom.CARDINAL)
+-            if icon_prop and icon_prop.value is not None and len(icon_prop.value) >= 3:
+-                icons = self._parse_net_wm_icon(icon_prop.value)
+-                if icons:
+-                    sni.update_icon(icons)
+-                    self._icon_cache[slot.get("icon_key", "unknown")] = icons
+-                    slot["icon_ready"] = True
+-                    log(f"Icon {icon_xid}: via _NET_WM_ICON")
+-                    return False
+-
++            # Wine sets a generic window icon in _NET_WM_ICON; capture the tray pixels.
+             # CopyArea method
+             self._display.sync()
+             geom = icon_win.get_geometry()

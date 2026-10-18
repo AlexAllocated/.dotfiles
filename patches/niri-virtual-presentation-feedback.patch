@@ -1,0 +1,323 @@
+--- a/src/niri.rs
++++ b/src/niri.rs
+@@ -5516,6 +5516,60 @@
+         feedback
+     }
+ 
++    /// Virtual outputs are presented by their capture consumers, not a KMS scanout.
++    /// Use the successful capture's visibility states, and wait for rendering to
++    /// finish before acknowledging it. Never acknowledge hidden/occluded surfaces
++    /// or claim hardware timing for a virtual display.
++    pub fn present_virtual_output(
++        &mut self,
++        output: &Output,
++        states: &RenderElementStates,
++        sync: Option<SyncPoint>,
++    ) {
++        use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
++        use smithay::wayland::presentation::Refresh;
++
++        if !crate::backend::VirtualOutputMarker::is_virtual(output) {
++            return;
++        }
++
++        self.update_primary_scanout_output(output, states);
++        let mut feedback = self.take_presentation_feedbacks(output, states);
++        let mut presented = move || {
++            feedback.presented::<_, Monotonic>(
++                get_monotonic_time(),
++                Refresh::Unknown,
++                0,
++                wp_presentation_feedback::Kind::empty(),
++            );
++        };
++
++        if let Some(sync) = sync {
++            if !sync.is_reached() {
++                if let Some(fd) = sync.export() {
++                    let output = output.clone();
++                    let source = Generic::new(fd, Interest::READ, Mode::OneShot);
++                    if let Err(err) = self.event_loop.insert_source(source, move |_, _, state| {
++                        if state.niri.monitors_active
++                            && state.niri.output_state.contains_key(&output)
++                        {
++                            presented();
++                        }
++                        Ok(PostAction::Remove)
++                    }) {
++                        warn!("error waiting for virtual output presentation: {err}");
++                    }
++                    return;
++                }
++                if let Err(err) = sync.wait() {
++                    warn!("error completing virtual output presentation: {err:?}");
++                    return;
++                }
++            }
++        }
++        presented();
++    }
++
+     pub fn render_for_screencopy_with_damage(
+         &mut self,
+         renderer: &mut GlesRenderer,
+@@ -5562,6 +5616,9 @@
+ 
+                         screencopy.damage(damages);
+ 
++                        let presentation_states =
++                            crate::backend::VirtualOutputMarker::is_virtual(output)
++                                .then(|| states.clone());
+                         let render_result = Self::render_for_screencopy_internal(
+                             renderer,
+                             damage_tracker,
+@@ -5571,6 +5628,9 @@
+                         );
+                         match render_result {
+                             Ok(sync) => {
++                                if let Some(states) = presentation_states {
++                                    self.present_virtual_output(output, &states, sync.clone());
++                                }
+                                 queue.pop().submit_after_sync(false, sync, &self.event_loop);
+                             }
+                             Err(err) => {
+@@ -5626,6 +5686,8 @@
+ 
+         let (_damages, states) =
+             Self::damage_screencopy_internal(output, &elements, damage_tracker, &screencopy);
++        let presentation_states =
++            crate::backend::VirtualOutputMarker::is_virtual(output).then(|| states.clone());
+         let res = Self::render_for_screencopy_internal(
+             renderer,
+             damage_tracker,
+@@ -5633,14 +5695,19 @@
+             states,
+             &screencopy,
+         );
+-        let res = res.map(|sync| screencopy.submit_after_sync(false, sync, &self.event_loop));
+-
+-        if res.is_err() {
+-            // Recreate damage tracker to report full damage next check.
+-            *damage_tracker = OutputDamageTracker::new((0, 0), 1.0, Transform::Normal);
+-        }
+-
+-        res
++        let sync = match res {
++            Ok(sync) => sync,
++            Err(err) => {
++                // Recreate damage tracker to report full damage next check.
++                *damage_tracker = OutputDamageTracker::new((0, 0), 1.0, Transform::Normal);
++                return Err(err);
++            }
++        };
++        if let Some(states) = presentation_states {
++            self.present_virtual_output(output, &states, sync.clone());
++        }
++        screencopy.submit_after_sync(false, sync, &self.event_loop);
++        Ok(())
+     }
+ 
+     pub fn render_for_image_copy_capture(
+@@ -5737,6 +5804,8 @@
+                 continue;
+             };
+ 
++            let presentation_states =
++                crate::backend::VirtualOutputMarker::is_virtual(output).then(|| states.clone());
+             let res = match capture_buffer {
+                 CaptureBuffer::Dma(dmabuf) => {
+                     render_to_dmabuf(renderer, &mut s.damage_tracker, dmabuf, elements, states)
+@@ -5755,6 +5824,9 @@
+ 
+             match res {
+                 Ok(sync) => {
++                    if let Some(states) = presentation_states {
++                        self.present_virtual_output(output, &states, sync.clone());
++                    }
+                     image_copy_capture_impl::frame_success_after_sync(
+                         frame,
+                         transform,
+--- a/src/backend/tty.rs
++++ b/src/backend/tty.rs
+@@ -2342,27 +2342,13 @@
+         self.ipc_outputs.clone()
+     }
+ 
+-    /// Render a virtual output (no actual rendering, just presentation feedback).
++    /// Pace a virtual output; capture paths report presentation after rendering.
+     fn render_virtual_output(
+         &mut self,
+         niri: &mut Niri,
+         output: &Output,
+         target_presentation_time: Duration,
+     ) -> RenderResult {
+-        use smithay::backend::renderer::element::RenderElementStates;
+-        use smithay::wayland::presentation::Refresh;
+-
+-        let now = get_monotonic_time();
+-
+-        let states = RenderElementStates::default();
+-        let mut presentation_feedbacks = niri.take_presentation_feedbacks(output, &states);
+-        presentation_feedbacks.presented::<_, smithay::utils::Monotonic>(
+-            now,
+-            Refresh::Unknown,
+-            0,
+-            wp_presentation_feedback::Kind::empty(),
+-        );
+-
+         // Update the frame clock so animation timing works correctly.
+         let Some(output_state) = niri.output_state.get_mut(output) else {
+             error!("missing output state for output {}", output.name());
+--- a/src/backend/headless.rs
++++ b/src/backend/headless.rs
+@@ -18,7 +18,6 @@
+ use smithay::backend::egl::native::EGLSurfacelessDisplay;
+ use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+ use smithay::backend::libinput::LibinputInputBackend;
+-use smithay::backend::renderer::element::RenderElementStates;
+ use smithay::backend::renderer::gles::GlesRenderer;
+ use smithay::backend::renderer::{ImportDma, ImportEgl};
+ use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
+@@ -26,17 +25,15 @@
+ use smithay::reexports::calloop::LoopHandle;
+ use smithay::reexports::input;
+ use smithay::reexports::input::Libinput;
+-use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
+ #[cfg(feature = "xdp-gnome-screencast")]
+ use smithay::utils::DeviceFd;
+ use smithay::utils::Size;
+ use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufGlobal};
+-use smithay::wayland::presentation::Refresh;
+ 
+ use super::{virtual_output, IpcOutputMap, OutputId, RenderResult, VirtualOutputMarker};
+ use crate::niri::{Niri, RedrawState, State};
+ use crate::render_helpers::{resources, shaders};
+-use crate::utils::{get_monotonic_time, logical_output};
++use crate::utils::logical_output;
+ 
+ pub struct Headless {
+     renderer: Option<GlesRenderer>,
+@@ -402,17 +399,6 @@
+         output: &Output,
+         target_presentation_time: Duration,
+     ) -> RenderResult {
+-        let now = get_monotonic_time();
+-
+-        let states = RenderElementStates::default();
+-        let mut presentation_feedbacks = niri.take_presentation_feedbacks(output, &states);
+-        presentation_feedbacks.presented::<_, smithay::utils::Monotonic>(
+-            now,
+-            Refresh::Unknown,
+-            0,
+-            wp_presentation_feedback::Kind::empty(),
+-        );
+-
+         let output_state = niri.output_state.get_mut(output).unwrap();
+         match mem::replace(&mut output_state.redraw_state, RedrawState::Idle) {
+             RedrawState::Idle => unreachable!(),
+--- a/src/screencasting/mod.rs
++++ b/src/screencasting/mod.rs
+@@ -236,13 +236,10 @@
+                 let cursor_data =
+                     CursorData::compute(&elements, main_start, pointer_location, scale);
+ 
+-                if cast.dequeue_buffer_and_render(
+-                    renderer,
+-                    &elements,
+-                    &cursor_data,
+-                    bbox.size,
+-                    scale,
+-                ) {
++                if cast
++                    .dequeue_buffer_and_render(renderer, &elements, &cursor_data, bbox.size, scale)
++                    .is_some()
++                {
+                     cast.last_frame_time = get_monotonic_time();
+                 }
+             });
+@@ -610,7 +607,10 @@
+             }
+             let cursor_data = cursor_data.as_ref().unwrap();
+ 
+-            if cast.dequeue_buffer_and_render(renderer, &elements, cursor_data, size, scale) {
++            if let Some((states, sync)) =
++                cast.dequeue_buffer_and_render(renderer, &elements, cursor_data, size, scale)
++            {
++                self.present_virtual_output(output, &states, Some(sync));
+                 cast.last_frame_time = target_presentation_time;
+             }
+         }
+@@ -695,7 +695,10 @@
+ 
+             let cursor_data = CursorData::compute(&elements, main_start, pointer_location, scale);
+ 
+-            if cast.dequeue_buffer_and_render(renderer, &elements, &cursor_data, bbox.size, scale) {
++            if cast
++                .dequeue_buffer_and_render(renderer, &elements, &cursor_data, bbox.size, scale)
++                .is_some()
++            {
+                 cast.last_frame_time = target_presentation_time;
+             }
+         }
+--- a/src/screencasting/pw_utils.rs
++++ b/src/screencasting/pw_utils.rs
+@@ -1192,7 +1192,7 @@
+         cursor_data: &CursorData<CastRenderElement<GlesRenderer>>,
+         size: Size<i32, Physical>,
+         scale: Scale<f64>,
+-    ) -> bool {
++    ) -> Option<(RenderElementStates, SyncPoint)> {
+         let mut inner = self.inner.borrow_mut();
+ 
+         let CastState::Ready {
+@@ -1203,7 +1203,7 @@
+         } = &mut inner.state
+         else {
+             error!("cast must be in Ready state to render");
+-            return false;
++            return None;
+         };
+         let damage_tracker = damage_tracker
+             .get_or_insert_with(|| OutputDamageTracker::new(size, scale, Transform::Normal));
+@@ -1249,14 +1249,14 @@
+ 
+         if damage.is_none() && !has_cursor_update {
+             trace!("no damage, skipping frame");
+-            return false;
++            return None;
+         }
+         *last_cursor_location = Some(cursor_data.location);
+         drop(inner);
+ 
+         let Some(pw_buffer) = self.dequeue_available_buffer() else {
+             warn!("no available buffer in pw stream, skipping frame");
+-            return false;
++            return None;
+         };
+         let buffer = pw_buffer.as_ptr();
+ 
+@@ -1285,6 +1285,7 @@
+             // allow for that codepath.
+             let fd = (*(*spa_buffer).datas).fd;
+ 
++            let presentation_states = states.clone();
+             let res = match (*(*spa_buffer).datas).type_ {
+                 x if x == DataType::DmaBuf.as_raw() => {
+                     let dmabuf = inner_.dmabufs[&fd].clone();
+@@ -1313,13 +1314,13 @@
+                 Ok((sync_point, buf)) => {
+                     mark_buffer_as_good(pw_buffer, &mut self.sequence_counter, buf);
+                     trace!("queueing buffer with seq={}", self.sequence_counter);
+-                    self.queue_after_sync(pw_buffer, sync_point);
+-                    true
++                    self.queue_after_sync(pw_buffer, sync_point.clone());
++                    Some((presentation_states, sync_point))
+                 }
+                 Err(err) => {
+                     warn!("error rendering to buffer: {err:?}");
+                     return_unused_buffer(&self.stream, pw_buffer);
+-                    false
++                    None
+                 }
+             }
+         }

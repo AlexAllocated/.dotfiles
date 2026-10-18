@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	io::Read,
+	os::unix::process::ExitStatusExt,
 	path::PathBuf,
 	process::{Child, Command, Stdio},
 	sync::{
@@ -25,10 +26,23 @@ const BUSES: [(&str, &str); 7] = [
 ];
 
 fn command(program: &str, args: &[&str]) -> Result<String> {
-	let output = Command::new(program)
+	command_with_timeout(program, args, Duration::from_secs(3))
+}
+
+fn command_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Result<String> {
+	let output = Command::new(option_env!("AMPS_TIMEOUT_BIN").unwrap_or("timeout"))
+		.args([
+			"--kill-after=1s",
+			&format!("{}s", timeout.as_secs_f64()),
+			program,
+		])
 		.args(args)
+		.stdin(Stdio::null())
 		.output()
 		.with_context(|| format!("Starting {program}"))?;
+	if matches!(output.status.code(), Some(124 | 137)) || output.status.signal() == Some(9) {
+		bail!("{program} timed out; the audio service is not responding");
+	}
 	if !output.status.success() {
 		bail!(
 			"{program}: {}",
@@ -143,11 +157,7 @@ pub fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 		routing_ready: online,
 		sample_rate: 48000,
 		suppression: if config.noise_suppression.enabled {
-			if config.noise_suppression.engine == "nvidia_afx" {
-				"NVIDIA AFX (RTX)"
-			} else {
-				"DeepFilterNet3 (CPU)"
-			}
+			"NVIDIA AFX (RTX)"
 		} else {
 			"Bypassed"
 		}
@@ -225,11 +235,9 @@ fn filter_config(plugin: &str, engine: &str) -> Value {
 				"node.description":"AMPS Noise Suppression","audio.rate":48000,"audio.channels":1,"audio.position":["MONO"],
 				"capture.props":{"node.name":"amps.filter.input","node.autoconnect":false},
 				"playback.props":{"node.name":"amps.filter.output","node.autoconnect":false},
-				"filter.graph":{"nodes":[{"type":"ladspa","name":"denoise","plugin":plugin,"label":"deep_filter_mono",
-					"control":{"Attenuation Limit (dB)":20.0,"Min processing threshold (dB)":-15.0,
-						"Max ERB processing threshold (dB)":35.0,"Max DF processing threshold (dB)":35.0,
-						"Min Processing Buffer (frames)":0.0,"Post Filter Beta":0.0}}],
-					"inputs":["denoise:Audio In"],"outputs":["denoise:Audio Out"]}
+				"filter.graph":{"nodes":[{"type":"ladspa","name":"denoise","plugin":plugin,"label":"linux_broadcast_bnr2",
+					"control":{"Intensity":0.5}}],
+					"inputs":["denoise:Microphone Input"],"outputs":["denoise:NVIDIA AFX Output"]}
 			}}
 		]
 	});
@@ -240,12 +248,7 @@ fn filter_config(plugin: &str, engine: &str) -> Value {
 	}
 	args["capture.props"]["node.name"] = format!("amps.filter.{engine}.input").into();
 	args["playback.props"]["node.name"] = format!("amps.filter.{engine}.output").into();
-	if engine == "nvidia_afx" {
-		args["filter.graph"]["nodes"][0]["label"] = "linux_broadcast_bnr2".into();
-		args["filter.graph"]["nodes"][0]["control"] = json!({"Intensity":0.5});
-		args["filter.graph"]["inputs"] = json!(["denoise:Microphone Input"]);
-		args["filter.graph"]["outputs"] = json!(["denoise:NVIDIA AFX Output"]);
-	}
+
 	value
 }
 
@@ -435,12 +438,7 @@ impl Backend {
 			);
 			if self.config.noise_suppression != config.noise_suppression || self.filter_state != state
 			{
-				let param = if config.noise_suppression.engine == "nvidia_afx" {
-					json!({"params":["denoise:Intensity", crate::suppression_intensity(&config.noise_suppression) as f32 / 100.0]})
-				} else {
-					json!({"params":["denoise:Attenuation Limit (dB)", config.noise_suppression.attenuation_limit_db,
-						"denoise:Post Filter Beta",config.noise_suppression.post_filter_beta]})
-				};
+				let param = json!({"params":["denoise:Intensity", crate::suppression_intensity(&config.noise_suppression) as f32 / 100.0]});
 				command(
 					"pw-cli",
 					&[
@@ -531,25 +529,20 @@ pub fn run(config: Config, path: PathBuf, stop: Arc<AtomicBool>) -> Result<()> {
 			children.push(bus(id, name)?);
 		}
 	}
-	for (engine, variable) in [
-		("deepfilternet3", "AMPS_DEEPFILTER_PLUGIN"),
-		("nvidia_afx", "AMPS_NVIDIA_PLUGIN"),
-	] {
-		let plugin = std::env::var(variable).with_context(|| format!("Missing {variable}"))?;
-		let filter_file = path.with_file_name(format!("pipewire-{engine}.conf"));
-		control::atomic_write(
-			&filter_file,
-			&serde_json::to_vec(&filter_config(&plugin, engine))?,
-		)?;
-		children.push(Process(
-			Command::new("pipewire")
-				.arg("-c")
-				.arg(&filter_file)
-				.stdin(Stdio::null())
-				.stdout(Stdio::null())
-				.spawn()?,
-		));
-	}
+	let plugin = std::env::var("AMPS_NVIDIA_PLUGIN").context("Missing AMPS_NVIDIA_PLUGIN")?;
+	let filter_file = path.with_file_name("pipewire-nvidia_afx.conf");
+	control::atomic_write(
+		&filter_file,
+		&serde_json::to_vec(&filter_config(&plugin, "nvidia_afx"))?,
+	)?;
+	children.push(Process(
+		Command::new("pipewire")
+			.arg("-c")
+			.arg(&filter_file)
+			.stdin(Stdio::null())
+			.stdout(Stdio::null())
+			.spawn()?,
+	));
 	let mut ready = false;
 	for _ in 0..600 {
 		let objects = dump()?;
@@ -557,7 +550,6 @@ pub fn run(config: Config, path: PathBuf, stop: Arc<AtomicBool>) -> Result<()> {
 			.iter()
 			.all(|(id, _)| !ports(&objects, &format!("amps.{id}"), "out").is_empty())
 			&& !ports(&objects, "amps.filter.nvidia_afx.input", "in").is_empty()
-			&& !ports(&objects, "amps.filter.deepfilternet3.input", "in").is_empty()
 		{
 			ready = true;
 			break;
@@ -822,8 +814,42 @@ pub fn meter_snapshot(config: &Config) -> Result<Vec<MeterReading>> {
 mod tests {
 	use super::*;
 	#[test]
+	fn audio_command_captures_large_output_without_blocking() {
+		let output = command("sh", &["-c", "head -c 262144 /dev/zero | tr '\\000' x"]).unwrap();
+		assert_eq!(output.len(), 262144);
+	}
+	#[test]
+	fn audio_command_reports_failures() {
+		let error = command("sh", &["-c", "echo failed >&2; exit 7"]).unwrap_err();
+		assert!(error.to_string().contains("failed"));
+	}
+	#[test]
+	fn audio_command_times_out_and_recovers() {
+		let start = Instant::now();
+		let error =
+			command_with_timeout("sh", &["-c", "sleep 30"], Duration::from_millis(100)).unwrap_err();
+		assert!(error.to_string().contains("timed out"));
+		assert!(start.elapsed() < Duration::from_secs(3));
+		assert_eq!(
+			command("sh", &["-c", "echo recovered"]).unwrap(),
+			"recovered"
+		);
+	}
+	#[test]
+	fn audio_command_kills_unresponsive_children() {
+		let start = Instant::now();
+		let error = command_with_timeout(
+			"sh",
+			&["-c", "trap '' TERM; sleep 30"],
+			Duration::from_millis(100),
+		)
+		.unwrap_err();
+		assert!(error.to_string().contains("timed out"));
+		assert!(start.elapsed() < Duration::from_secs(4));
+	}
+	#[test]
 	fn filter_does_not_autoconnect_or_create_a_server() {
-		let filter = filter_config("/test/deepfilter.so", "deepfilternet3");
+		let filter = filter_config("/test/afx.so", "nvidia_afx");
 		assert_eq!(filter["context.properties"]["core.daemon"], false);
 		let args = &filter["context.modules"][4]["args"];
 		assert_eq!(args["capture.props"]["node.autoconnect"], false);

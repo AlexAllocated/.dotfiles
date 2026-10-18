@@ -1,18 +1,16 @@
-diff --git a/src/pipewire/pipewire_service.h b/src/pipewire/pipewire_service.h
 --- a/src/pipewire/pipewire_service.h
 +++ b/src/pipewire/pipewire_service.h
-@@ -153,6 +153,7 @@ public:
+@@ -165,6 +165,7 @@
      bool nodePassive = false;
      bool streamCaptureSink = false;
      bool streamClassificationReady = false;
 +    bool hidden = false;
-     float volume = 1.0f;
-     // Software / node-route mute from PipeWire props (SPA_PARAM_Props, node routes). For device nodes
-     // swMute mirrors the authoritative mixer-api mute.
-diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.cpp
+     bool hasReadablePropsParam = false;
+     bool hasReadableRouteParam = false;
+     float volume = 1.0F;
 --- a/src/pipewire/pipewire_service.cpp
 +++ b/src/pipewire/pipewire_service.cpp
-@@ -993,6 +993,7 @@ void PipeWireService::onRegistryGlobal(
+@@ -1272,6 +1272,7 @@
        nd->iconName = nd->applicationBinary;
      }
      nd->mediaClass = mediaClass;
@@ -20,7 +18,7 @@ diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.c
      applyStreamFilterPropsFromDict(*nd, props, false);
      const bool audioDeviceNode = mediaClass == "Audio/Sink" || mediaClass == "Audio/Source";
      applyVolumePropsFromDict(*nd, props, !audioDeviceNode);
-@@ -1192,6 +1193,10 @@ void PipeWireService::onNodeInfo(std::uint32_t id, const pw_node_info* info) {
+@@ -1477,6 +1478,10 @@
      if (!iconName.empty()) {
        nd.iconName = iconName;
      }
@@ -31,7 +29,7 @@ diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.c
      filterPropsChanged = applyStreamFilterPropsFromDict(nd, info->props, true);
      const bool audioDevice = nd.mediaClass == "Audio/Sink" || nd.mediaClass == "Audio/Source";
      applyVolumePropsFromDict(nd, info->props, !audioDevice);
-@@ -1627,14 +1632,18 @@ void PipeWireService::rebuildState() {
+@@ -1921,13 +1926,17 @@
        if (node.isDefault) {
          next.defaultSinkId = id;
        }

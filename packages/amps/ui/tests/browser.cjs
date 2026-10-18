@@ -26,7 +26,11 @@ const { chromium } = requireRuntime("playwright");
 			const dropdowns = await page.locator("select:not(:disabled)").evaluateAll(elements =>
 				elements.map(element => {
 					const style = getComputedStyle(element);
-					return { appearance: style.appearance, color: style.color, background: style.backgroundColor };
+					return {
+						appearance: style.appearance,
+						color: style.color,
+						background: style.backgroundColor
+					};
 				})
 			);
 			for (const dropdown of dropdowns) {
@@ -152,8 +156,7 @@ const { chromium } = requireRuntime("playwright");
 					suppression: {
 						enabled: true,
 						engine: "nvidia_afx",
-						attenuation_limit_db: 40,
-						post_filter_beta: 0
+						attenuation_limit_db: 40
 					},
 					canUndo: false,
 					canRedo: false,
@@ -306,8 +309,7 @@ const { chromium } = requireRuntime("playwright");
 									fixture.runtime.suppression = {
 										enabled: edit.enabled,
 										engine: edit.engine,
-										attenuation_limit_db: edit.intensity * 0.4,
-										post_filter_beta: 0
+										attenuation_limit_db: edit.intensity * 0.4
 									};
 							}
 							fixture.runtime.revision++;
@@ -430,6 +432,22 @@ const { chromium } = requireRuntime("playwright");
 			() => page.locator('[data-id="noise_filter"]').click(),
 			"intrepid-key"
 		);
+		assert.equal(
+			await page.getByRole("heading", { name: "NVIDIA noise suppression", exact: true }).count(),
+			1
+		);
+		assert.equal(
+			await page
+				.getByRole("heading", { name: "NVIDIA noise suppression", exact: true })
+				.locator("..")
+				.locator("select")
+				.count(),
+			0
+		);
+		await page
+			.getByRole("heading", { name: "NVIDIA noise suppression", exact: true })
+			.scrollIntoViewIfNeeded();
+		await page.screenshot({ path: path.join(output, "nvidia-noise-suppression.png") });
 		await audible("slider adjustment", () => page.getByRole("slider").fill("75"), "search");
 		await page.waitForTimeout(300);
 		await page.evaluate(() => {
@@ -528,10 +546,20 @@ const { chromium } = requireRuntime("playwright");
 		);
 		await assertWindowFit();
 		await page.screenshot({ path: path.join(output, "phone-connected.png"), fullPage: true });
-		await page.getByRole("checkbox", { name: "Enable receiver when AMPS starts (phone initiates connection)" }).check();
+		await page
+			.getByRole("checkbox", {
+				name: "Enable receiver when AMPS starts (phone initiates connection)"
+			})
+			.check();
 		await page.getByRole("button", { name: "Disable receiver", exact: true }).click();
 		await page.getByRole("button", { name: "Enable receiver", exact: true }).waitFor();
-		assert(await page.getByRole("checkbox", { name: "Enable receiver when AMPS starts (phone initiates connection)" }).isChecked());
+		assert(
+			await page
+				.getByRole("checkbox", {
+					name: "Enable receiver when AMPS starts (phone initiates connection)"
+				})
+				.isChecked()
+		);
 		for (const [id, title] of [
 			["comms", "Comms Audio"],
 			["comms_send", "Comms Mic"],

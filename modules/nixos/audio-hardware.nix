@@ -3,6 +3,10 @@
   services.pipewire.wireplumber.extraConfig."51-creator-hardware-aliases" = {
     "monitor.alsa.rules" = [
       {
+        matches = [ { "device.name" = "~alsa_card[.]usb-ACTIONS_Pebble_V3.*"; } ];
+        actions.update-props."api.alsa.soft-mixer" = true;
+      }
+      {
         matches = [
           {
             "node.name" = "~alsa_input[.]usb-Generic_Blue_Microphones_LT_.*-00[.]analog-stereo";

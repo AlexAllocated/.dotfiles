@@ -74,14 +74,25 @@ too.
 
 On the unified-profile setup, `razer-profile apply-profile Heroes` selects
 one layout across the connected mouse, keyboard, and keypad. Simple Basilisk
-key actions are programmed directly into its volatile hardware profile:
+key actions are programmed into both its active and default onboard profiles:
 Heroes uses Z/B for left/right wheel tilt and Left Alt for the clutch.
 Software-only actions, such as macros and shared HyperShift, still use Input
 Remapper. Private controls use F13-F16 bridges only for those software actions;
 their presets explicitly select the mouse's keyboard event interface.
 
-The persistent onboard profile used by Windows is not written. Both wired
-`1532:00d6` and wireless `1532:00d7` transports are supported, with wired
+The unified profile manager keeps the default onboard button assignments aligned
+with the selected profile, so wireless sleep/wake and power cycling cannot fall
+back to an older layout while the USB receiver stays connected. This also changes
+the default button layout seen on another OS. Before changing onboard bindings,
+the previous assignments are saved under
+`~/.local/state/razer-profile/onboard-backups/`; only changed buttons are written
+and each write is read back. DPI, lighting, polling rate, macros, and other onboard
+slots are preserved. Failed onboard writes attempt to restore the old assignments.
+Repeated application of the same profile does not rewrite those flash bindings.
+The startup/hotplug service retains its bounded retries; it does not periodically
+reprogram the mouse.
+
+Both wired `1532:00d6` and wireless `1532:00d7` transports are supported, with wired
 preferred when both are present. Run `razer-profile reapply-profile` to restore
 the selected layout, or `razer-profile validate` to check all generated hardware
 profiles without accessing the mouse. Native protocol support is proposed in

@@ -2,11 +2,41 @@
   config,
   lib,
   pkgs,
+  toolPkgs ? pkgs,
   ...
 }:
 let
   cfg = config.dotfiles.desktop;
   workstationPackageOverlay = _final: prev: {
+    xwayland-satellite = prev.xwayland-satellite.overrideAttrs (oldAttrs: {
+      # Preserve the native pixel size of fullscreen games on the 175% iPad
+      # output; truncating the conversion makes Wine exit fullscreen.
+      patches = (oldAttrs.patches or [ ]) ++ [
+        ../../patches/xwayland-satellite-fractional-size.patch
+        ../../patches/xwayland-satellite-output-dpi.patch
+        ../../patches/xwayland-satellite-stable-primary.patch
+        ../../patches/xwayland-satellite-fixed-dpi.patch
+        ../../patches/xwayland-satellite-pointer-scale.patch
+      ];
+      # Library tests use an in-process Wayland fixture; the separate X11
+      # integration suite needs a real display and stays out of this build.
+      doCheck = true;
+      cargoTestFlags = [ "--lib" ];
+      nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ prev.makeWrapper ];
+      postFixup =
+        (oldAttrs.postFixup or "")
+        + lib.optionalString (cfg.xwaylandPrimaryOutput != null || cfg.xwaylandDpi != null) ''
+          wrapProgram "$out/bin/xwayland-satellite" \
+            ${
+              lib.optionalString (
+                cfg.xwaylandPrimaryOutput != null
+              ) "--set XWAYLAND_SATELLITE_PRIMARY_OUTPUT ${lib.escapeShellArg cfg.xwaylandPrimaryOutput}"
+            } \
+            ${lib.optionalString (
+              cfg.xwaylandDpi != null
+            ) "--set XWAYLAND_SATELLITE_DPI ${toString cfg.xwaylandDpi}"}
+        '';
+    });
     alvr = prev.alvr.overrideAttrs (oldAttrs: {
       postPatch = (oldAttrs.postPatch or "") + ''
         substituteInPlace alvr/adb/src/commands.rs \
@@ -24,6 +54,7 @@ let
       ];
     });
     steam = prev.steam.override {
+      extraEnv.OBS_VKCAPTURE = true;
       # SteamVR 2.16's CEF requires NSS 3.31, but Valve's legacy Scout
       # runtime only carries NSS 3.22. Expose NixOS's current NSS/NSPR to
       # Steam's FHS environment so its runtime can select the compatible
@@ -52,6 +83,14 @@ let
         ])
       ];
     });
+    xdg-desktop-portal-wlr = prev.xdg-desktop-portal-wlr.override {
+      # The portal image is temporary; default PNG compression stalls the
+      # monitor picker on large desktops. Level 0 preserves every pixel and
+      # avoids spending seconds compressing a file Flameshot immediately reads.
+      grim = prev.writeShellScriptBin "grim" ''
+        exec ${lib.getExe prev.grim} -l 0 "$@"
+      '';
+    };
     flameshot = prev.flameshot.overrideAttrs (_oldAttrs: {
       # Version 13 spans one editor over global desktop coordinates and breaks
       # its toolbar on a fractionally scaled output with a nonzero origin. V14
@@ -166,9 +205,12 @@ let
     '';
     inherit (pkgs.discord) meta passthru;
   };
+  vesktopWithDeepLinks = pkgs.vesktop.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ../../patches/vesktop-discord-deep-links.patch ];
+  });
   vesktopWayland = pkgs.symlinkJoin {
     name = "vesktop-wayland-${pkgs.vesktop.version}";
-    paths = [ pkgs.vesktop ];
+    paths = [ vesktopWithDeepLinks ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     # Keep Vesktop on the browser-style WebRTC path that played incoming
     # streams smoothly and exposed Niri's PipeWire source picker.
@@ -210,6 +252,7 @@ let
       exec ${razerOnboardPython}/bin/python3 ${../../scripts/nixos/razer-onboard.py} \
         --profiles-dir ${lib.escapeShellArg (toString razerProfileDirectory)} \
         --state-file /home/${cfg.user}/.local/state/razer-profile/current \
+        ${lib.optionalString cfg.unifiedRazerProfiles "--onboard-backups /home/${cfg.user}/.local/state/razer-profile/onboard-backups"} \
         "$@"
     '';
   };
@@ -301,13 +344,7 @@ let
       pkgs.coreutils
       razerProfile
     ];
-    text = ''
-      while ! razer-profile --attempts 3 reapply-profile; do
-        printf '%s\n' \
-          'Razer devices are unavailable; keeping the selected profile pending and retrying in 30 seconds.' >&2
-        sleep 30
-      done
-    '';
+    text = builtins.readFile ../../scripts/nixos/razer-profile-sync.sh;
   };
   razerProfileTrayPython = pkgs.python3.withPackages (pythonPackages: [
     pythonPackages.pygobject3
@@ -637,7 +674,8 @@ let
       inherit name runtimeInputs;
       text = ''
         connector=${lib.escapeShellArg ipadConnector}
-        for candidate in ${ipadConnectorShellWords}; do
+        ipad_candidates=(${ipadConnectorShellWords})
+        for candidate in "''${ipad_candidates[@]}"; do
           for status_file in /sys/class/drm/card*-"$candidate"/status; do
             [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
             connector="$candidate"
@@ -670,7 +708,8 @@ let
     runtimeInputs = [ pkgs.coreutils ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
-      for candidate in ${ipadConnectorShellWords}; do
+      ipad_candidates=(${ipadConnectorShellWords})
+      for candidate in "''${ipad_candidates[@]}"; do
         for status_file in /sys/class/drm/card*-"$candidate"/status; do
           [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
           connector="$candidate"
@@ -719,7 +758,8 @@ let
     ];
     text = ''
         connector=${lib.escapeShellArg ipadConnector}
-        for candidate in ${ipadConnectorShellWords}; do
+        ipad_candidates=(${ipadConnectorShellWords})
+        for candidate in "''${ipad_candidates[@]}"; do
           for status_file in /sys/class/drm/card*-"$candidate"/status; do
             [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
             connector="$candidate"
@@ -874,7 +914,8 @@ let
     ];
     text = ''
       connector=${lib.escapeShellArg ipadConnector}
-      for candidate in ${ipadConnectorShellWords}; do
+      ipad_candidates=(${ipadConnectorShellWords})
+      for candidate in "''${ipad_candidates[@]}"; do
         for status_file in /sys/class/drm/card*-"$candidate"/status; do
           [[ -r "$status_file" && "$(<"$status_file")" == connected ]] || continue
           connector="$candidate"
@@ -1230,6 +1271,16 @@ let
 in
 {
   options.dotfiles.desktop = {
+    xwaylandPrimaryOutput = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Preferred active X11 primary output, independent of window focus; null follows focus.";
+    };
+    xwaylandDpi = lib.mkOption {
+      type = lib.types.nullOr (lib.types.ints.between 48 384);
+      default = null;
+      description = "Fixed global X11 DPI; null derives DPI from connected outputs. Per-surface Wayland scaling is preserved.";
+    };
     unifiedRazerProfiles = lib.mkEnableOption "unified recovered Razer mouse, keyboard and keypad profiles";
     user = lib.mkOption {
       type = lib.types.str;
@@ -1592,7 +1643,7 @@ in
         modesetting.enable = true;
         nvidiaSettings = true;
         open = true;
-        package = config.boot.kernelPackages.nvidiaPackages.stable;
+        package = lib.mkDefault config.boot.kernelPackages.nvidiaPackages.stable;
         powerManagement.enable = true;
       };
     };
@@ -1815,7 +1866,8 @@ in
     # The Phantom Green accepts the Basilisk V3 button protocol on interface
     # zero, which browsers cannot address through WebHID. Reapply the selected
     # recovered Synapse layout after boot and whenever either transport
-    # reconnects; the tray selector writes the same direct hardware layer. A
+    # reconnects; the tray selector writes the same direct hardware layer and
+    # keeps the default onboard buttons in sync for wireless sleep/wake. A
     # powered-off wireless mouse leaves its receiver present but cannot answer
     # profile commands, so keep the work pending in an asynchronous service
     # instead of failing an otherwise successful NixOS activation.
@@ -1835,8 +1887,8 @@ in
         Type = "simple";
         ExecStartPre = "${lib.getExe' pkgs.coreutils "sleep"} 1";
         ExecStart = lib.getExe razerProfileSync;
-        Restart = "on-failure";
-        RestartSec = 5;
+        # The wrapper bounds retries; systemd must not reset that budget.
+        Restart = "no";
       };
     };
 
@@ -2088,10 +2140,15 @@ in
       obs-studio = {
         enable = true;
         package = obsStudio;
-        plugins = [ pkgs.obs-studio-plugins.droidcam-obs ];
+        plugins = [
+          pkgs.obs-studio-plugins.droidcam-obs
+          pkgs.obs-studio-plugins.obs-vkcapture
+          (pkgs.callPackage ../../packages/obs-branch-output { })
+        ];
       };
       steam = {
         enable = true;
+        extraPackages = [ pkgs.obs-studio-plugins.obs-vkcapture ];
         localNetworkGameTransfers.openFirewall = true;
         protontricks.enable = true;
         extraCompatPackages = [ pkgs.proton-ge-bin ];
@@ -2178,8 +2235,9 @@ in
       btrfs-progs
       ardour
       audacity
+      toolPkgs.blender
       curl
-      davinci-resolve
+      (pkgs.callPackage ../../packages/davinci-resolve.nix { })
       discordNvidia
       vesktopWayland
       file-roller
@@ -2207,6 +2265,7 @@ in
       migrateDockerDataRoot
       nautilus
       nvtopPackages.nvidia
+      obs-studio-plugins.obs-vkcapture
       papers
       pciutils
       (plex-desktop.override {

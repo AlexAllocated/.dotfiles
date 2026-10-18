@@ -11,6 +11,7 @@ import pathlib
 import pickle
 import sys
 import time
+import uuid
 
 import hid
 
@@ -296,6 +297,57 @@ def apply_profile(device, profiles_dir, name, target=protocol.Profile.DIRECT):
     return result
 
 
+def persist_profile(device, profiles_dir, name, backup_dir):
+    """Keep the wake-up profile aligned without resetting flash or settings."""
+    bindings, _ = compile_profile(profiles_dir, name)
+    target = protocol.Profile.DEFAULT
+    if target not in device.get_profile_list():
+        raise RuntimeError("The default onboard profile is missing; refusing to reset or replace other profiles")
+    previous = {
+        button: device.get_button_function(button, profile=target)
+        for button in bindings
+    }
+    changed = [button for button, function in bindings.items()
+               if bytes(previous[button]) != bytes(function)]
+    if not changed:
+        return {"changed": [], "backup": None}
+
+    # Preserve the exact old assignments before the first nonvolatile write.
+    # DPI, polling, lighting, macros, shifted bindings and other slots are untouched.
+    backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    backup = backup_dir / f"{time.time_ns()}-{uuid.uuid4().hex}.json"
+    with backup.open("x", encoding="utf-8") as stream:
+        json.dump({
+            "version": 1,
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "selected_profile": name,
+            "onboard_profile": target.value,
+            "bindings": {button.name: bytes(function).hex()
+                         for button, function in previous.items()},
+        }, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+    attempted = []
+    try:
+        for button in changed:
+            # A failed write can still have reached hardware, so include it
+            # in rollback before attempting the command.
+            attempted.append(button)
+            set_and_verify(device, button, bindings[button], target)
+    except Exception as error:
+        failures = []
+        for button in reversed(attempted):
+            try:
+                set_and_verify(device, button, previous[button], target)
+            except Exception as rollback:
+                failures.append(f"{button.name}: {rollback}")
+        detail = "; rollback failed: " + "; ".join(failures) if failures else "; old bindings restored"
+        raise RuntimeError(f"Onboard profile update failed{detail}; backup: {backup}") from error
+    return {"changed": [button.name.lower() for button in changed], "backup": str(backup)}
+
+
 def read_selected(state_file, profiles_dir):
     profiles = available_profiles(profiles_dir)
     try:
@@ -427,6 +479,10 @@ def parse_args():
         default="auto",
     )
     parser.add_argument("--attempts", type=int, default=10)
+    parser.add_argument(
+        "--onboard-backups", type=pathlib.Path,
+        help="also persist selected button bindings in the default onboard slot, backing up changes here",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("list-profiles", help="list recovered profile names")
     subparsers.add_parser("status", help="show the selected profile")
@@ -437,7 +493,7 @@ def parse_args():
     validate_parser.add_argument("profile", nargs="?")
     apply_parser = subparsers.add_parser(
         "apply-profile",
-        help="apply and remember a profile in the volatile direct layer",
+        help="apply and remember a profile (also onboard when --onboard-backups is set)",
     )
     apply_parser.add_argument("profile")
     subparsers.add_parser(
@@ -488,6 +544,9 @@ def main():
     device = None
     try:
         device, transport, path = connect(args.transport, args.attempts)
+        persistent = None
+        if args.onboard_backups and args.command in ("apply-profile", "reapply-profile"):
+            persistent = persist_profile(device, args.profiles_dir, selected, args.onboard_backups)
         if args.command == "apply-profile":
             bindings = apply_profile(device, args.profiles_dir, selected)
             write_selected(args.state_file, selected)
@@ -511,6 +570,7 @@ def main():
                     "command": args.command,
                     "profile": selected,
                     "bindings": bindings,
+                    "onboard": persistent,
                 },
                 indent=2,
                 sort_keys=True,

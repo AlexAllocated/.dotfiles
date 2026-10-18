@@ -1,6 +1,10 @@
 import importlib.util
+import errno
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -126,6 +130,17 @@ class RazerProfiles(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertTrue(device.closed)
 
+    def test_interface_scan_tolerates_hotplug_and_pending_permissions(self):
+        for error in (errno.ENOENT, errno.ENODEV, errno.EACCES):
+            with self.subTest(error=error), \
+                 patch("evdev.list_devices", return_value=["/dev/input/test"]), \
+                 patch("evdev.InputDevice", side_effect=OSError(error, "not ready")):
+                self.assertEqual(CONTROL.mouse_interfaces(IMPORTER.DEVICES["mouse"]), [])
+        with patch("evdev.list_devices", return_value=["/dev/input/test"]), \
+             patch("evdev.InputDevice", side_effect=OSError(errno.EIO, "I/O error")):
+            with self.assertRaises(OSError):
+                CONTROL.mouse_interfaces(IMPORTER.DEVICES["mouse"])
+
     def test_mouse_bridge_uses_keyboard_interface_with_leds(self):
         interfaces = [({1: [184], 2: [6]}, "consumer"),
                       ({1: [184], 17: [0, 1]}, "keyboard"),
@@ -145,6 +160,35 @@ class RazerProfiles(unittest.TestCase):
         CONTROL.bind_mouse_inputs(mappings, interfaces)
         self.assertEqual(mappings[0]["input_combination"][0]["origin_hash"], "mouse")
 
+    def test_tartarus_thumb_uses_boot_keyboard_without_changing_main_keys(self):
+        folder = self.generated / "presets" / IMPORTER.DEVICES["keypad"]
+        keys = list(range(256))
+        interfaces = [({1: keys, 2: [8], 3: [0, 1]}, "multifunction"),
+                      ({1: keys, 17: [0, 1]}, "boot-keyboard")]
+        with patch.object(CONTROL, "mouse_interfaces", return_value=interfaces):
+            CONTROL.bind_keypad_thumb_presets(folder, IMPORTER.DEVICES["keypad"])
+        count = 0
+        for preset in folder.glob("*.json"):
+            for mapping in json.loads(preset.read_text()):
+                for event in mapping["input_combination"]:
+                    if event["type"] == 1 and event["code"] in (56, 103, 105, 106, 108):
+                        self.assertEqual(event["origin_hash"], "boot-keyboard")
+                        count += 1
+                    else:
+                        self.assertNotIn("origin_hash", event)
+        self.assertGreater(count, 50)
+
+    def test_tartarus_thumb_rejects_missing_or_ambiguous_keyboard(self):
+        folder = self.generated / "presets" / IMPORTER.DEVICES["keypad"]
+        before = {p: p.read_bytes() for p in folder.glob("*.json")}
+        keyboard = {1: list(range(256)), 17: [0, 1]}
+        for interfaces in ([], [(keyboard, "one"), (keyboard, "two")]):
+            with self.subTest(interfaces=interfaces), \
+                 patch.object(CONTROL, "mouse_interfaces", return_value=interfaces):
+                with self.assertRaisesRegex(RuntimeError, "unavailable or ambiguous"):
+                    CONTROL.bind_keypad_thumb_presets(folder, IMPORTER.DEVICES["keypad"])
+            self.assertEqual(before, {p: p.read_bytes() for p in folder.glob("*.json")})
+
     def test_direct_mouse_profile_does_not_start_injector(self):
         state = self.root / "state"
         interfaces = [({1: list(range(256)), 17: [0]}, "keyboard"),
@@ -155,6 +199,57 @@ class RazerProfiles(unittest.TestCase):
             CONTROL.apply(self.generated, state, self.manifest, "Heroes", "hardware", 1)
         self.assertNotIn("start_injecting", [call.args[0] for call in bus.call_args_list])
         self.assertEqual(json.loads((state / "applied.json").read_text())["profile"], "Heroes")
+
+    def test_hid_rebind_waits_without_reapplying_hardware(self):
+        keyboard = ({1: list(range(256)), 17: [0]}, "keyboard")
+        pointer = ({1: list(range(256, 280)), 2: [0, 1, 6]}, "mouse")
+        state = self.root / "state"
+        with patch.object(CONTROL, "bus"), \
+             patch.object(CONTROL, "run", return_value=IMPORTER.DEVICES["mouse"]) as run, \
+             patch.object(CONTROL, "mouse_interfaces", side_effect=[[], [keyboard], [keyboard, pointer]]) as scan, \
+             patch.object(CONTROL.time, "sleep"):
+            CONTROL.apply(self.generated, state, self.manifest, "Heroes", "hardware", 1)
+        self.assertEqual(scan.call_count, 3)
+        self.assertEqual(sum(call.args[0] == "hardware" for call in run.call_args_list), 1)
+        self.assertEqual(json.loads((state / "applied.json").read_text())["profile"], "Heroes")
+
+    def test_missing_interfaces_time_out_without_publishing_partial_presets(self):
+        folder = self.generated / "presets" / IMPORTER.DEVICES["mouse"]
+        before = {p: p.read_bytes() for p in folder.glob("*.json")}
+        with patch.object(CONTROL, "mouse_interfaces", return_value=[]), \
+             patch.object(CONTROL.time, "monotonic", side_effect=[0, 0, 11]), \
+             patch.object(CONTROL.time, "sleep"):
+            with self.assertRaisesRegex(CONTROL.MouseInterfaceUnavailable, "within 10s"):
+                CONTROL.bind_mouse_presets(folder, IMPORTER.DEVICES["mouse"])
+        self.assertEqual(before, {p: p.read_bytes() for p in folder.glob("*.json")})
+
+    def test_sync_retries_are_bounded_and_stop_after_success(self):
+        commands = self.root / "bin"
+        commands.mkdir()
+        attempts = self.root / "attempts"
+        sleeps = self.root / "sleeps"
+        profile = commands / "razer-profile"
+        profile.write_text(f'#!{shutil.which("bash")}\n'
+                           'echo attempt >> "$ATTEMPTS"\n'
+                           '[[ "$(wc -l < "$ATTEMPTS")" -ge "$SUCCEED_AFTER" ]]\n')
+        sleep = commands / "sleep"
+        sleep.write_text(f'#!{shutil.which("bash")}\necho "$*" >> "$SLEEPS"\n')
+        profile.chmod(0o755)
+        sleep.chmod(0o755)
+        for succeed_after, expected_calls, expected_sleeps, expected_status in (
+                (1, 1, 0, 0), (2, 2, 1, 0), (99, 3, 2, 1)):
+            with self.subTest(succeed_after=succeed_after):
+                attempts.unlink(missing_ok=True)
+                sleeps.unlink(missing_ok=True)
+                env = {**os.environ, "PATH": f'{commands}:{os.environ["PATH"]}',
+                       "ATTEMPTS": str(attempts), "SLEEPS": str(sleeps),
+                       "SUCCEED_AFTER": str(succeed_after)}
+                result = subprocess.run(["bash", str(ROOT / "scripts/nixos/razer-profile-sync.sh")],
+                                        env=env, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, expected_status, result.stderr)
+                self.assertEqual(len(attempts.read_text().splitlines()), expected_calls)
+                self.assertEqual(sleeps.read_text().splitlines() if sleeps.exists() else [],
+                                 ["30"] * expected_sleeps)
 
     def test_mouse_alias_and_missing_devices(self):
         self.assertEqual(CONTROL.connected(self.manifest, ["Razer Razer Basilisk V3 Pro 35K"]),

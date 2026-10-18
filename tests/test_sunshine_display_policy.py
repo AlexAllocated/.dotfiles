@@ -108,7 +108,19 @@ class Tests(unittest.TestCase):
         lg["logical"].update(x=100, y=40)
         _, fake = self.run_policy({"DP-4": lg})
         self.assertEqual(fake.outputs["Moonlight"]["logical"]["x"], 1820)
-        self.assertEqual(fake.outputs["Moonlight"]["logical"]["y"], 40)
+        self.assertEqual(fake.outputs["Moonlight"]["logical"]["y"], 0)
+
+    def test_ipad_matches_output_follow_service_at_global_top_edge(self):
+        _, fake = self.run_policy({"DP-4": output(scale=1)})
+        logical = fake.outputs["Moonlight"]["logical"]
+        self.assertEqual(logical["x"], 3440)
+        self.assertEqual(logical["y"], 0)
+
+    def test_aligned_secondary_reconnect_does_not_nudge_geometry(self):
+        existing = output(2732, 2048, 120, scale=1.75)
+        existing["logical"].update(x=3440, y=0)
+        _, fake = self.run_policy({"DP-4": output(scale=1), "Moonlight": existing})
+        self.assertNotIn(["output", "Moonlight", "position", "set", "3441", "0"], fake.calls)
 
     def test_idle_with_lg_does_not_leave_an_extra_monitor(self):
         target, fake = self.run_policy({"DP-4": output()})
@@ -119,34 +131,67 @@ class Tests(unittest.TestCase):
     def test_headless_idle_retains_a_usable_virtual_display(self):
         target, fake = self.run_policy({})
         target.idle()
-        self.assertEqual(fake.outputs["Moonlight"], output(1920, 1080, 60))
+        self.assertEqual(fake.outputs["Moonlight"], output(1920, 1080, 60, scale=1.75))
         self.assertEqual(target.state.read_text(), "Moonlight\n")
 
     def test_headless_matches_client_and_keeps_last_output_on_disconnect(self):
         target, fake = self.run_policy({})
-        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120))
-        self.assertIn(["output", "Moonlight", "scale", "1.5"], fake.calls)
+        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120, scale=1.75))
+        self.assertIn(["output", "Moonlight", "scale", "1.75"], fake.calls)
         target.stop()
         self.assertIn("Moonlight", fake.outputs)
+
+    def test_paused_headless_session_is_cleaned_up_when_lg_returns(self):
+        target, fake = self.run_policy({})
+        self.assertFalse(target.stop())
+        self.assertTrue(target.pending.exists())
+        fake.outputs["DP-4"] = output()
+        self.assertTrue(target.cleanup())
+        self.assertNotIn("Moonlight", fake.outputs)
+        self.assertEqual(target.state.read_text(), "DP-4\n")
+        self.assertFalse(target.pending.exists())
+
+    def test_resuming_cancels_deferred_cleanup(self):
+        target, fake = self.run_policy({})
+        target.stop()
+        target.prepare((2732, 2048, 120))
+        fake.outputs["DP-4"] = output()
+        self.assertTrue(target.cleanup())
+        self.assertIn("Moonlight", fake.outputs)
+        self.assertFalse(target.pending.exists())
+
+    def test_idle_headless_display_gets_deferred_cleanup(self):
+        target, fake = self.run_policy({})
+        target.idle()
+        self.assertTrue(target.pending.exists())
+        fake.outputs["DP-4"] = output()
+        self.assertTrue(target.cleanup())
+        self.assertNotIn("Moonlight", fake.outputs)
+
+    def test_cleanup_is_idempotent(self):
+        target, fake = self.run_policy({"DP-4": output()})
+        self.assertTrue(target.stop())
+        self.assertTrue(target.cleanup())
+        self.assertEqual(fake.calls.count(["remove-virtual-output", "Moonlight"]), 1)
 
     def test_reconnect_resizes_existing_virtual(self):
         _, fake = self.run_policy({"Moonlight": output(1920, 1080, 60)})
         self.assertFalse(any(call[0] == "create-virtual-output" for call in fake.calls))
-        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120))
-        self.assertIn(["output", "Moonlight", "scale", "1.5"], fake.calls)
+        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120, scale=1.75))
+        self.assertIn(["output", "Moonlight", "scale", "1.75"], fake.calls)
         self.assertEqual(fake.calls[-2:], [
             ["output", "Moonlight", "position", "set", "1", "0"],
             ["output", "Moonlight", "position", "set", "0", "0"],
         ])
 
     def test_unchanged_reconnect_does_not_nudge_geometry(self):
-        _, fake = self.run_policy({"Moonlight": output(2732, 2048, 120)})
+        _, fake = self.run_policy({"Moonlight": output(2732, 2048, 120, scale=1.75)})
         self.assertNotIn(["output", "Moonlight", "position", "set", "1", "0"], fake.calls)
 
     def test_scale_only_change_refreshes_xwayland_geometry(self):
         _, fake = self.run_policy({"Moonlight": output(2732, 2048, 120, scale=1)})
         self.assertIn(["output", "Moonlight", "position", "set", "1", "0"], fake.calls)
-        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120))
+        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120, scale=1.75))
 
     def test_lg_return_keeps_virtual_as_second_monitor(self):
         _, fake = self.run_policy({"DP-4": output(), "Moonlight": output()})
@@ -154,10 +199,10 @@ class Tests(unittest.TestCase):
         self.assertEqual(fake.outputs["Moonlight"]["logical"]["x"], 2293)
 
     def test_lg_off_reconnect_moves_virtual_to_origin(self):
-        existing = output(2732, 2048, 120)
+        existing = output(2732, 2048, 120, scale=1.75)
         existing["logical"]["x"] = 2293
         _, fake = self.run_policy({"Moonlight": existing})
-        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120))
+        self.assertEqual(fake.outputs["Moonlight"], output(2732, 2048, 120, scale=1.75))
         self.assertIn(["output", "Moonlight", "position", "set", "1", "0"], fake.calls)
 
     def test_disabled_physical_does_not_win(self):

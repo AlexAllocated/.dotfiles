@@ -57,7 +57,7 @@ def run(engine, pipewire_config):
             duplicate = subprocess.run([engine, "--config", str(config), "run"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             assert duplicate.returncode != 0 and b"Another AMPS engine" in duplicate.stderr
             for backend, enabled, intensity in [("nvidia_afx", True, 100), ("nvidia_afx", True, 0),
-                    ("nvidia_afx", False, 50), ("deepfilternet3", True, 80), ("nvidia_afx", True, 50)]:
+                    ("nvidia_afx", False, 50), ("nvidia_afx", True, 80), ("nvidia_afx", True, 50)]:
                 edit({"kind": "suppression", "engine": backend, "enabled": enabled, "intensity": intensity})
                 objects = json.loads(subprocess.check_output(["pw-dump"], env=env))
                 selected = next(o for o in objects if o.get("info", {}).get("props", {}).get("node.name") == f"amps.filter.{backend}.input")
@@ -67,8 +67,8 @@ def run(engine, pipewire_config):
                     if isinstance(values, list):
                         values = dict(zip(values[::2], values[1::2]))
                     parameters.update(values)
-                key = "denoise:Intensity" if backend == "nvidia_afx" else "denoise:Attenuation Limit (dB)"
-                expected = intensity / 100 if backend == "nvidia_afx" else intensity * .4
+                key = "denoise:Intensity"
+                expected = intensity / 100
                 assert key in parameters, parameters
                 assert abs(parameters[key] - expected) < .001, (parameters, expected)
             edit({"kind": "connect", "source": "music", "destination": "comms_send"})

@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
@@ -8,14 +9,14 @@ let
   cfg = config.dotfiles.amps;
   account = config.users.users.${cfg.user};
   packages = import ../../packages/amps { inherit pkgs lib; };
-  nvidia = pkgs.callPackage ../../packages/amps/nvidia-linux.nix { };
-  filters = import ../../packages/amps/pipewire-spatial.nix { inherit pkgs; };
-  spatial = pkgs.writeText "amps-spatial.json" (
-    builtins.toJSON {
-      game = filters.gameBus.args;
-      music = filters.musicBus.args;
-    }
-  );
+  nvidiaPkgs = import inputs.nvidia-afx-nixpkgs {
+    system = pkgs.stdenv.hostPlatform.system;
+    config.allowUnfree = true;
+  };
+  nvidia = nvidiaPkgs.callPackage ../../packages/amps/nvidia-linux.nix { };
+  # Keep Game and Media unprocessed: the headphone surround renderer changes
+  # their tonal balance. Missing filter entries create ordinary stereo buses.
+  spatial = pkgs.writeText "amps-spatial.json" (builtins.toJSON { });
   state = "${account.home}/.config/amps";
   runtime = "/run/user/${toString account.uid}";
   ui = pkgs.symlinkJoin {
@@ -103,7 +104,6 @@ in
         HOME = account.home;
         XDG_RUNTIME_DIR = runtime;
         DBUS_SESSION_BUS_ADDRESS = "unix:path=${runtime}/bus";
-        AMPS_DEEPFILTER_PLUGIN = "${pkgs.deepfilternet}/lib/ladspa/libdeep_filter_ladspa.so";
         AMPS_NVIDIA_PLUGIN = "${nvidia}/lib/liblinux_broadcast_afx_ladspa.so";
         AMPS_SPATIAL_FILTERS = toString spatial;
         AFX_SDK_ROOT = "${nvidia}/lib/nvidia";

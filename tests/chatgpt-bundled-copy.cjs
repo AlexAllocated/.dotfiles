@@ -9,11 +9,11 @@ async function main() {
 	assert.equal(process.argv.length, 3, "Expected exactly one main bundle");
 	const bundlePath = path.resolve(process.argv[2]);
 	const source = await fs.readFile(bundlePath, "utf8");
-	const start = source.indexOf("async function jre(e,t){");
-	const end = source.indexOf("async function po(e){", start);
+	const start = source.indexOf("async function Tne(e,t){");
+	const end = source.indexOf("async function vs(e){", start);
 	assert(start >= 0 && end > start, "Bundled-plugin copy function must remain identifiable");
 	const copy = vm.runInNewContext(`(${source.slice(start, end)})`, {
-		k: { default: { platform: "linux" } },
+		P: { default: { platform: "linux" } },
 		b: { default: fs },
 		require: createRequire(bundlePath)
 	});
@@ -28,12 +28,13 @@ async function main() {
 		await fs.mkdir(outside);
 		await fs.writeFile(path.join(outside, "untouched"), "outside");
 		await fs.writeFile(path.join(original, ".codex-plugin/plugin.json"), '{"name":"visualize"}');
+		await fs.writeFile(path.join(original, ".mcp.json"), '{}');
 		await fs.writeFile(path.join(original, "executable"), "#!/bin/sh\n");
 		await fs.symlink(outside, path.join(original, "external-directory"));
 		await fs.symlink(path.join(outside, "untouched"), path.join(original, "external-file"));
 		await fs.symlink(".codex-plugin/plugin.json", path.join(original, "internal-file"));
 		await fs.symlink("missing", path.join(original, "dangling"));
-		for (const file of [path.join(original, ".codex-plugin/plugin.json"), path.join(outside, "untouched")]) {
+		for (const file of [path.join(original, ".codex-plugin/plugin.json"), path.join(original, ".mcp.json"), path.join(outside, "untouched")]) {
 			await fs.chmod(file, 0o444);
 		}
 		for (const file of [original, path.join(original, ".codex-plugin"), path.join(original, "executable"), outside]) {
@@ -77,6 +78,38 @@ async function main() {
 		await assert.rejects(copy(path.join(temporary, "missing"), failedDestination), { code: "ENOENT" });
 		assert.equal(await mode(failedDestination), 0o555);
 		await fs.chmod(failedDestination, 0o755);
+
+		// The executor uses a separate copy path, then rewrites .mcp.json.
+		// Also recover runtime directories left read-only by an older build.
+		const executorStart = source.indexOf("async function Yc(");
+		const executorEnd = source.indexOf("async function Xc(", executorStart);
+		assert(executorStart >= 0 && executorEnd > executorStart);
+		const executorSource = path.join(temporary, "executor-source");
+		await fs.mkdir(path.join(executorSource, ".codex-plugin"), { recursive: true });
+		for (const name of [".mcp.json", ".codex-plugin/plugin.json", "executable"]) {
+			await fs.copyFile(path.join(original, name), path.join(executorSource, name));
+			await fs.chmod(path.join(executorSource, name), 0o444);
+		}
+		await fs.chmod(path.join(executorSource, ".codex-plugin"), 0o555);
+		await fs.chmod(executorSource, 0o555);
+		const executorCopy = vm.runInNewContext(`(${source.slice(executorStart, executorEnd)})`, {
+			Zc: async () => ({ cwd: executorSource, command: path.join(executorSource, "executable") }),
+			b: { default: fs },
+			S: { default: path },
+			r: { An: "test-host" },
+			process: { platform: "linux" },
+			require: createRequire(bundlePath)
+		});
+		const executorRoot = path.join(temporary, "executor");
+		await fs.cp(executorSource, executorRoot, { recursive: true, verbatimSymlinks: true });
+		for (let attempt = 0; attempt < 2; attempt++) {
+			assert.equal(await executorCopy({ executorPluginRoot: executorRoot }), executorRoot);
+			const definition = JSON.parse(await fs.readFile(path.join(executorRoot, ".mcp.json"), "utf8"));
+			assert.equal(definition.mcpServers.codex_app.cwd, executorRoot);
+			assert.equal(definition.mcpServers.codex_app.env.CODEX_APP_TOOLS_CALLER_HOST_ID, "test-host");
+			assert.equal(await mode(path.join(executorRoot, ".mcp.json")), 0o644);
+		}
+		assert.equal(await mode(path.join(original, ".mcp.json")), 0o444);
 
 		const linkedRoot = path.join(temporary, "linked-root");
 		await fs.symlink(outside, linkedRoot);

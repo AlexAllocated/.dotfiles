@@ -1,0 +1,69 @@
+--- a/src/XrrOutput.c
++++ b/src/XrrOutput.c
+@@ -44,6 +44,9 @@
+     xRRGetOutputInfoReq		*req;
+     int				nbytes, nbytesRead, rbytes;
+     XRROutputInfo		*xoi;
++    _XAsyncHandler async;
++    _XAsyncErrorState async_state = {0};
++    Status replied;
+
+     RRCheckExtension (dpy, info, NULL);
+
+@@ -54,7 +57,22 @@
+     req->output = output;
+     req->configTimestamp = resources->configTimestamp;
+
+-    if (!_XReply (dpy, (xReply *) &rep, OutputInfoExtra >> 2, xFalse))
++    /* An output can disappear after GetScreenResources on hotplug. Return
++     * NULL for that query rather than invoking Xlib's fatal default handler.
++     * Match only this request and BadRROutput; other errors remain visible.
++     * The Display lock keeps this handler local to the synchronous reply. */
++    async_state.min_sequence_number = dpy->request;
++    async_state.max_sequence_number = dpy->request;
++    async_state.error_code = info->codes->first_error + BadRROutput;
++    async_state.major_opcode = info->codes->major_opcode;
++    async_state.minor_opcode = X_RRGetOutputInfo;
++    async.next = dpy->async_handlers;
++    async.handler = _XAsyncErrorHandler;
++    async.data = (XPointer) &async_state;
++    dpy->async_handlers = &async;
++    replied = _XReply (dpy, (xReply *) &rep, OutputInfoExtra >> 2, xFalse);
++    DeqAsyncHandler (dpy, &async);
++    if (!replied)
+     {
+ 	UnlockDisplay (dpy);
+ 	SyncHandle ();
+--- a/src/XrrCrtc.c
++++ b/src/XrrCrtc.c
+@@ -41,6 +41,9 @@
+     xRRGetCrtcInfoReq	    *req;
+     int			    nbytes, nbytesRead, rbytes;
+     XRRCrtcInfo		    *xci;
++    _XAsyncHandler async;
++    _XAsyncErrorState async_state = {0};
++    Status replied;
+
+     RRCheckExtension (dpy, info, NULL);
+
+@@ -51,7 +54,19 @@
+     req->crtc = crtc;
+     req->configTimestamp = resources->configTimestamp;
+
+-    if (!_XReply (dpy, (xReply *) &rep, 0, xFalse))
++    /* A CRTC can also vanish between the resource snapshot and this query. */
++    async_state.min_sequence_number = dpy->request;
++    async_state.max_sequence_number = dpy->request;
++    async_state.error_code = info->codes->first_error + BadRRCrtc;
++    async_state.major_opcode = info->codes->major_opcode;
++    async_state.minor_opcode = X_RRGetCrtcInfo;
++    async.next = dpy->async_handlers;
++    async.handler = _XAsyncErrorHandler;
++    async.data = (XPointer) &async_state;
++    dpy->async_handlers = &async;
++    replied = _XReply (dpy, (xReply *) &rep, 0, xFalse);
++    DeqAsyncHandler (dpy, &async);
++    if (!replied)
+     {
+ 	UnlockDisplay (dpy);
+ 	SyncHandle ();

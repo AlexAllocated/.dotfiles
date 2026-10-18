@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import closing
+import errno
 import fcntl
 import hashlib
 import importlib.util
@@ -14,6 +15,10 @@ import sys
 import tempfile
 import time
 import uuid
+
+
+class MouseInterfaceUnavailable(RuntimeError):
+    pass
 
 
 def load_module(name, path):
@@ -64,11 +69,17 @@ def mouse_interfaces(group):
 
     result = []
     for path in list_devices():
-        with closing(InputDevice(path)) as device:
-            if device.name == group:
-                capabilities = device.capabilities(absinfo=False)
-                identity = hashlib.md5((str(capabilities) + device.name).encode()).hexdigest()
-                result.append((capabilities, identity))
+        try:
+            with closing(InputDevice(path)) as device:
+                if device.name == group:
+                    capabilities = device.capabilities(absinfo=False)
+                    identity = hashlib.md5((str(capabilities) + device.name).encode()).hexdigest()
+                    result.append((capabilities, identity))
+        except OSError as error:
+            # Rebinding HID recreates event nodes before udev has assigned
+            # their permissions. Another device can also disappear mid-scan.
+            if error.errno not in (errno.ENOENT, errno.ENODEV, errno.EACCES):
+                raise
     return result
 
 
@@ -78,7 +89,7 @@ def bind_mouse_inputs(mappings, interfaces):
             candidates = [(caps, identity) for caps, identity in interfaces
                           if event["code"] in caps.get(event["type"], [])]
             if not candidates:
-                raise RuntimeError(f"Mouse interface unavailable for {event}")
+                raise MouseInterfaceUnavailable(f"Mouse interface unavailable for {event}")
             keyboard = event["type"] == 1 and event["code"] < 256
             candidates.sort(key=lambda pair: (
                 (17 in pair[0]) != keyboard,
@@ -86,6 +97,29 @@ def bind_mouse_inputs(mappings, interfaces):
             ))
             event["origin_hash"] = candidates[0][1]
     return mappings
+
+
+def bind_mouse_presets(folder, group, timeout=10):
+    # libusb releases and reattaches the input driver when the hardware
+    # command exits. Wait for accessible event nodes and their capabilities,
+    # without reprogramming the mouse or starting a rollback while udev settles.
+    deadline = time.monotonic() + timeout
+    while True:
+        interfaces = mouse_interfaces(group)
+        try:
+            presets = {
+                preset: bind_mouse_inputs(json.loads(preset.read_text()), interfaces)
+                for preset in folder.glob("*.json")
+            }
+            break
+        except MouseInterfaceUnavailable as error:
+            if time.monotonic() >= deadline:
+                raise MouseInterfaceUnavailable(
+                    f"Mouse interfaces did not become ready within {timeout}s: {error}"
+                ) from error
+            time.sleep(.1)
+    for preset, mappings in presets.items():
+        preset.write_text(json.dumps(mappings, indent=2))
 
 
 def prepare(source, state, manifest, name, devices):
@@ -105,6 +139,27 @@ def prepare(source, state, manifest, name, devices):
     return transaction
 
 
+def bind_keypad_thumb_presets(folder, group):
+    # Tartarus Pro's main keys use the multifunction interface, but its
+    # thumb controls emit on the boot keyboard interface. Both advertise
+    # these keycodes, so Input Remapper's fallback can pick the wrong one.
+    interfaces = [(caps, identity) for caps, identity in mouse_interfaces(group) if 17 in caps]
+    presets = {}
+    for preset in folder.glob("*.json"):
+        mappings = json.loads(preset.read_text())
+        for mapping in mappings:
+            for event in mapping["input_combination"]:
+                if event["type"] == 1 and event["code"] in (56, 103, 105, 106, 108):
+                    candidates = [identity for caps, identity in interfaces
+                                  if event["code"] in caps.get(1, [])]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Tartarus thumb keyboard interface unavailable or ambiguous for {event}")
+                    event["origin_hash"] = candidates[0]
+        presets[preset] = mappings
+    for preset, mappings in presets.items():
+        preset.write_text(json.dumps(mappings, indent=2))
+
+
 def apply(source, state, manifest, name, hardware, attempts):
     devices = connected(manifest, run("input-remapper-control", "--list-devices").splitlines())
     if not devices:
@@ -116,10 +171,10 @@ def apply(source, state, manifest, name, hardware, attempts):
         run(hardware, "--profiles-dir", str(source / "hardware"),
             "--state-file", str(transaction / "hardware-current"),
             "--attempts", str(attempts), "apply-profile", name)
-        interfaces = mouse_interfaces(devices["mouse"])
         folder = transaction / "presets" / devices["mouse"]
-        for preset in folder.glob("*.json"):
-            preset.write_text(json.dumps(bind_mouse_inputs(json.loads(preset.read_text()), interfaces), indent=2))
+        bind_mouse_presets(folder, devices["mouse"])
+    if "keypad" in devices:
+        bind_keypad_thumb_presets(transaction / "presets" / devices["keypad"], devices["keypad"])
     bus("set_config_dir", "s", str(transaction))
     started = []
     try:

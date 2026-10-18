@@ -1,0 +1,104 @@
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -491,6 +491,12 @@
+     updated_outputs: Vec<Entity>,
+     new_scale: Option<f64>,
+     current_scale: f64,
++    fixed_global_scale: Option<f64>,
++}
++
++fn parse_global_dpi(value: &str) -> Option<f64> {
++    let dpi = value.parse::<u16>().ok()?;
++    (48..=384).contains(&dpi).then_some(f64::from(dpi) / 96.0)
+ }
+ 
+ impl<S: X11Selection> ServerState<NoConnection<S>> {
+@@ -600,6 +606,9 @@
+             updated_outputs: Vec::new(),
+             new_scale: None,
+             current_scale: 1.0,
++            fixed_global_scale: std::env::var("XWAYLAND_SATELLITE_DPI")
++                .ok()
++                .and_then(|value| parse_global_dpi(&value)),
+             decoration_manager,
+             world,
+         };
+@@ -736,6 +745,10 @@
+                     );
+                 }
+ 
++                // X11 has one global DPI. Keep it independent of monitor hotplug
++                // when explicitly configured; surface viewports still use each
++                // output's preferred scale.
++                scale = self.fixed_global_scale.unwrap_or(scale);
+                 debug!("Using new scale {scale}");
+                 self.new_scale = Some(scale);
+                 self.current_scale = scale;
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -3025,9 +3025,28 @@
+ 
+ #[test]
+ fn output_dpi_survives_window_moves_and_hotplug() {
++    check_output_dpi_window_moves_and_hotplug(None);
++}
++
++#[test]
++fn fixed_global_dpi_survives_hotplug_without_changing_surface_scale() {
++    check_output_dpi_window_moves_and_hotplug(Some(1.0));
++}
++
++#[test]
++fn fixed_global_dpi_rejects_invalid_values() {
++    assert_eq!(super::parse_global_dpi("96"), Some(1.0));
++    assert_eq!(super::parse_global_dpi("168"), Some(1.75));
++    for value in ["0", "47", "385", "-96", "NaN", "infinity", "1.75"] {
++        assert_eq!(super::parse_global_dpi(value), None);
++    }
++}
++
++fn check_output_dpi_window_moves_and_hotplug(fixed_global_scale: Option<f64>) {
+     let mut f = TestFixture::new_pre_connect(|testwl| {
+         testwl.enable_fractional_scale();
+     });
++    f.satellite.inner.fixed_global_scale = fixed_global_scale;
+     let comp = f.compositor();
+     let (desktop_client, desktop) = f.new_output(0, 0);
+     let (tablet_client, tablet) = f.new_output(3440, 270);
+@@ -3070,14 +3100,33 @@
+     }
+     f.remove_output(desktop);
+     f.run();
+-    assert_eq!(f.satellite.inner.current_scale, 1.75);
+-    // A real output scale change must still update global DPI.
++    assert_eq!(
++        f.satellite.inner.current_scale,
++        fixed_global_scale.unwrap_or(1.75)
++    );
++    fractional.preferred_scale(210);
++    f.run();
++    f.run();
++    let entity = f.satellite.inner.windows[&window];
++    assert_eq!(
++        f.satellite
++            .inner
++            .world
++            .get::<&super::event::SurfaceScaleFactor>(entity)
++            .unwrap()
++            .0,
++        1.75
++    );
++    // Real output scale changes still update automatic DPI, but not fixed DPI.
+     let xdg = f.testwl.get_xdg_output(&tablet).unwrap();
+     xdg.logical_size(1366, 1024);
+     xdg.done();
+     f.run();
+     f.run();
+-    assert_eq!(f.satellite.inner.current_scale, 2.0);
++    assert_eq!(
++        f.satellite.inner.current_scale,
++        fixed_global_scale.unwrap_or(2.0)
++    );
+ }
+ 
+ #[track_caller]

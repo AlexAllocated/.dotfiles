@@ -14,8 +14,8 @@ let
         pkgs.fetchFromGitHub {
           owner = "willybarret";
           repo = "niri";
-          rev = "dc0505f043028a8cc1e007d5760953753dec2d3b";
-          hash = "sha256-NmsIOdV1MW1GJ54rXOhPmD3DZJVP+c1qyim9nfWxREE=";
+          rev = "7fd585dd44ed67644977dd9561bb6e8b3837f8f7";
+          hash = "sha256-OWF03QF62Q8HJ3fCme3I3GX7dKX9YU+JD7bhTiIzfQ4=";
         }
       else
         oldAttrs.src;
@@ -23,23 +23,39 @@ let
       if config.dotfiles.desktop.sunshine.mode == "adaptive" then
         pkgs.rustPlatform.fetchCargoVendor {
           src = niriPackage.src;
-          hash = "sha256-aNovCzrTtmqTO33YtZap47npdN73zXC1bap5q5dZvZk=";
+          hash = "sha256-Yqvambc4F7PdGkGxrxp5xD6PqAEAWmMgqOYZRY+TIBA=";
         }
       else
         oldAttrs.cargoDeps;
     patches =
       (oldAttrs.patches or [ ])
-      ++ [
-        # Niri 26.04 advertises only DMA-BUF buffers, while Discord requests
-        # ordinary shared-memory frames. Backport upstream's SHM fallback so
-        # Discord works without replacing the GNOME portal and losing Niri's
-        # per-window capture support.
+      ++ lib.optionals (config.dotfiles.desktop.sunshine.mode == "adaptive") [
+        # Chrome exits fullscreen after 1.5s without presentation feedback.
+        # Acknowledge visible virtual-output frames after capture rendering.
+        ../../patches/niri-virtual-presentation-feedback.patch
+        (pkgs.fetchurl {
+          url = "https://github.com/niri-wm/niri/commit/4da66421fe745aed1d6442b844ff20aa3ac7ebe6.patch";
+          hash = "sha256-4kc7imEf6y49Kx6ae1JDLSTpBS7Wj4eXgdC7sORXfKQ=";
+        })
+      ]
+      ++ lib.optionals (config.dotfiles.desktop.sunshine.mode != "adaptive") [
         (pkgs.fetchurl {
           url = "https://github.com/niri-wm/niri/compare/dd1c3bcb9f1ef416df33ffa22d1d9bcee1398e7d...2ab59b90d55afbbe362a63e2a061afe4b524d8c4.diff";
           hash = "sha256-gkQnj931BC5/ttf81UVYOi0VRQvXzJN3CA8osUA7iXU=";
         })
       ]
-      ++ [ ../../patches/niri-window-rule-open-animation.patch ];
+      ++ [
+        ../../patches/niri-window-rule-open-animation.patch
+        ../../patches/niri-floating-above-fullscreen.patch
+      ];
+    postCheck =
+      (oldAttrs.postCheck or "")
+      + lib.optionalString (config.dotfiles.desktop.sunshine.mode == "adaptive") ''
+        export __EGL_VENDOR_LIBRARY_FILENAMES=${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json
+        export LIBGL_ALWAYS_SOFTWARE=1
+        cargo test --offline --release --no-default-features --features dbus,xdp-gnome-screencast,systemd --lib tests::renderer_cleanup:: -- --test-threads=1
+        cargo test --offline --release --no-default-features --features dbus,xdp-gnome-screencast,systemd --lib floating_above_fullscreen_visibility_and_input
+      '';
   });
   systemctl = lib.getExe' pkgs.systemd "systemctl";
   loginctl = lib.getExe' pkgs.systemd "loginctl";
@@ -83,6 +99,23 @@ let
       }
 
       clear_session_state
+
+      ${lib.optionalString (lib.attrByPath [ "dotfiles" "keyringUnlock" "enable" ] false config) ''
+        # Unlock before Niri/shell startup can create an authentication prompt.
+        # This is synchronous and reruns against the fresh bus at every login.
+        ${lib.optionalString (lib.attrByPath [ "dotfiles" "chatgptService" "enable" ] false config) ''
+          # The system supervisor survives user-manager replacement. Quiesce
+          # its old client so it cannot request a keyring prompt during handoff.
+          /run/wrappers/bin/sudo -n ${systemctl} stop chatgpt-desktop.service
+        ''}
+        if ! /run/wrappers/bin/sudo -n ${systemctl} restart tracer-keyring-unlock.service; then
+          printf 'Automatic keyring unlock failed; starting the desktop for manual recovery.\n' >&2
+        fi
+        ${lib.optionalString (lib.attrByPath [ "dotfiles" "chatgptService" "enable" ] false config) ''
+          /run/wrappers/bin/sudo -n ${systemctl} start chatgpt-desktop.service
+        ''}
+      ''}
+
       ${systemctl} --user set-environment \
         DOTFILES_DESKTOP_SHELL=${lib.escapeShellArg shell}
 

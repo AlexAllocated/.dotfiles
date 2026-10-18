@@ -12,6 +12,8 @@
     ./cloud.nix
     ./terminal.nix
     ./obs.nix
+    ./bumblebee.nix
+    ./bumblebee-resume.nix
     ./wallpaper.nix
     ./appearance.nix
     ./compositors.nix

@@ -278,7 +278,7 @@ function Console() {
 		[reducedMotion, setReducedMotion] = useState(
 			matchMedia("(prefers-reduced-motion: reduce)").matches
 		);
-	const [noise, setNoise] = useState({ enabled: true, intensity: 50, engine: "nvidia_afx" }),
+	const [noise, setNoise] = useState({ enabled: true, intensity: 50 }),
 		[noiseDirty, setNoiseDirty] = useState(false),
 		[devicePending, setDevicePending] = useState<string | null>(null);
 	const [confirmation, setConfirmation] = useState<{ edit: any; message: string } | null>(null);
@@ -401,8 +401,7 @@ function Console() {
 		const n = snapshot.runtime.suppression;
 		setNoise({
 			enabled: n.enabled,
-			intensity: Math.round((n.attenuation_limit_db / 40) * 100),
-			engine: n.engine
+			intensity: Math.round((n.attenuation_limit_db / 40) * 100)
 		});
 	}, [snapshot?.runtime?.revision, noiseDirty, busy]);
 	const online = !!snapshot?.runtime?.online && snapshot.runtime.appliedRevision !== null;
@@ -953,8 +952,8 @@ function Console() {
 									</p>
 								)}
 								<p className="hint">
-									Use these selectors to choose your listening output and microphone.
-									Main output volume affects listening, not the separate bus recordings.
+									Use these selectors to choose your listening output and microphone. Main
+									output volume affects listening, not the separate bus recordings.
 								</p>
 							</section>
 						)}
@@ -1169,7 +1168,7 @@ function Console() {
 							)}
 						{["noise_filter", "clean_mic", "physical_mic"].includes(selection) && (
 							<section>
-								<h3>Microphone processing</h3>
+								<h3>NVIDIA noise suppression</h3>
 								<p className="binding">Observed: {snapshot?.graph.suppression}</p>
 								<label className="check">
 									<input
@@ -1183,20 +1182,7 @@ function Console() {
 									/>
 									Noise suppression
 								</label>
-								<label>
-									Processor
-									<select
-										value={noise.engine}
-										disabled={busy || !online}
-										onChange={e => {
-											setNoise(n => ({ ...n, engine: e.target.value }));
-											setNoiseDirty(true);
-										}}
-									>
-										<option value="nvidia_afx">NVIDIA AFX (RTX)</option>
-										<option value="deepfilternet3">DeepFilterNet3 (CPU)</option>
-									</select>
-								</label>
+								<p className="binding">NVIDIA AFX · RTX GPU</p>
 								<label>
 									Intensity <output>{noise.intensity}%</output>
 									<input
@@ -1213,7 +1199,9 @@ function Console() {
 								</label>
 								<button
 									disabled={!noiseDirty || busy || !online}
-									onClick={() => void transact({ kind: "suppression", ...noise })}
+									onClick={() =>
+										void transact({ kind: "suppression", engine: "nvidia_afx", ...noise })
+									}
 								>
 									Apply filter settings
 								</button>

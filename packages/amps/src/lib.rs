@@ -188,22 +188,6 @@ pub struct NoiseSuppressionConfig {
 	pub enabled: bool,
 	pub engine: String,
 	pub attenuation_limit_db: f32,
-	pub post_filter_beta: f32,
-}
-
-#[cfg(any(windows, test))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SuppressionBackend {
-	Nvidia,
-	DeepFilter,
-}
-
-#[cfg(any(windows, test))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SuppressionTransition {
-	Bypass,
-	UpdateInPlace,
-	Rebuild,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -257,7 +241,6 @@ impl Default for NoiseSuppressionConfig {
 			enabled: true,
 			engine: "nvidia_afx".into(),
 			attenuation_limit_db: 20.0,
-			post_filter_beta: 0.0,
 		}
 	}
 }
@@ -428,21 +411,13 @@ impl Config {
 		if self.microphone.vr_input.trim().is_empty() {
 			bail!("vr_input must be non-empty");
 		}
-		if !matches!(
-			self.noise_suppression.engine.as_str(),
-			"nvidia_afx" | "deepfilternet3"
-		) {
-			bail!("noise suppression engine must be nvidia_afx or deepfilternet3");
+		if self.noise_suppression.engine != "nvidia_afx" {
+			bail!("noise suppression engine must be nvidia_afx");
 		}
 		if !self.noise_suppression.attenuation_limit_db.is_finite()
 			|| !(0.0..=100.0).contains(&self.noise_suppression.attenuation_limit_db)
 		{
 			bail!("attenuation_limit_db must be between 0 and 100 dB");
-		}
-		if !self.noise_suppression.post_filter_beta.is_finite()
-			|| !(0.0..=1.0).contains(&self.noise_suppression.post_filter_beta)
-		{
-			bail!("post_filter_beta must be between 0 and 1");
 		}
 		validate_device_connections(&self.patchbay.connections, &self.devices)?;
 		for route in &self.routes {
@@ -676,27 +651,6 @@ pub fn attenuation_for_intensity(intensity: u8) -> f32 {
 	intensity.min(100) as f32 / 100.0 * MAX_SUPPRESSION_ATTENUATION_DB
 }
 
-#[cfg(any(windows, test))]
-pub(crate) fn suppression_transition(
-	current: &NoiseSuppressionConfig,
-	updated: &NoiseSuppressionConfig,
-	backend: Option<SuppressionBackend>,
-) -> SuppressionTransition {
-	if !updated.enabled {
-		return SuppressionTransition::Bypass;
-	}
-	if !current.enabled || current.engine != updated.engine {
-		return SuppressionTransition::Rebuild;
-	}
-	match backend {
-		// NVIDIA accepts a post-load intensity update but does not reliably
-		// apply it to the loaded model. Recreate only the Clean Mic effect so
-		// the requested ratio is guaranteed to become effective.
-		Some(SuppressionBackend::Nvidia) | None => SuppressionTransition::Rebuild,
-		Some(SuppressionBackend::DeepFilter) => SuppressionTransition::UpdateInPlace,
-	}
-}
-
 pub fn save_suppression_controls(
 	config_path: &Path,
 	enabled: bool,
@@ -706,8 +660,8 @@ pub fn save_suppression_controls(
 	if intensity > 100 {
 		bail!("noise suppression intensity must be between 0 and 100");
 	}
-	if !matches!(engine, "nvidia_afx" | "deepfilternet3") {
-		bail!("noise suppression engine must be nvidia_afx or deepfilternet3");
+	if engine != "nvidia_afx" {
+		bail!("noise suppression engine must be nvidia_afx");
 	}
 	let mut controls = load_runtime_controls(config_path)?;
 	controls.noise_suppression = Some(NoiseSuppressionControls {
@@ -913,9 +867,8 @@ impl MeterProbe {
 mod tests {
 	use super::{
 		attenuation_for_intensity, patch_destinations, patch_sources, suppression_intensity,
-		suppression_transition, validate_patch_connections, Config, NoiseSuppressionConfig,
-		PatchConnection, PatchbayConfig, SuppressionBackend, SuppressionTransition, DEFAULT_CONFIG,
-		MAX_SUPPRESSION_ATTENUATION_DB,
+		validate_patch_connections, Config, NoiseSuppressionConfig, PatchConnection, PatchbayConfig,
+		DEFAULT_CONFIG, MAX_SUPPRESSION_ATTENUATION_DB,
 	};
 
 	#[test]
@@ -1025,7 +978,7 @@ mod tests {
 				},
 			],
 		] {
-			super::save_suppression_controls(&config_path, false, 23, "deepfilternet3").unwrap();
+			super::save_suppression_controls(&config_path, false, 23, "nvidia_afx").unwrap();
 			super::save_patch_connections(&config_path, connections.clone()).unwrap();
 			let before = std::fs::read(&controls_path).unwrap();
 			let loaded = Config::load(&config_path).unwrap();
@@ -1174,66 +1127,24 @@ mod tests {
 	}
 
 	#[test]
-	fn suppression_transition_covers_bypass_and_reenable() {
-		let current = NoiseSuppressionConfig::default();
-		let mut bypassed = current.clone();
-		bypassed.enabled = false;
-		assert_eq!(
-			suppression_transition(&current, &bypassed, Some(SuppressionBackend::Nvidia)),
-			SuppressionTransition::Bypass
-		);
-		assert_eq!(
-			suppression_transition(&bypassed, &current, None),
-			SuppressionTransition::Rebuild
-		);
-	}
-
-	#[test]
-	fn suppression_transition_rebuilds_engine_swaps() {
-		let current = NoiseSuppressionConfig::default();
-		let mut updated = current.clone();
-		updated.engine = "deepfilternet3".into();
-		assert_eq!(
-			suppression_transition(&current, &updated, Some(SuppressionBackend::Nvidia)),
-			SuppressionTransition::Rebuild
-		);
-		assert_eq!(
-			suppression_transition(&updated, &current, Some(SuppressionBackend::DeepFilter)),
-			SuppressionTransition::Rebuild
-		);
-	}
-
-	#[test]
-	fn suppression_transition_remembers_changes_while_bypassed() {
-		let mut current = NoiseSuppressionConfig::default();
-		current.enabled = false;
-		let mut updated = current.clone();
-		updated.engine = "deepfilternet3".into();
-		assert_eq!(
-			suppression_transition(&current, &updated, None),
-			SuppressionTransition::Bypass
-		);
-		let mut enabled = updated.clone();
-		enabled.enabled = true;
-		assert_eq!(
-			suppression_transition(&updated, &enabled, None),
-			SuppressionTransition::Rebuild
-		);
-	}
-
-	#[test]
-	fn suppression_transition_rebuilds_nvidia_but_updates_deepfilter_in_place() {
-		let current = NoiseSuppressionConfig::default();
-		let mut updated = current.clone();
-		updated.attenuation_limit_db = 40.0;
-		assert_eq!(
-			suppression_transition(&current, &updated, Some(SuppressionBackend::Nvidia)),
-			SuppressionTransition::Rebuild
-		);
-		assert_eq!(
-			suppression_transition(&current, &updated, Some(SuppressionBackend::DeepFilter)),
-			SuppressionTransition::UpdateInPlace
-		);
+	fn removed_suppression_engine_is_rejected_without_overwriting_controls() {
+		let root = tempfile::tempdir().unwrap();
+		let path = root.path().join("config.toml");
+		std::fs::write(&path, DEFAULT_CONFIG).unwrap();
+		super::save_suppression_controls(&path, true, 50, "nvidia_afx").unwrap();
+		let controls_path = root.path().join("controls.toml");
+		let original = std::fs::read(&controls_path).unwrap();
+		for engine in ["deepfilternet3", "unsupported"] {
+			let mut config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+			config.noise_suppression.engine = engine.into();
+			assert!(config
+				.validate()
+				.unwrap_err()
+				.to_string()
+				.contains("nvidia_afx"));
+			assert!(super::save_suppression_controls(&path, true, 75, engine).is_err());
+			assert_eq!(std::fs::read(&controls_path).unwrap(), original);
+		}
 	}
 
 	#[test]

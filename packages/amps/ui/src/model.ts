@@ -32,7 +32,6 @@ export type Noise = {
 	enabled: boolean;
 	engine: string;
 	attenuation_limit_db: number;
-	post_filter_beta: number;
 };
 export type Runtime = {
 	schemaVersion: number;

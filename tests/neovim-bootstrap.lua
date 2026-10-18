@@ -68,6 +68,8 @@ local function add_package(outcome)
 		return outcome ~= "unsupported"
 	end
 	function pkg:install(opts, callback)
+		assert(not self.installing, "retried before the previous install finished")
+		assert(opts.version == "2", "retry changed the target version")
 		self.installs = self.installs + 1
 		self.installing = true
 		if outcome == "timeout" then
@@ -75,10 +77,11 @@ local function add_package(outcome)
 		end
 		table.insert(tasks, function()
 			self.installing = false
-			if outcome == "success" then
+			local result = type(outcome) == "table" and outcome[self.installs] or outcome
+			if result == "success" then
 				self.version = opts.version
 			end
-			callback(outcome ~= "failure", "test install result")
+			callback(result == "success" or result == "wrong-version", result)
 		end)
 	end
 	table.insert(packages, pkg)
@@ -95,10 +98,38 @@ assert(#errors == 0)
 
 for _, outcome in ipairs({ "failure", "wrong-version", "timeout", "unsupported" }) do
 	reset()
-	add_package(outcome)
+	local pkg = add_package(outcome)
 	assert(not bootstrap.update_mason_packages(1), outcome .. " was accepted")
 	assert(#errors > 0)
+	assert(pkg.installs <= 1, "retried a non-network failure")
 end
+
+for _, code in ipairs({ "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ECONNREFUSED" }) do
+	reset()
+	local recovered = add_package({ "spawn: npm failed with exit code 146. npm error code " .. code, "success" })
+	local healthy = add_package("success")
+	assert(bootstrap.update_mason_packages(1))
+	assert(recovered.installs == 2 and recovered.version == "2")
+	assert(healthy.installs == 1, "reinstalled a successful package")
+	assert(#errors == 0)
+end
+
+reset()
+local last_attempt = add_package({ "ETIMEDOUT", "ECONNRESET", "success" })
+assert(bootstrap.update_mason_packages(1))
+assert(last_attempt.installs == 3 and last_attempt.version == "2")
+
+reset()
+local exhausted = add_package({ "ETIMEDOUT", "ETIMEDOUT", "ETIMEDOUT", "success" })
+assert(not bootstrap.update_mason_packages(1))
+assert(exhausted.installs == 3 and exhausted.version == "1")
+assert(errors[1]:find("ETIMEDOUT", 1, true))
+
+reset()
+local permanent = add_package({ "ETIMEDOUT", "npm error code E404", "success" })
+assert(not bootstrap.update_mason_packages(1))
+assert(permanent.installs == 2)
+assert(errors[1]:find("E404", 1, true))
 
 for _, failure in ipairs({ "registry-failure", "registry-timeout" }) do
 	reset()
