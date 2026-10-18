@@ -526,12 +526,16 @@ let
       cudaPackages = pkgs.cudaPackages_12_9;
     }).overrideAttrs
       (oldAttrs: {
-        # Linux KMS normally exposes volatile numeric plane indexes. Accept a
-        # stable connector name instead and notify our display policy before
-        # encoder probing and after the final streaming client disconnects.
+        # Require the named active KMS connector instead of a wrong-monitor
+        # fallback, and notify our display policy before encoder probing and
+        # after the final streaming client disconnects.
         patches = (oldAttrs.patches or [ ]) ++ [
           ../../patches/sunshine-linux-kms-connector-and-stream-hook.patch
         ];
+        nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ pkgs.python3 ];
+        postPatch = (oldAttrs.postPatch or "") + ''
+          python ${../../tests/sunshine-patch.py} .
+        '';
       });
   mkChromeWebApp =
     {
