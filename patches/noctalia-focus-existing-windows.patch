@@ -1,18 +1,9 @@
-diff --git a/src/compositors/compositor_platform.cpp b/src/compositors/compositor_platform.cpp
-index 2cd556d..1fd247e 100644
 --- a/src/compositors/compositor_platform.cpp
 +++ b/src/compositors/compositor_platform.cpp
-@@ -841,6 +841,28 @@ void CompositorPlatform::activateToplevel(zwlr_foreign_toplevel_handle_v1* handl
- }
-
- void CompositorPlatform::activateToplevelInfo(const ToplevelInfo& window) {
-+  // Native compositor IDs are more reliable than the generic Wayland
-+  // activation request on compositors such as niri. In particular, niri may
-+  // acknowledge the foreign-toplevel request without scrolling to the window.
-+  if (!window.identifier.empty() && m_workspaceMetadataBackend != nullptr
-+      && m_workspaceMetadataBackend->focusWindowById(window.identifier)) {
-+    return;
-+  }
+@@ -964,6 +964,21 @@
+       && m_workspaceMetadataBackend->focusWindowById(window.identifier)) {
+     return;
+   }
 +  // The generic wlr-foreign-toplevel protocol synthesizes identifiers from
 +  // app-id/title, whereas niri's IPC exposes the numeric id required by its
 +  // FocusWindow action. Resolve the protocol window against the compositor's
@@ -31,22 +22,20 @@ index 2cd556d..1fd247e 100644
    if (window.handle != nullptr) {
      activateToplevel(window.handle);
      return;
-diff --git a/src/launcher/app_provider.cpp b/src/launcher/app_provider.cpp
-index fe30411..3e460e6 100644
 --- a/src/launcher/app_provider.cpp
 +++ b/src/launcher/app_provider.cpp
-@@ -3,6 +3,7 @@
- #include "compositors/compositor_platform.h"
- #include "config/config_service.h"
+@@ -6,6 +6,7 @@
  #include "i18n/i18n.h"
+ #include "launcher/launcher_provider.h"
+ #include "shell/panel/panel_manager.h"
 +#include "system/app_identity.h"
  #include "system/desktop_entry_launch.h"
  #include "util/fuzzy_match.h"
  #include "util/string_utils.h"
-@@ -219,6 +220,33 @@ bool AppProvider::activate(const LauncherResult& result) {
+@@ -323,6 +324,33 @@
        continue;
      }
-
+ 
 +    // Treat selecting an application like selecting its running dock item.
 +    // Explicit desktop actions still launch, and terminal emulators retain
 +    // their expected create-a-new-terminal behavior.
@@ -77,36 +66,9 @@ index fe30411..3e460e6 100644
      const DesktopAction* chosen = nullptr;
      if (!result.desktopActionId.empty()) {
        for (const auto& action : entry.actions) {
-diff --git a/src/app/application_ui.cpp b/src/app/application_ui.cpp
-index 9efe97e..6477094 100644
---- a/src/app/application_ui.cpp
-+++ b/src/app/application_ui.cpp
-@@ -659,4 +659,6 @@
- void Application::initNotificationAndOsd() {
--  m_notificationToast.initialize(m_wayland, &m_configService, &m_notificationManager, &m_renderContext, &m_httpClient);
-+  m_notificationToast.initialize(
-+      m_wayland, &m_configService, &m_notificationManager, &m_compositorPlatform, &m_renderContext, &m_httpClient
-+  );
-   m_configService.addReloadCallback([this]() { m_notificationToast.onConfigReload(); });
-   auto applyNotificationFilterConfig = [this]() {
-diff --git a/src/shell/notification/notification_toast.h b/src/shell/notification/notification_toast.h
-index 0942550..e29ca44 100644
 --- a/src/shell/notification/notification_toast.h
 +++ b/src/shell/notification/notification_toast.h
-@@ -14,3 +14,4 @@
-+class CompositorPlatform;
- class ConfigService;
- class HttpClient;
- class Input;
-@@ -40,6 +41,6 @@ public:
-   void initialize(
-       WaylandConnection& wayland, ConfigService* config, NotificationManager* notifications,
--      RenderContext* renderContext, HttpClient* httpClient = nullptr
-+      CompositorPlatform* platform, RenderContext* renderContext, HttpClient* httpClient = nullptr
-   );
-   void onConfigReload();
-   void onOutputChange();
-@@ -56,6 +57,7 @@ private:
+@@ -59,6 +59,7 @@
    struct PopupEntry {
      uint32_t notificationId = 0;
      std::string appName;
@@ -114,36 +76,9 @@ index 0942550..e29ca44 100644
      std::string summary;
      std::string body;
      std::vector<std::string> actions;
-@@ -189,5 +191,6 @@ private:
-   WaylandConnection* m_wayland = nullptr;
-   ConfigService* m_config = nullptr;
-   NotificationManager* m_notifications = nullptr;
-+  CompositorPlatform* m_platform = nullptr;
-   RenderContext* m_renderContext = nullptr;
-   HttpClient* m_httpClient = nullptr;
-diff --git a/src/shell/notification/notification_toast.cpp b/src/shell/notification/notification_toast.cpp
-index 79c4ca7..52005cc 100644
 --- a/src/shell/notification/notification_toast.cpp
 +++ b/src/shell/notification/notification_toast.cpp
-@@ -3,3 +3,4 @@
-+#include "compositors/compositor_platform.h"
- #include "config/config_service.h"
- #include "config/config_types.h"
- #include "core/deferred_call.h"
-@@ -501,9 +502,10 @@
- void NotificationToast::initialize(
--    WaylandConnection& wayland, ConfigService* config, NotificationManager* notifications, RenderContext* renderContext,
--    HttpClient* httpClient
-+    WaylandConnection& wayland, ConfigService* config, NotificationManager* notifications,
-+    CompositorPlatform* platform, RenderContext* renderContext, HttpClient* httpClient
- ) {
-   m_wayland = &wayland;
-   m_config = config;
-   m_notifications = notifications;
-+  m_platform = platform;
-   m_renderContext = renderContext;
-   m_httpClient = httpClient;
-@@ -612,6 +614,7 @@
+@@ -692,6 +692,7 @@
          const int prevToastBodyLines = m_entries[i].toastBodyLines;
          const bool previouslyPlaced = hasPlacement(m_entries[i]);
          m_entries[i].appName = notificationDisplayAppName(n);
@@ -151,32 +86,35 @@ index 79c4ca7..52005cc 100644
          m_entries[i].summary = n.summary;
          m_entries[i].body = n.body;
          m_entries[i].actions = n.actions;
-@@ -828,6 +831,7 @@
-   PopupEntry entry;
+@@ -914,6 +915,7 @@
    entry.notificationId = n.id;
+   entry.targetOutput = m_followFocusedOutput ? m_focusedOutput : nullptr;
    entry.appName = notificationDisplayAppName(n);
 +  entry.desktopEntry = n.desktopEntry;
    entry.summary = n.summary;
    entry.body = n.body;
    entry.actions = n.actions;
-@@ -2184,17 +2188,31 @@
-   auto viewport = std::make_unique<InputArea>();
+@@ -2414,9 +2416,13 @@
+   const bool showAppName = shouldShowNotificationAppName(m_config, entry.appName);
+ 
+   auto viewport = ui::inputArea({});
 +  std::string notificationAppId = StringUtils::toLower(entry.desktopEntry.value_or(entry.appName));
 +  if (notificationAppId.ends_with(".desktop")) {
 +    notificationAppId.resize(notificationAppId.size() - std::string_view(".desktop").size());
 +  }
    viewport->setAcceptedButtons(InputArea::buttonMask({BTN_LEFT, BTN_RIGHT}));
--  viewport->setOnClick([this, id = entry.notificationId,
-+  viewport->setOnClick([this, id = entry.notificationId, appId = std::move(notificationAppId),
-                         hasDefaultAction = !entry.actions.empty()
-                             && entry.actions.size() >= 2
-                             && entry.actions[0] == "default"](const InputArea::PointerData& data) {
+   wl_surface* const sourceSurface = outputInstance.surface->wlSurface();
+-  viewport->setOnClick([this, id = entry.notificationId, sourceSurface,
++  viewport->setOnClick([this, id = entry.notificationId, sourceSurface, appId = std::move(notificationAppId),
+                         hasDefaultAction =
+                             hasNotificationAction(entry.actions, "default")](const InputArea::PointerData& data) {
      if (data.button == BTN_RIGHT) {
-       requestClose(id, CloseReason::Dismissed);
-     } else if (data.button == BTN_LEFT && hasDefaultAction) {
+@@ -2425,8 +2431,18 @@
        if (m_notifications != nullptr) {
--        if (!m_notifications->invokeAction(id, "default", true)) {
-+        const bool invoked = m_notifications->invokeAction(id, "default", true);
+         const std::string activationToken =
+             m_wayland != nullptr ? m_wayland->requestActivationToken(sourceSurface) : std::string{};
+-        if (!m_notifications->invokeAction(id, "default", activationToken, true)) {
++        const bool invoked = m_notifications->invokeAction(id, "default", activationToken, true);
 +        if (!invoked) {
            kLog.warn("notification toast: failed to invoke default action for #{}", id);
 +        } else if (m_platform != nullptr && !StringUtils::isBlank(appId)) {
@@ -191,5 +129,3 @@ index 79c4ca7..52005cc 100644
          }
        }
      }
-   });
-   viewport->setCursorShape(WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT);

@@ -7,15 +7,15 @@ use std::{
 };
 
 use amps::{default_config_path, Config, DEFAULT_CONFIG};
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 use anyhow::bail;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use anyhow::Context;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(about = "Seven-bus Windows audio router", version)]
+#[command(about = "Audio Mixing and Processing Subsystem", version)]
 struct Cli {
 	#[arg(long, global = true, value_name = "FILE")]
 	config: Option<PathBuf>,
@@ -45,7 +45,7 @@ enum Command {
 	Doctor,
 	/// List the audio endpoints visible to AMPS.
 	Devices,
-	/// Select a temporary Windows playback endpoint for the complete bus mix.
+	/// Select AMPS's listening output without changing physical Windows defaults.
 	SelectOutput {
 		#[arg(value_name = "ENDPOINT")]
 		endpoint: String,
@@ -87,9 +87,9 @@ fn main() -> Result<()> {
 		return Ok(());
 	}
 	if matches!(cli.command, Command::Devices) {
-		#[cfg(windows)]
+		#[cfg(any(windows, target_os = "linux"))]
 		return amps::print_devices();
-		#[cfg(not(windows))]
+		#[cfg(not(any(windows, target_os = "linux")))]
 		bail!("AMPS device enumeration runs on Windows; build and run amps.exe");
 	}
 
@@ -121,7 +121,7 @@ fn main() -> Result<()> {
 	}
 	let config = Config::load(&config_path)?;
 
-	#[cfg(windows)]
+	#[cfg(any(windows, target_os = "linux"))]
 	{
 		match cli.command {
 			Command::Snapshot => {
@@ -152,7 +152,7 @@ fn main() -> Result<()> {
 				amps::run(config, config_path, stop)
 			}
 			Command::Doctor => amps::doctor(&config),
-			Command::SelectOutput { endpoint } => amps::select_main_output(&endpoint),
+			Command::SelectOutput { endpoint } => amps::select_main_output(&config, &endpoint),
 			Command::SelectInput { endpoint } => amps::select_main_input(&endpoint),
 			Command::Endpoints => amps::print_cable_endpoints(&config),
 			Command::Benchmark { seconds } => amps::benchmark(&config, seconds),
@@ -168,7 +168,7 @@ fn main() -> Result<()> {
 		}
 	}
 
-	#[cfg(not(windows))]
+	#[cfg(not(any(windows, target_os = "linux")))]
 	{
 		let _ = (config, Arc::new(AtomicBool::new(false)), Ordering::Relaxed);
 		match cli.command {

@@ -17,6 +17,7 @@ export type GraphNode = {
 	effect?: string;
 };
 export type GraphEdge = {
+	routeDestination?: string | null;
 	id: string;
 	source: string;
 	target: string;
@@ -31,7 +32,6 @@ export type Noise = {
 	enabled: boolean;
 	engine: string;
 	attenuation_limit_db: number;
-	post_filter_beta: number;
 };
 export type Runtime = {
 	schemaVersion: number;
@@ -48,8 +48,16 @@ export type Runtime = {
 	pending?: string;
 	inputName: string;
 	outputName: string;
+	devices?: DeviceBinding[];
+	unavailableRoutes?: Record<string, string>;
 };
 export type Endpoint = { id: string; name: string; selected: boolean };
+export type DeviceBinding = {
+	id: string;
+	name: string;
+	direction: "input" | "output";
+	endpointId: string;
+};
 export type Snapshot = {
 	phone?: {
 		supported: boolean;
@@ -58,7 +66,6 @@ export type Snapshot = {
 			schemaVersion: number;
 			deviceId?: string;
 			autoConnect: boolean;
-			bufferMs: number;
 		};
 		wanted: boolean;
 		connected: boolean;
@@ -74,6 +81,7 @@ export type Snapshot = {
 		suppression: string;
 		inputDevices: Endpoint[];
 		outputDevices: Endpoint[];
+		devices?: DeviceBinding[];
 		mainInput?: Endpoint;
 		mainOutput?: Endpoint;
 		sessionOverride?: string;

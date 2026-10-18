@@ -1,0 +1,60 @@
+--- a/wine-sni-bridge.py
++++ b/wine-sni-bridge.py
+@@ -29,6 +29,7 @@
+ from Xlib import X, display, Xatom, protocol, error
+ from Xlib.error import ConnectionClosedError
+ from Xlib.ext import shape, composite
++from wine_tray_menu import BattleNetMenu, is_battlenet_icon
+ 
+ SNI_WATCHER_BUS = "org.kde.StatusNotifierWatcher"
+ SNI_WATCHER_PATH = "/StatusNotifierWatcher"
+@@ -48,6 +49,8 @@
+ 
+     def __init__(self, bus_name, path, bridge):
+         self._bridge = bridge
++        self._menu_bus_name = bus_name
++        self._menu = None
+         self._icon_xid = 0
+         self._icon_data = []
+         self._title = "Wine App"
+@@ -60,6 +63,10 @@
+         self._icon_data = []
+         self._title = "Wine App"
+         self._active = True
++        command = os.environ.get("WINE_SNI_BATTLENET_RESET")
++        window = self._bridge._display.create_resource_object("window", icon_xid)
++        if command and is_battlenet_icon(window, self._bridge._display):
++            self._menu = BattleNetMenu(self._menu_bus_name, self._bridge, icon_xid, command)
+         self.NewStatus("Active")
+ 
+     def unbind(self):
+@@ -95,7 +102,7 @@
+                 ("", dbus.Array([], signature="(iiay)"), self._title, ""),
+                 signature="sa(iiay)ss"),
+             "ItemIsMenu": dbus.Boolean(False),
+-            "Menu": dbus.ObjectPath("/NO_MENU"),
++            "Menu": dbus.ObjectPath("/Menu" if self._menu else "/NO_MENU"),
+             "WindowId": dbus.Int32(self._icon_xid),
+         }
+ 
+@@ -112,7 +119,10 @@
+     @dbus.service.method(SNI_ITEM_IFACE, in_signature="ii")
+     def ContextMenu(self, x, y):
+         if self._active:
+-            self._bridge.send_click(self._icon_xid, 3)
++            if self._menu:
++                self._menu.ItemActivationRequested(0, 0)
++            else:
++                self._bridge.send_click(self._icon_xid, 3)
+ 
+     @dbus.service.method(SNI_ITEM_IFACE, in_signature="is")
+     def Scroll(self, delta, orientation):
+@@ -364,6 +374,8 @@
+ 
+         # Fully remove from DBus so waybar drops the icon
+         try:
++            if slot["sni"]._menu:
++                slot["sni"]._menu.remove_from_connection()
+             slot["sni"].remove_from_connection()
+             # Release its BusName reference before closing the connection.
+             del slot["sni"]

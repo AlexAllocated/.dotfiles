@@ -4,7 +4,11 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Recovery capsule resume compatibility is checked against this exact input.
     migration-nixpkgs.url = "github:NixOS/nixpkgs/421eebfd0ec7bccd4abe826ce62d7e6e83129493";
+    # Retain the deployed NVIDIA AFX runtime while its upstream artifact host
+    # redirects in a loop. Refresh this build pin once downloads work again.
+    nvidia-afx-nixpkgs.url = "github:NixOS/nixpkgs/ecc58f32d1069a3e3f8a991e2233d365689f748d";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -25,14 +29,16 @@
     # stable workstation base. Mango's modern socket protocol is shared by
     # both shell experiments below.
     mango = {
-      url = "github:mangowm/mango/0.15.4";
+      url = "github:mangowm/mango/0.17.5";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     noctalia = {
-      url = "github:noctalia-dev/noctalia-shell/v5.0.0-beta.3";
+      url = "github:noctalia-dev/noctalia-shell/v5.2.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    iloader.url = "github:nab138/iloader/v2.3.5";
   };
 
   outputs =
@@ -97,6 +103,7 @@
                 bash
                 git
                 lua
+                neovim
                 nixfmt
                 python3
                 rsync
@@ -111,17 +118,31 @@
               chmod -R u+w source
               cd source
               find . -name '*.nix' -print0 | xargs -0 nixfmt --check
-            shellcheck scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
-            bash -n scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
-            shfmt -d -i 0 -ci scripts/dotctl scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            shellcheck scripts/dotctl scripts/updoot scripts/maintenance-adapter.sh scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            bash -n scripts/dotctl scripts/updoot scripts/maintenance-adapter.sh scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
+            shfmt -d -i 0 -ci scripts/dotctl scripts/updoot scripts/maintenance-adapter.sh scripts/lib/*.sh scripts/commands/*.sh scripts/nixos/*.sh scripts/profiles/*.sh dot-bootstrap tests/*.bash
             for script in reboot-windows rescue-remote-on rescue-remote-off; do
               bash "scripts/nixos/$script.sh" --help >/dev/null
             done
             bash tests/dotctl.bash
             bash tests/macos-managed.bash
+            python3 tests/codex-archive.py
+            bash tests/x11-primary.bash
+            lua tests/neovim-bootstrap.lua
             stylua --check nvim .wezterm.lua wezterm
             find nvim wezterm -name '*.lua' -print0 | xargs -0 -n1 luac -p
-            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py
+            python3 -m py_compile scripts/codex/*.py scripts/windows/*.py scripts/nixos/*.py scripts/updates/*.py
+            python3 -m unittest discover -s tests -p 'test_dotctl*.py'
+            python3 scripts/dotfiles/cli.py catalog --validate
+            python3 -m unittest discover -s tests -p 'test_release_updates.py'
+            python3 -m unittest discover -s tests -p 'test_sunshine_display_policy.py'
+            python3 -m unittest discover -s tests -p 'test_wine_display_dpi.py'
+            python3 -m unittest discover -s tests -p 'test_wine_session.py'
+            python3 -m unittest discover -s tests -p 'test_wine_display_topology.py'
+            python3 -m unittest discover -s tests -p 'test_battlenet_force_close.py'
+            python3 -m unittest discover -s tests -p 'test_battlenet_settings.py'
+            python3 -m unittest discover -s tests -p 'test_wow_display_settings.py'
+            python3 -m unittest discover -s tests -p 'test_chatgpt_supervisor.py'
             python3 scripts/windows/configure-codex.py --self-test
             python3 scripts/codex/canonicalize-home.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
@@ -186,6 +207,8 @@
         nvim = ./modules/home/nvim.nix;
         neovide = ./modules/home/neovide.nix;
         codex = ./modules/home/codex.nix;
+        bumblebee = ./modules/home/bumblebee.nix;
+        bumblebee-resume = ./modules/home/bumblebee-resume.nix;
         cloud = ./modules/home/cloud.nix;
         terminal = ./modules/home/terminal.nix;
         wallpaper = ./modules/home/wallpaper.nix;
@@ -316,6 +339,10 @@
         ];
       };
 
+      nixosConfigurations.tracer-remote-rescue = self.nixosConfigurations.tracer-rescue.extendModules {
+        modules = [ ./modules/nixos/tracer-remote-rescue.nix ];
+      };
+
       homeConfigurations = {
         linux = linuxHomeConfiguration;
         ubuntu-wsl = ubuntuWslHomeConfiguration;
@@ -346,14 +373,23 @@
         })
         // {
           bigblue-font = pkgs.nerd-fonts.bigblue-terminal;
+          chatgpt-desktop = import ./packages/chatgpt-desktop.nix {
+            inherit (nixpkgs) lib;
+            inherit pkgs;
+          };
           codex = import ./packages/codex.nix {
             inherit (nixpkgs) lib;
             inherit pkgs;
           };
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          bumblebee-desktop = pkgs.callPackage ./packages/bumblebee-desktop.nix { };
+          curseforge = pkgs.callPackage ./packages/curseforge.nix { };
+          fantasy-grounds = pkgs.callPackage ./packages/fantasy-grounds.nix { };
           chev-installer-iso = self.nixosConfigurations.chev-installer.config.system.build.isoImage;
           tracer-rescue-iso = self.nixosConfigurations.tracer-rescue.config.system.build.isoImage;
+          tracer-remote-rescue-iso =
+            self.nixosConfigurations.tracer-remote-rescue.config.system.build.isoImage;
           tracer-rescue-media = pkgs.writeShellApplication {
             name = "prepare-tracer-rescue";
             runtimeInputs = with pkgs; [
@@ -493,12 +529,80 @@
           quality = mkQualityCheck pkgs toolPkgs;
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          obs-migration-and-sunshine-policy =
+            pkgs.runCommand "obs-migration-and-sunshine-policy-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
+              ''
+                export PYTHONDONTWRITEBYTECODE=1
+                python -m unittest discover -s ${self}/tests -p 'test_obs_migration.py'
+                python -m unittest discover -s ${self}/tests -p 'test_sunshine_display_policy.py'
+                touch "$out"
+              '';
           home-module-api = mkModuleApiCheck pkgs pkgs.stdenv.hostPlatform.system;
+          razer-profiles =
+            pkgs.runCommand "razer-profiles-tests"
+              {
+                nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.evdev ])) ];
+              }
+              ''
+                export PYTHONDONTWRITEBYTECODE=1
+                python -m unittest discover -s ${self}/tests -p 'test_razer*.py'
+                touch "$out"
+              '';
+          tracer-resume =
+            pkgs.runCommand "tracer-resume"
+              {
+                nativeBuildInputs = [
+                  pkgs.bash
+                  pkgs.python3
+                ];
+              }
+              ''
+                python ${self}/tests/resume-tracer.py
+                touch "$out"
+              '';
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
           profile-api = mkDarwinProfileCheck pkgs pkgs.stdenv.hostPlatform.system;
         }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+          vesktop-autostart =
+            let
+              home = self.nixosConfigurations.tracer.config.home-manager.users.alx;
+              activation = pkgs.writeText "vesktop-autostart-activation" (
+                nixpkgs.lib.replaceStrings
+                  [ "${home.xdg.configHome}/autostart/vesktop.desktop" ]
+                  [ ''"$TEST_CONFIG_HOME/autostart/vesktop.desktop"'' ]
+                  home.home.activation.vesktopAutostart.data
+              );
+            in
+            pkgs.runCommand "vesktop-autostart" { nativeBuildInputs = [ pkgs.bash ]; } ''
+              export TEST_CONFIG_HOME="$TMPDIR/config"
+              file="$TEST_CONFIG_HOME/autostart/vesktop.desktop"
+              run() { "$@"; }
+              source ${activation}
+              test -f "$file" && test ! -L "$file" && test -w "$file"
+              grep -Fx 'X-GNOME-Autostart-enabled=true' "$file"
+              cp "$file" "$TMPDIR/expected.desktop"
+              before=$(stat -c '%i:%y' "$file")
+              source ${activation}
+              test "$before" = "$(stat -c '%i:%y' "$file")"
+              printf '\nX-Vesktop-Setup=true\n' >> "$file"
+              source ${activation}
+              cmp "$file" "$TMPDIR/expected.desktop"
+              rm "$file"
+              chmod 0444 "$TMPDIR/expected.desktop"
+              ln -s "$TMPDIR/expected.desktop" "$file"
+              source ${activation}
+              test ! -L "$file" && test -w "$file"
+              cmp "$file" "$TMPDIR/expected.desktop"
+              printf '\nX-Vesktop-Setup=true\n' >> "$file"
+              test "$(stat -c %a "$TMPDIR/expected.desktop")" = 444
+              export TEST_CONFIG_HOME="$TMPDIR/dry-run"
+              run() { :; }
+              source ${activation}
+              test ! -e "$TEST_CONFIG_HOME"
+              touch "$out"
+            '';
           firefox-wayland-wrapper =
             let
               workstation = self.nixosConfigurations.chev-desktop.config;
@@ -513,8 +617,38 @@
               touch "$out"
             '';
           tracer-contract = pkgs.runCommand "tracer-contract" { } ''
+            ${self.nixosConfigurations.tracer.config.programs.niri.package}/bin/niri validate --config ${
+              pkgs.writeText "tracer-niri-config.kdl"
+                self.nixosConfigurations.tracer.config.home-manager.users.alx.xdg.configFile."niri/config.kdl".text
+            }
+            test ${
+              nixpkgs.lib.escapeShellArg
+                self.nixosConfigurations.tracer.config.xdg.portal.config.niri."org.freedesktop.impl.portal.Screenshot"
+            } = wlr
+            test ${
+              nixpkgs.lib.escapeShellArg
+                self.nixosConfigurations.tracer.config.xdg.portal.config.niri."org.freedesktop.impl.portal.ScreenCast"
+            } = gnome
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.networking.hostName} = tracer
             test ${nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.dotfiles.desktop.user} = alx
+            test ${
+              let
+                workstation = self.nixosConfigurations.tracer.config;
+                ap = workstation.systemd.services.hostapd;
+                radio = "sys-subsystem-net-devices-wlp8s0.device";
+                address = "network-addresses-wlp8s0.service";
+              in
+              if
+                workstation.services.hostapd.enable
+                && ap.wantedBy == [ radio ]
+                && builtins.elem radio ap.bindsTo
+                && builtins.elem address ap.requires
+                && builtins.elem address ap.after
+              then
+                "device-triggered"
+              else
+                "invalid-ap-dependencies"
+            } = device-triggered
             test ${
               if self.nixosConfigurations.tracer.config.services.displayManager.autoLogin.enable then
                 "enabled"
@@ -522,9 +656,8 @@
                 "disabled"
             } = enabled
             test ${
-              nixpkgs.lib.escapeShellArg
-                self.nixosConfigurations.tracer.config.boot.initrd.luks.devices."tracer-root".device
-            } = /dev/disk/by-partlabel/TRACER_CRYPT
+              nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer.config.fileSystems."/".device
+            } = /dev/disk/by-label/TRACER_NIX
             test ${
               nixpkgs.lib.escapeShellArg self.nixosConfigurations.tracer-rescue.config.fileSystems."/home".device
             } = /dev/disk/by-partlabel/TRACER_RESCUE_DATA

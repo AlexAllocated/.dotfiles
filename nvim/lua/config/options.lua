@@ -3,6 +3,7 @@
 -- Add any additional options here
 
 if vim.g.neovide then
+	vim.g.neovide_opacity = 0.75
 	if vim.fn.has("wsl") == 1 then
 		if vim.fn.argc() == 0 then
 			vim.api.nvim_set_current_dir(vim.env.HOME)

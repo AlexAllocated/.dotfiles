@@ -1,0 +1,80 @@
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -302,8 +302,19 @@
+             let window = *window;
+             let x = (pending.x.max(0) as f64 * scale_factor.0) as i32 + window_data.output_offset.x;
+             let y = (pending.y.max(0) as f64 * scale_factor.0) as i32 + window_data.output_offset.y;
++            // Preserve exact output pixels for fullscreen Wine clients without
++            // changing fractional-size titlebar/content layout for ordinary windows.
++            let fullscreen = matches!(role, SurfaceRole::Toplevel(Some(toplevel)) if toplevel.fullscreen);
++            let to_physical = |logical: i32| {
++                let physical = logical as f64 * scale_factor.0;
++                if fullscreen {
++                    physical.round() as u16
++                } else {
++                    physical as u16
++                }
++            };
+             let width = if pending.width > 0 {
+-                (pending.width as f64 * scale_factor.0) as u16
++                to_physical(pending.width)
+             } else {
+                 window_data.attrs.dims.width
+             };
+@@ -319,7 +330,7 @@
+                         }
+                     }
+                 }
+-                (logical_height as f64 * scale_factor.0) as u16
++                to_physical(logical_height)
+             } else {
+                 window_data.attrs.dims.height
+             };
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -3343,3 +3343,45 @@
+ /// See Pointer::handle_event for an explanation.
+ #[test]
+ fn popup_pointer_motion_workaround() {}
++#[test]
++fn fractional_fullscreen_monitor_handoff_dimensions() {
++    let mut f = TestFixture::new_pre_connect(|testwl| {
++        testwl.enable_fractional_scale();
++    });
++    let comp = f.compositor();
++    let (_, desktop) = f.new_output(0, 0);
++    let (_, tablet) = f.new_output(3440, 270);
++    let window = Window::new(1);
++    let (_, id) = f.create_toplevel(&comp, window);
++    let fractional = f
++        .testwl
++        .get_surface_data(id)
++        .unwrap()
++        .fractional
++        .clone()
++        .unwrap();
++
++    // LG -> iPad at 175% -> LG. Wine needs the complete physical dimensions
++    // to recognize borderless fullscreen after each compositor resize.
++    for (output, scale, logical, physical) in [
++        (&desktop, 120, (3440, 1440), (3440, 1440)),
++        (&tablet, 210, (1561, 1170), (2732, 2048)),
++        (&desktop, 120, (3440, 1440), (3440, 1440)),
++    ] {
++        fractional.preferred_scale(scale);
++        f.testwl.move_surface_to_output(id, output);
++        f.run();
++        f.testwl.configure_toplevel(
++            id,
++            logical.0,
++            logical.1,
++            vec![xdg_toplevel::State::Fullscreen],
++        );
++        f.run();
++        f.run();
++        let data = f.connection().window(window);
++        assert!(data.fullscreen);
++        assert_eq!((data.dims.width, data.dims.height), physical);
++    }
++}
++

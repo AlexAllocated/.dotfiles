@@ -11,6 +11,7 @@ import pathlib
 import pickle
 import sys
 import time
+import uuid
 
 import hid
 
@@ -24,11 +25,8 @@ PRODUCT_IDS = {
     "wireless": 0x00D7,
 }
 
-# Linux input events emitted by the physical controls in the recovered
-# Input Remapper profiles.  The four F13-F16 entries were only an old bridge;
-# they identify the corresponding Razer controls and are never emitted by the
-# direct layouts produced here.
 INPUT_BUTTONS = {
+    (1, 274, None): protocol.Button.MIDDLE,
     (1, 183, None): protocol.Button.BOTTOM,
     (1, 184, None): protocol.Button.AIM,
     (1, 185, None): protocol.Button.MIDDLE_BACKWARD,
@@ -43,11 +41,14 @@ INPUT_BUTTONS = {
 # present in the recovered Synapse profiles must be understood before any
 # hardware write begins.
 KEYBOARD_USAGES = {
+    "KEY_A": 0x04,
     "KEY_B": 0x05,
     "KEY_C": 0x06,
     "KEY_E": 0x08,
+    "KEY_F": 0x09,
     "KEY_G": 0x0A,
     "KEY_H": 0x0B,
+    "KEY_I": 0x0C,
     "KEY_K": 0x0E,
     "KEY_M": 0x10,
     "KEY_Q": 0x14,
@@ -55,6 +56,7 @@ KEYBOARD_USAGES = {
     "KEY_T": 0x17,
     "KEY_V": 0x19,
     "KEY_X": 0x1B,
+    "KEY_Z": 0x1D,
     "KEY_ESC": 0x29,
     "KEY_TAB": 0x2B,
     "KEY_SPACE": 0x2C,
@@ -64,6 +66,14 @@ KEYBOARD_USAGES = {
     "KEY_DOT": 0x37,
     "KEY_F1": 0x3A,
     "KEY_F5": 0x3E,
+    "KEY_F10": 0x43,
+    "KEY_PAGEUP": 0x4B,
+    "KEY_PAGEDOWN": 0x4E,
+    "KEY_KP0": 0x62,
+    "KEY_F13": 0x68,
+    "KEY_F14": 0x69,
+    "KEY_F15": 0x6A,
+    "KEY_F16": 0x6B,
 }
 KEYBOARD_MODIFIERS = {
     "KEY_LEFTCTRL": protocol.FnKeyboardModifier.LEFT_CONTROL,
@@ -75,6 +85,22 @@ KEYBOARD_MODIFIERS = {
     "KEY_RIGHTALT": protocol.FnKeyboardModifier.RIGHT_ALT,
     "KEY_RIGHTMETA": protocol.FnKeyboardModifier.RIGHT_GUI,
 }
+KEYBOARD_USAGES.update({f"KEY_{letter}": 4 + index for index, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ")})
+KEYBOARD_USAGES.update({f"KEY_{key}": 30 + index for index, key in enumerate("1234567890")})
+KEYBOARD_USAGES.update({f"KEY_F{index}": 57 + index for index in range(1, 13)})
+KEYBOARD_USAGES.update({f"KEY_F{index}": 91 + index for index in range(13, 25)})
+KEYBOARD_USAGES.update({
+    "KEY_ENTER": 40, "KEY_BACKSPACE": 42, "KEY_MINUS": 45,
+    "KEY_LEFTBRACE": 47, "KEY_RIGHTBRACE": 48, "KEY_BACKSLASH": 49,
+    "KEY_SEMICOLON": 51, "KEY_APOSTROPHE": 52, "KEY_SLASH": 56, "KEY_CAPSLOCK": 57,
+    "KEY_SYSRQ": 70, "KEY_SCROLLLOCK": 71, "KEY_PAUSE": 72, "KEY_INSERT": 73,
+    "KEY_HOME": 74, "KEY_DELETE": 76, "KEY_END": 77,
+    "KEY_RIGHT": 79, "KEY_LEFT": 80, "KEY_DOWN": 81, "KEY_UP": 82,
+    "KEY_NUMLOCK": 83, "KEY_KPSLASH": 84, "KEY_KPASTERISK": 85, "KEY_KPMINUS": 86,
+    "KEY_KPPLUS": 87, "KEY_KPENTER": 88, "KEY_KPDOT": 99, "KEY_102ND": 100,
+    "KEY_COMPOSE": 101,
+})
+KEYBOARD_USAGES.update({f"KEY_KP{index}": 88 + index for index in range(1, 10)})
 
 
 def candidate_paths(transport):
@@ -188,6 +214,9 @@ def keyboard_function(output_symbol):
 def baseline_bindings():
     """Return the normal hardware behavior for every profile-aware control."""
     return {
+        protocol.Button.MIDDLE: protocol.ButtonFunction().set_mouse(
+            protocol.FnMouse.MIDDLE
+        ),
         protocol.Button.BACKWARD: protocol.ButtonFunction().set_mouse(
             protocol.FnMouse.BACKWARD
         ),
@@ -266,6 +295,57 @@ def apply_profile(device, profiles_dir, name, target=protocol.Profile.DIRECT):
             **describe(current),
         }
     return result
+
+
+def persist_profile(device, profiles_dir, name, backup_dir):
+    """Keep the wake-up profile aligned without resetting flash or settings."""
+    bindings, _ = compile_profile(profiles_dir, name)
+    target = protocol.Profile.DEFAULT
+    if target not in device.get_profile_list():
+        raise RuntimeError("The default onboard profile is missing; refusing to reset or replace other profiles")
+    previous = {
+        button: device.get_button_function(button, profile=target)
+        for button in bindings
+    }
+    changed = [button for button, function in bindings.items()
+               if bytes(previous[button]) != bytes(function)]
+    if not changed:
+        return {"changed": [], "backup": None}
+
+    # Preserve the exact old assignments before the first nonvolatile write.
+    # DPI, polling, lighting, macros, shifted bindings and other slots are untouched.
+    backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    backup = backup_dir / f"{time.time_ns()}-{uuid.uuid4().hex}.json"
+    with backup.open("x", encoding="utf-8") as stream:
+        json.dump({
+            "version": 1,
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "selected_profile": name,
+            "onboard_profile": target.value,
+            "bindings": {button.name: bytes(function).hex()
+                         for button, function in previous.items()},
+        }, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+    attempted = []
+    try:
+        for button in changed:
+            # A failed write can still have reached hardware, so include it
+            # in rollback before attempting the command.
+            attempted.append(button)
+            set_and_verify(device, button, bindings[button], target)
+    except Exception as error:
+        failures = []
+        for button in reversed(attempted):
+            try:
+                set_and_verify(device, button, previous[button], target)
+            except Exception as rollback:
+                failures.append(f"{button.name}: {rollback}")
+        detail = "; rollback failed: " + "; ".join(failures) if failures else "; old bindings restored"
+        raise RuntimeError(f"Onboard profile update failed{detail}; backup: {backup}") from error
+    return {"changed": [button.name.lower() for button in changed], "backup": str(backup)}
 
 
 def read_selected(state_file, profiles_dir):
@@ -399,6 +479,10 @@ def parse_args():
         default="auto",
     )
     parser.add_argument("--attempts", type=int, default=10)
+    parser.add_argument(
+        "--onboard-backups", type=pathlib.Path,
+        help="also persist selected button bindings in the default onboard slot, backing up changes here",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("list-profiles", help="list recovered profile names")
     subparsers.add_parser("status", help="show the selected profile")
@@ -409,7 +493,7 @@ def parse_args():
     validate_parser.add_argument("profile", nargs="?")
     apply_parser = subparsers.add_parser(
         "apply-profile",
-        help="apply and remember a profile in the volatile direct layer",
+        help="apply and remember a profile (also onboard when --onboard-backups is set)",
     )
     apply_parser.add_argument("profile")
     subparsers.add_parser(
@@ -460,6 +544,9 @@ def main():
     device = None
     try:
         device, transport, path = connect(args.transport, args.attempts)
+        persistent = None
+        if args.onboard_backups and args.command in ("apply-profile", "reapply-profile"):
+            persistent = persist_profile(device, args.profiles_dir, selected, args.onboard_backups)
         if args.command == "apply-profile":
             bindings = apply_profile(device, args.profiles_dir, selected)
             write_selected(args.state_file, selected)
@@ -483,6 +570,7 @@ def main():
                     "command": args.command,
                     "profile": selected,
                     "bindings": bindings,
+                    "onboard": persistent,
                 },
                 indent=2,
                 sort_keys=True,

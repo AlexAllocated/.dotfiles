@@ -15,7 +15,7 @@ validated 4 TB-class disk that already contains Windows Boot Manager. Existing
 Windows partitions are preserved. The command creates a 2 GiB XBOOTLDR and a
 LUKS2/Btrfs NixOS partition, then installs the tracer flake.
 
-Windows must be installed first into approximately 500 GiB while the secondary
+Windows must be installed first into approximately 1.5 TB while the secondary
 Intel SSD is physically disconnected. Secure Boot and BitLocker must still be
 disabled for this first installation.
 EOF
@@ -139,9 +139,9 @@ free_record="$(
 )"
 read -r free_size free_start free_end <<<"$free_record"
 sector_size="$(blockdev --getss "$disk")"
-minimum_free_sectors=$((2500 * 1024 * 1024 * 1024 / sector_size))
+minimum_free_sectors=$((2400000000000 / sector_size))
 [[ -n "${free_size:-}" && "$free_size" -ge "$minimum_free_sectors" ]] || {
-	printf '%s\n' 'The largest unallocated extent is smaller than the 2.5 TiB safety minimum.' >&2
+	printf '%s\n' 'The largest unallocated extent is smaller than the 2.4 TB safety minimum.' >&2
 	exit 1
 }
 boot_sectors=$((2 * 1024 * 1024 * 1024 / sector_size))

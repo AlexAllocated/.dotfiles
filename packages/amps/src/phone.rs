@@ -1,4 +1,4 @@
-//! Private phone playback. No phone signal is inserted into the VAC patchbay.
+//! Phone reception and explicit graph fan-out. Private Main Output by default.
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -13,10 +13,18 @@ use std::{
 
 #[cfg(any(windows, test))]
 mod buffer;
+#[cfg(any(windows, test))]
+pub(crate) mod hub;
+#[cfg(any(windows, test))]
+mod recovery;
 #[cfg(windows)]
 mod relay;
 #[cfg(windows)]
+pub(crate) use relay::Fanout;
+mod ipc;
+#[cfg(windows)]
 mod windows;
+pub use ipc::Client;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -31,7 +39,6 @@ pub struct Settings {
 	pub schema_version: u32,
 	pub device_id: Option<String>,
 	pub auto_connect: bool,
-	pub buffer_ms: u32,
 }
 impl Default for Settings {
 	fn default() -> Self {
@@ -39,7 +46,6 @@ impl Default for Settings {
 			schema_version: 1,
 			device_id: None,
 			auto_connect: false,
-			buffer_ms: 200,
 		}
 	}
 }
@@ -52,7 +58,6 @@ impl Settings {
 			Err(e) => return Err(e.into()),
 		};
 		crate::control::check_schema(settings.schema_version)?;
-		check_buffer_ms(settings.buffer_ms)?;
 		Ok(settings)
 	}
 	fn save(&self, path: &Path) -> Result<()> {
@@ -60,7 +65,7 @@ impl Settings {
 	}
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
 	pub supported: bool,
@@ -87,20 +92,52 @@ impl Default for Snapshot {
 	}
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Request {
 	pub action: String,
 	pub device_id: Option<String>,
 	pub auto_connect: Option<bool>,
-	pub buffer_ms: Option<u32>,
+}
+impl Request {
+	fn validate(&self) -> Result<()> {
+		if ![
+			"connect",
+			"reconnect",
+			"disconnect",
+			"refresh",
+			"settings",
+			"quiesce",
+		]
+		.contains(&self.action.as_str())
+		{
+			bail!("Unknown phone action");
+		}
+		if self.device_id.as_ref().is_some_and(|id| id.len() > 4096) {
+			bail!("Invalid phone device ID");
+		}
+		Ok(())
+	}
 }
 
-fn check_buffer_ms(value: u32) -> Result<()> {
-	if !(50..=500).contains(&value) {
-		bail!("Phone buffer must be between 50 and 500 ms");
-	}
-	Ok(())
+/// Best-effort graceful shutdown before the supervisor terminates the engine.
+pub fn quiesce(config: &Path) {
+	let client = Client::new(config);
+	let _ = client.edit_timeout(
+		Request {
+			action: "quiesce".into(),
+			device_id: None,
+			auto_connect: None,
+		},
+		Duration::from_secs(2),
+	);
+}
+/// Fail closed even after an engine crash; never restore the default/VAC route.
+pub fn disable_native_listen(config: &Path) {
+	#[cfg(windows)]
+	let _ = windows::disable_native_listen(config);
+	#[cfg(not(windows))]
+	let _ = config;
 }
 
 enum Message {
@@ -112,8 +149,10 @@ enum Message {
 	Stop,
 }
 
-/// The tray owns this receiver; closing its window does not stop phone playback.
+/// The engine owns reception and routing. The tray talks to it via local IPC.
 pub struct Service {
+	#[cfg(windows)]
+	pub(crate) hub: Arc<hub::Hub>,
 	sender: mpsc::Sender<Message>,
 	snapshot: Arc<Mutex<Snapshot>>,
 	meter: Arc<Mutex<Option<crate::MeterReading>>>,
@@ -125,7 +164,14 @@ impl Service {
 		let (sender, receiver) = mpsc::channel();
 		let snapshot = Arc::new(Mutex::new(Snapshot::default()));
 		let meter = Arc::new(Mutex::new(None));
+		#[cfg(not(windows))]
 		let path = config_path.with_file_name("phone.toml");
+		#[cfg(windows)]
+		let source_config = config_path.to_path_buf();
+		#[cfg(windows)]
+		let hub = hub::Hub::new();
+		#[cfg(windows)]
+		let worker_hub = hub.clone();
 		let state = snapshot.clone();
 		let levels = meter.clone();
 		let stop = Arc::new(AtomicBool::new(false));
@@ -136,7 +182,15 @@ impl Service {
 			.name("amps-phone".into())
 			.spawn(move || {
 				#[cfg(windows)]
-				windows::run(path, receiver, state, levels, stopped, wakeup);
+				windows::run(
+					source_config,
+					receiver,
+					state,
+					levels,
+					stopped,
+					wakeup,
+					worker_hub,
+				);
 				#[cfg(not(windows))]
 				{
 					let _ = (path, levels, stopped);
@@ -159,6 +213,8 @@ impl Service {
 			})
 			.expect("could not start the AMPS phone receiver");
 		Self {
+			#[cfg(windows)]
+			hub,
 			sender,
 			snapshot,
 			meter,
@@ -176,12 +232,7 @@ impl Service {
 		let _ = self.sender.send(Message::Output(output));
 	}
 	pub fn edit(&self, request: Request) -> Result<()> {
-		if let Some(value) = request.buffer_ms {
-			check_buffer_ms(value)?;
-		}
-		if !["connect", "disconnect", "refresh", "settings"].contains(&request.action.as_str()) {
-			bail!("Unknown phone action");
-		}
+		request.validate()?;
 		let (sender, receiver) = mpsc::channel();
 		self.sender.send(Message::Edit(request, sender))?;
 		receiver
@@ -248,56 +299,26 @@ pub fn append_topology(topology: &mut crate::topology::Topology, phone: &Snapsho
 	if !phone.supported {
 		return;
 	}
-	use crate::topology::{Edge, Node, Port};
-	topology.nodes.push(Node {
-		id: "phone".into(),
-		title: "Phone Audio".into(),
-		kind: "device",
-		detail: phone
+	if let Some(node) = topology.nodes.iter_mut().find(|n| n.id == "phone") {
+		node.detail = phone
 			.devices
 			.iter()
 			.find(|d| Some(&d.id) == phone.settings.device_id.as_ref())
 			.map(|d| format!("{} · {}", d.name, phone.phase))
-			.unwrap_or_else(|| "Select a paired phone · private playback".into()),
-		meter: Some("phone".into()),
-		inputs: vec![],
-		effect: None,
-		outputs: vec![Port {
-			id: "out".into(),
-			label: "Private listening".into(),
-			direction: "output",
-			editable: false,
-			signal: "Phone PCM",
-			fan_in: false,
-		}],
-	});
-	if phone.connected && phone.output.is_some() {
-		if let Some(output) = topology.nodes.iter_mut().find(|n| n.id == "main_output") {
-			output.inputs.push(Port {
-				id: "phone".into(),
-				label: "Private phone".into(),
-				direction: "input",
-				editable: false,
-				signal: "Phone PCM",
-				fan_in: false,
-			});
-		}
-		topology.edges.push(Edge {
-			id: "fixed:phone:main_output".into(),
-			source: "phone".into(),
-			target: "main_output".into(),
-			source_handle: "out".into(),
-			target_handle: "phone".into(),
-			kind: "fixed",
-			meter: Some("phone".into()),
-			label: "Private phone playback · bypasses VAC and listening mix".into(),
-		});
+			.unwrap_or_else(|| "Select a paired phone · private by default".into());
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[test]
+	fn receiver_never_initiates_a_bluetooth_connection() {
+		let source = include_str!("phone/windows.rs");
+		assert!(source.contains("connection.StartAsync()?"));
+		assert!(!source.contains(".OpenAsync("));
+		assert!(!source.contains(".Open("));
+	}
 	#[test]
 	fn maps_exact_bluetooth_instance() {
 		assert_eq!(
@@ -312,24 +333,28 @@ mod tests {
 		let temp = tempfile::tempdir().unwrap();
 		let path = temp.path().join("phone.toml");
 		assert!(!Settings::load(&path).unwrap().auto_connect);
-		assert_eq!(Settings::load(&path).unwrap().buffer_ms, 200);
 		let settings = Settings {
 			device_id: Some("fixture".into()),
 			auto_connect: true,
-			buffer_ms: 300,
 			..Default::default()
 		};
 		settings.save(&path).unwrap();
 		assert_eq!(Settings::load(&path).unwrap().device_id, settings.device_id);
-		assert_eq!(Settings::load(&path).unwrap().buffer_ms, 300);
-		assert!(check_buffer_ms(49).is_err());
-		assert!(check_buffer_ms(501).is_err());
+		let legacy = format!(
+			"{}\nbufferMs = 500\n",
+			toml::to_string_pretty(&settings).unwrap()
+		);
+		std::fs::write(&path, legacy).unwrap();
+		assert_eq!(Settings::load(&path).unwrap(), settings);
+		assert!(!toml::to_string_pretty(&settings)
+			.unwrap()
+			.contains("buffer"));
 		std::fs::write(&path, "schemaVersion = 2").unwrap();
 		assert!(Settings::load(&path).is_err());
 		assert_eq!(std::fs::read_to_string(&path).unwrap(), "schemaVersion = 2");
 	}
 	#[test]
-	fn phone_never_projects_to_patch_buses() {
+	fn phone_status_does_not_invent_routes() {
 		let mut topology = crate::topology::Topology {
 			nodes: vec![],
 			edges: vec![],
@@ -344,8 +369,7 @@ mod tests {
 			..Default::default()
 		};
 		append_topology(&mut topology, &phone);
-		assert!(topology.nodes[0].outputs.iter().all(|p| !p.editable));
-		assert_eq!(topology.edges.len(), 1);
-		assert_eq!(topology.edges[0].target, "main_output");
+		assert!(topology.nodes.is_empty());
+		assert!(topology.edges.is_empty());
 	}
 }

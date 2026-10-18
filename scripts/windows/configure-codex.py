@@ -124,8 +124,6 @@ def toml_array(values: list[str]) -> str:
 def generated_fragment(args: argparse.Namespace) -> str:
     powershell_args = ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
     lines = [
-        f"sqlite_home = {toml_string(str(Path(args.linux_home) / '.codex' / 'sqlite'))}",
-        "",
         "[desktop.open-in-target-preferences]",
         'global = "custom:neovide-wsl"',
         "",
@@ -156,6 +154,12 @@ def configure(args: argparse.Namespace) -> bool:
         tomllib.loads(existing)
 
     document = TomlDocument(existing)
+    legacy_sqlite = str(Path(args.linux_home) / ".codex" / "sqlite")
+    if tomllib.loads(existing).get("sqlite_home") == legacy_sqlite:
+        document.sections[None] = [
+            line for line in document.sections[None]
+            if not re.match(r"^\s*sqlite_home\s*=", line)
+        ]
     project_paths_rewritten = document.canonicalize_linux_projects(args.linux_home)
     managed_text = Path(args.desktop_config).read_text()
     tomllib.loads(managed_text)
@@ -195,6 +199,7 @@ def self_test() -> None:
         desktop.write_text('[desktop]\nintegratedTerminalShell = "wsl"\n')
         config.write_text(
             'model = "local"\n'
+            'sqlite_home = "/home/tester/.codex/sqlite"\n'
             "\n"
             '[projects."/home/legacy/code"]\n'
             'trust_level = "trusted"\n'
@@ -224,13 +229,16 @@ def self_test() -> None:
         assert parsed["model"] == "local"
         assert parsed["plugins"]["linear@openai-curated"]["enabled"] is True
         assert parsed["mcp_servers"]["linear"]["url"] == "https://mcp.linear.app/mcp"
-        assert parsed["sqlite_home"] == "/home/tester/.codex/sqlite"
+        assert "sqlite_home" not in parsed
         assert "/home/legacy/code" not in parsed["projects"]
         assert parsed["projects"]["/home/tester/code"]["trust_level"] == "trusted"
         assert parsed["desktop"]["open-in-target-preferences"]["global"] == "custom:neovide-wsl"
         assert "neovim-wsl" in parsed["desktop"]["custom_file_handlers"]
         assert "neovide-wsl" in parsed["desktop"]["custom_file_handlers"]
         assert not configure(args)
+        config.write_text('sqlite_home = "C:/custom/codex-state"\n' + config.read_text())
+        assert not configure(args)
+        assert tomllib.loads(config.read_text())["sqlite_home"] == "C:/custom/codex-state"
 
 
 def parse_args() -> argparse.Namespace:

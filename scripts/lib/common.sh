@@ -69,7 +69,7 @@ apply_windows_packages() {
 apply_windows_integration() {
 	local source_root="${1:-$REPO_ROOT}"
 	local script font_installer configurator desktop_config ssh_forwarder quest_hotspot obs_configurator obs_wallpaper obs_production_mode obs_production_launcher amps_configurator amps_endpoint_configurator amps_source amps_workspace docker_configurator always_on slack_presence slack_presence_launcher vdd_settings sunshine_session sunshine_configurator nvidia_frame_limiter wallpaper_configurator lg_display wallpaper_ultrawide wallpaper_ipad script_windows nvidia_video_effects nvidia_audio_effects
-	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows obs_production_mode_windows obs_production_launcher_windows nvidia_frame_limiter_windows amps_configurator_windows amps_source_windows docker_configurator_windows nvidia_video_effects_windows nvidia_audio_effects_windows
+	local font_package font_directory_windows font_installer_windows obs_configurator_windows obs_wallpaper_windows obs_production_mode_windows obs_production_launcher_windows nvidia_frame_limiter_windows amps_configurator_windows amps_source_windows nvidia_video_effects_windows nvidia_audio_effects_windows
 	local windows_home local_appdata program_files system_root windows_home_linux local_appdata_linux neovide_windows
 	local ssh_forwarder_target ssh_forwarder_target_windows quest_hotspot_target quest_hotspot_target_windows always_on_target always_on_target_windows slack_presence_target slack_presence_target_windows slack_presence_launcher_target
 	local vdd_settings_target sunshine_configurator_target sunshine_configurator_target_windows nvidia_frame_limiter_target wallpaper_configurator_target wallpaper_configurator_target_windows lg_display_target lg_display_target_windows wallpaper_directory wallpaper_directory_windows minecraft_vr minecraft_desktop minecraft_graphics powerwash_configurator powerwash_launcher powerwash_configurator_target powerwash_configurator_target_windows flat2vr_configurator flat2vr_configurator_target flat2vr_configurator_target_windows
@@ -168,9 +168,9 @@ apply_windows_integration() {
 		-ProductionModeScriptPath "$obs_production_mode_windows" \
 		-ProductionFrameLauncherPath "$obs_production_launcher_windows" \
 		-FrameLimiterPath "$nvidia_frame_limiter_windows"
-	docker_configurator_windows="$(wslpath -w "$docker_configurator")"
-	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$docker_configurator_windows" \
-		-DistroName "$WSL_DISTRO_NAME"
+	local system_restore_configurator_windows
+	system_restore_configurator_windows="$(wslpath -w "$source_root/scripts/windows/configure-system-restore.ps1")"
+	powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$system_restore_configurator_windows" -Disable
 
 	windows_home="$(powershell.exe -NoLogo -NoProfile -Command "\$env:USERPROFILE" | tr -d '\r')"
 	local_appdata="$(powershell.exe -NoLogo -NoProfile -Command "\$env:LOCALAPPDATA" | tr -d '\r')"
@@ -257,9 +257,16 @@ apply_windows_integration() {
 			"$flat2vr_configurator_target_windows" -Mode Ensure
 	fi
 
-	mkdir -p "$HOME/.codex/sqlite"
+	local windows_codex_home codex_config_home
+	windows_codex_home="$(powershell.exe -NoLogo -NoProfile -Command \
+		'[Environment]::GetEnvironmentVariable("CODEX_HOME", "User")' | tr -d '\r')"
+	if [[ -n "$windows_codex_home" ]]; then
+		codex_config_home="$(wslpath -u "$windows_codex_home")"
+	else
+		codex_config_home="$windows_home_linux/.codex"
+	fi
 	python3 "$configurator" \
-		--config "$windows_home_linux/.codex/config.toml" \
+		--config "$codex_config_home/config.toml" \
 		--desktop-config "$desktop_config" \
 		--linux-home "$HOME" \
 		--neovim-script "$local_appdata\\NvimWSL\\open-in-nvim.ps1" \
@@ -307,15 +314,17 @@ detect_profile() {
 flake_ref_for_profile() {
 	local profile="$1"
 	local source_root="${2:-$REPO_ROOT}"
+	local source_ref
+	source_ref="$(python3 -c 'from pathlib import Path; import sys; print("git+" + Path(sys.argv[1]).resolve().as_uri())' "$source_root")" || return $?
 	case "$profile" in
-		ubuntu-wsl) printf 'path:%s#ubuntu-wsl\n' "$source_root" ;;
-		tracer) printf 'path:%s#tracer\n' "$source_root" ;;
+		ubuntu-wsl) printf '%s#ubuntu-wsl\n' "$source_ref" ;;
+		tracer) printf '%s#tracer\n' "$source_ref" ;;
 		# The native target includes a machine-generated, gitignored ESP PARTUUID.
 		# path: semantics deliberately include it in every rebuild.
 		chev-desktop) printf 'path:%s#chev-desktop\n' "$source_root" ;;
-		linux) printf 'path:%s#linux\n' "$source_root" ;;
-		macos) printf 'path:%s#macos-arm64\n' "$source_root" ;;
-		darwin-macos) printf 'path:%s#macos-arm64\n' "$source_root" ;;
+		linux) printf '%s#linux\n' "$source_ref" ;;
+		macos) printf '%s#macos-arm64\n' "$source_ref" ;;
+		darwin-macos) printf '%s#macos-arm64\n' "$source_ref" ;;
 		*)
 			printf 'Profile does not have a Nix flake output: %s\n' "$profile" >&2
 			return 2

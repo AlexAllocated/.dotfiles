@@ -1,4 +1,21 @@
 export const key = (source, destination) => `${source}:${destination}`;
+export const visibleDestination = destination =>
+	destination === "monitor" ? "main_output" : destination;
+export const edgeRoute = edge => ({
+	source: edge.source,
+	destination: edge.routeDestination ?? edge.target
+});
+export function connectionRoute(connection, replacing) {
+	if (replacing && connection.target === replacing.target)
+		return { source: connection.source, destination: edgeRoute(replacing).destination };
+	return {
+		source: connection.source,
+		destination:
+			connection.target === "main_output" && connection.source !== "phone" ?
+				"monitor"
+			:	connection.target
+	};
+}
 export const colors = {
 	game: "#2288ff",
 	comms: "#e98181",
@@ -30,7 +47,9 @@ export function validateConnection(topology, patches, connection, replacing) {
 		!target?.inputs.some(p => p.id === connection.targetHandle && p.editable)
 	)
 		return "This port is part of a fixed pipeline, not an editable audio connection.";
-	const remaining = patches.filter(p => !replacing || key(p.source, p.destination) !== replacing);
+	const remaining = patches
+		.filter(p => !replacing || key(p.source, p.destination) !== replacing)
+		.map(p => ({ ...p, destination: visibleDestination(p.destination) }));
 	if (connection.source === connection.target) return "A bus cannot feed itself.";
 	if (remaining.some(p => p.source === source.id && p.destination === target.id))
 		return "That connection already exists.";
@@ -53,6 +72,23 @@ export function trace(topology, id) {
 			)
 			.map(e => e.id)
 	);
+}
+
+// Nodes and wires must describe the same selected signal path. Null nodeIds
+// means overview (including unwired nodes), not an empty/fully dimmed graph.
+export function focusTrace(topology, nodeId, edgeId) {
+	const node = topology.nodes.find(n => n.id === nodeId);
+	const edge = topology.edges.find(e => e.id === edgeId);
+	if (!node && !edge) return { edgeIds: trace(topology, null), nodeIds: null };
+	const edgeIds = edge ? new Set([edge.id]) : trace(topology, node.id);
+	const nodeIds = new Set(edge ? [] : [node.id]);
+	for (const e of topology.edges) {
+		if (edgeIds.has(e.id)) {
+			nodeIds.add(e.source);
+			nodeIds.add(e.target);
+		}
+	}
+	return { edgeIds, nodeIds };
 }
 // Audio samples are interpolated by path distance, not squeezed into one period
 // per edge. Silent/missing samples never become a synthetic travelling signal.

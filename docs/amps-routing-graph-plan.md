@@ -90,7 +90,7 @@ an extra wire. The UI must explain that limitation.
   per-edge routing transaction. A node-editor library will not fix that boundary.
   [Current patch worker](https://github.com/AlexAllocated/.dotfiles/blob/8af62e484a0b538924dcce08d01b5dd08b7332f7/packages/audioarray/src/windows_audio.rs#L1798).
 - Microphone capture, 48 kHz mono processing, and VAC Clean Mic output form a
-  dedicated pipeline. NVIDIA AFX and DeepFilterNet are real in-process DSP, but
+  dedicated pipeline. NVIDIA AFX provides in-process DSP, but
   currently belong to that pipeline rather than arbitrary insert slots.
   [Current mic pipeline](https://github.com/AlexAllocated/.dotfiles/blob/8af62e484a0b538924dcce08d01b5dd08b7332f7/packages/audioarray/src/windows_audio.rs#L1978).
 - DTS Headphone:X and Dolby Atmos are selected on the Game and Music Windows

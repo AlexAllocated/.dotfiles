@@ -18,8 +18,6 @@ use cpal::{
 	Device, Sample, SampleFormat, SampleRate, Stream, StreamConfig, SupportedStreamConfig,
 };
 use crossbeam_queue::ArrayQueue;
-use df::tract::{DfParams, DfTract, RuntimeParams};
-use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 use wasapi::{DeviceEnumerator, Direction as WasapiDirection, Role as WasapiRole};
@@ -32,7 +30,7 @@ use crate::{
 	master_volume::MasterVolumeBridge,
 	nvidia_afx::NvidiaAfx,
 	patch_destinations, patch_sources, BusSummary, Config, EndpointSummary, GraphSnapshot,
-	MeterReading, PatchConnection, SuppressionBackend, SuppressionTransition,
+	MeterReading, PatchConnection,
 };
 
 const SAMPLE_RATE: u32 = 48_000;
@@ -51,126 +49,10 @@ const PROCESSED_MIC_TELEMETRY_STALE_AFTER: Duration = Duration::from_millis(250)
 const ENDPOINT_HISTORY_LIMIT: usize = 8;
 const PREFERRED_ENDPOINT_RECHECK_INTERVAL: Duration = Duration::from_secs(2);
 const NVIDIA_AFX_LABEL: &str = "NVIDIA AFX (RTX)";
-const DEEPFILTER_LABEL: &str = "DeepFilterNet3";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ActiveSuppressionStatus {
 	engine: String,
-}
-
-enum SuppressionProcessor {
-	Nvidia(NvidiaAfx),
-	DeepFilter {
-		model: Box<DfTract>,
-		input: Array2<f32>,
-		output: Array2<f32>,
-	},
-}
-
-impl SuppressionProcessor {
-	fn new(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
-		match config.engine.as_str() {
-			"nvidia_afx" => Self::nvidia(config),
-			"deepfilternet3" => Self::deep_filter(config),
-			other => bail!("unsupported suppression engine {other:?}"),
-		}
-	}
-
-	fn nvidia(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
-		let processor = NvidiaAfx::new(crate::suppression_intensity(config))?;
-		Ok(Self::Nvidia(processor))
-	}
-
-	fn deep_filter(config: &crate::NoiseSuppressionConfig) -> Result<Self> {
-		let runtime = RuntimeParams::default_with_ch(1)
-			.with_atten_lim(config.attenuation_limit_db)
-			.with_post_filter(config.post_filter_beta);
-		let mut model = Box::new(
-			DfTract::new(DfParams::default(), &runtime)
-				.context("could not initialize the embedded DeepFilterNet3 model")?,
-		);
-		if model.sr != SAMPLE_RATE as usize {
-			bail!(
-				"DeepFilterNet requires {} Hz but AMPS is fixed at {SAMPLE_RATE} Hz",
-				model.sr
-			);
-		}
-		let input = Array2::zeros((1, model.hop_size));
-		let mut output = Array2::zeros((1, model.hop_size));
-		model
-			.process(input.view(), output.view_mut())
-			.context("could not warm up DeepFilterNet3")?;
-		Ok(Self::DeepFilter {
-			model,
-			input,
-			output,
-		})
-	}
-
-	fn label(&self) -> &'static str {
-		match self {
-			Self::Nvidia(_) => NVIDIA_AFX_LABEL,
-			Self::DeepFilter { .. } => DEEPFILTER_LABEL,
-		}
-	}
-
-	fn frame_samples(&self) -> usize {
-		match self {
-			Self::Nvidia(processor) => processor.frame_samples(),
-			Self::DeepFilter { model, .. } => model.hop_size,
-		}
-	}
-
-	fn backend(&self) -> SuppressionBackend {
-		match self {
-			Self::Nvidia(_) => SuppressionBackend::Nvidia,
-			Self::DeepFilter { .. } => SuppressionBackend::DeepFilter,
-		}
-	}
-
-	fn update_parameters(&mut self, config: &crate::NoiseSuppressionConfig) -> Result<()> {
-		match self {
-			Self::Nvidia(_) => {
-				bail!("NVIDIA AFX parameter changes require a Clean Mic processor rebuild")
-			}
-			Self::DeepFilter { model, .. } => {
-				model.set_atten_lim(config.attenuation_limit_db);
-				model.set_pf_beta(config.post_filter_beta);
-				Ok(())
-			}
-		}
-	}
-
-	fn startup_silence(&self) -> usize {
-		match self {
-			Self::Nvidia(_) => 0,
-			Self::DeepFilter { model, .. } => {
-				model.fft_size - model.hop_size + model.lookahead * model.hop_size
-			}
-		}
-	}
-
-	fn process(&mut self, input_frame: &[f32], output_frame: &mut [f32]) -> Result<()> {
-		match self {
-			Self::Nvidia(processor) => processor.process(input_frame, output_frame),
-			Self::DeepFilter {
-				model,
-				input,
-				output,
-			} => {
-				for (destination, source) in input.iter_mut().zip(input_frame) {
-					*destination = *source;
-				}
-				model
-					.process(input.view(), output.view_mut())
-					.context("DeepFilterNet3 inference failed")?;
-				for (destination, source) in output_frame.iter_mut().zip(output.iter()) {
-					*destination = *source;
-				}
-				Ok(())
-			}
-		}
-	}
 }
 
 #[derive(Clone, Copy)]
@@ -197,9 +79,38 @@ struct PhysicalEndpointState {
 	inputs: Vec<SavedEndpoint>,
 	#[serde(default)]
 	outputs: Vec<SavedEndpoint>,
+	// An explicit physical choice wins within this remote/VR session, without
+	// changing the Windows default that Sunshine owns. Cleared when it ends.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	physical_output_session: Option<String>,
 }
 
 impl PhysicalEndpointState {
+	fn select_output(&mut self, endpoint: SavedEndpoint, temporary: bool, session: Option<String>) {
+		if temporary {
+			self.physical_output_session = None;
+		} else {
+			self.remember(Direction::Output, endpoint);
+			self.physical_output_session = session;
+		}
+	}
+
+	fn physical_output_selected(&self, session: Option<&str>) -> bool {
+		self
+			.physical_output_session
+			.as_deref()
+			.zip(session)
+			.is_some_and(|(saved, current)| saved.eq_ignore_ascii_case(current))
+	}
+
+	fn reconcile_session(&mut self, session: Option<&str>) -> bool {
+		if self.physical_output_session.is_some() && !self.physical_output_selected(session) {
+			self.physical_output_session = None;
+			return true;
+		}
+		false
+	}
+
 	fn migrate_legacy(&mut self) -> bool {
 		let mut changed = false;
 		if let Some(endpoint) = self.input.take() {
@@ -252,8 +163,11 @@ struct EndpointCoordinator {
 impl EndpointCoordinator {
 	fn new(config: &Config) -> Result<Self> {
 		let state_path = physical_state_path()?;
+		let _lock = lock_physical_state(&state_path)?;
 		let mut state = load_physical_state(&state_path)?;
 		let mut changed = state.migrate_legacy();
+		let temporary_output = temporary_output_for_session(config)?;
+		changed |= state.reconcile_session(temporary_output.as_deref());
 		for (wasapi_direction, direction) in [
 			(WasapiDirection::Capture, Direction::Input),
 			(WasapiDirection::Render, Direction::Output),
@@ -275,7 +189,6 @@ impl EndpointCoordinator {
 			save_physical_state(&state_path, &state)?;
 		}
 		let defaults = GlobalAudioDefaults::new(config)?;
-		let temporary_output = temporary_output_for_session(config)?;
 		defaults.enforce_inputs()?;
 		if !temporary_output_yields_defaults(config, temporary_output.as_deref()) {
 			defaults.enforce_outputs()?;
@@ -296,7 +209,12 @@ impl EndpointCoordinator {
 		} else {
 			first_active_endpoint_name(Direction::Input, self.state.history(Direction::Input))?
 		};
-		effective.monitor.output = if let Some(temporary_output) = &self.temporary_output {
+		effective.monitor.output = if let Some(temporary_output) =
+			self.temporary_output.as_ref().filter(|_| {
+				!self
+					.state
+					.physical_output_selected(self.temporary_output.as_deref())
+			}) {
 			temporary_output.clone()
 		} else {
 			first_active_endpoint_name(Direction::Output, self.state.history(Direction::Output))?
@@ -309,17 +227,16 @@ impl EndpointCoordinator {
 	}
 
 	fn reconcile(&mut self, config: &Config) -> Result<bool> {
+		let _lock = lock_physical_state(&self.state_path)?;
 		let mut persisted_state = load_physical_state(&self.state_path)?;
-		let migrated = persisted_state.migrate_legacy();
+		let temporary_output = temporary_output_for_session(config)?;
+		let migrated = persisted_state.migrate_legacy()
+			| persisted_state.reconcile_session(temporary_output.as_deref());
 		let mut changed = persisted_state != self.state;
 		if changed {
 			info!("adopted an explicit AMPS physical endpoint selection");
 			self.state = persisted_state;
 		}
-		if migrated {
-			save_physical_state(&self.state_path, &self.state)?;
-		}
-		let temporary_output = temporary_output_for_session(config)?;
 		let temporary_changed = temporary_output != self.temporary_output;
 		if temporary_changed {
 			info!(
@@ -350,7 +267,7 @@ impl EndpointCoordinator {
 				changed = true;
 			}
 		}
-		if changed {
+		if changed || migrated {
 			save_physical_state(&self.state_path, &self.state)?;
 		}
 		if changed || !input_defaults_match(config)? {
@@ -402,7 +319,11 @@ impl EndpointCoordinator {
 				return Some(("input", endpoint));
 			}
 		}
-		if self.temporary_output.is_none() {
+		if self.temporary_output.is_none()
+			|| self
+				.state
+				.physical_output_selected(self.temporary_output.as_deref())
+		{
 			if let Some(endpoint) = returned_preferred_endpoint(
 				Direction::Output,
 				self.state.history(Direction::Output),
@@ -492,14 +413,6 @@ fn read_active_suppression() -> Option<String> {
 		.map(|status| status.engine)
 }
 
-fn configured_suppression_label(engine: &str) -> &'static str {
-	match engine {
-		"nvidia_afx" => NVIDIA_AFX_LABEL,
-		"deepfilternet3" => DEEPFILTER_LABEL,
-		_ => "Unknown",
-	}
-}
-
 fn physical_state_path() -> Result<PathBuf> {
 	let app_data = std::env::var_os("APPDATA")
 		.ok_or_else(|| anyhow!("APPDATA is unavailable; cannot persist physical audio selections"))?;
@@ -551,17 +464,57 @@ fn load_physical_state(path: &PathBuf) -> Result<PhysicalEndpointState> {
 		.with_context(|| format!("could not parse physical endpoint state {}", path.display()))
 }
 
+fn lock_physical_state(path: &Path) -> Result<fs::File> {
+	use fs2::FileExt;
+	fs::create_dir_all(path.parent().context("physical state has no parent")?)?;
+	let file = fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create(true)
+		.truncate(false)
+		.open(path.with_extension("lock"))?;
+	file
+		.lock_exclusive()
+		.context("could not lock physical endpoint selections")?;
+	Ok(file)
+}
+
 fn save_physical_state(path: &PathBuf, state: &PhysicalEndpointState) -> Result<()> {
 	let parent = path
 		.parent()
 		.ok_or_else(|| anyhow!("physical endpoint state path has no parent"))?;
 	fs::create_dir_all(parent)?;
-	fs::write(path, toml::to_string_pretty(state)?)
+	crate::control::atomic_write(path, toml::to_string_pretty(state)?.as_bytes())
 		.with_context(|| format!("could not save physical endpoint state {}", path.display()))
 }
 
-pub(crate) fn remember_selected_physical_output(selector: &str) -> Result<()> {
-	remember_selected_physical_endpoint(Direction::Output, selector)
+pub(crate) fn select_main_output(config: &Config, selector: &str) -> Result<()> {
+	let endpoint = resolve_endpoint(WasapiDirection::Render, selector)?;
+	let temporary = [&config.monitor.remote_output, &config.monitor.vr_output]
+		.iter()
+		.any(|name| endpoint.name.eq_ignore_ascii_case(name.trim()));
+	if is_non_physical_endpoint_name(&endpoint.name) && !temporary {
+		bail!("Cannot use a routing bus as Main Output");
+	}
+	let session = temporary_output_for_session(config)?;
+	let path = physical_state_path()?;
+	let _lock = lock_physical_state(&path)?;
+	let mut state = load_physical_state(&path)?;
+	state.migrate_legacy();
+	if temporary {
+		// Returning to an already-active Moonlight sink only changes AMPS's
+		// binding. Do not reset that sink or restart Sunshine's capture.
+		if !session
+			.as_deref()
+			.is_some_and(|name| name.eq_ignore_ascii_case(&endpoint.name))
+		{
+			crate::app_routing::select_output(&endpoint.id)?;
+		}
+	}
+	state.select_output(endpoint.clone(), temporary, session);
+	save_physical_state(&path, &state)?;
+	info!(physical_endpoint = %endpoint.name, "saved explicit Main Output binding without changing physical Windows defaults");
+	Ok(())
 }
 
 pub(crate) fn remember_selected_physical_input(selector: &str) -> Result<()> {
@@ -581,6 +534,7 @@ fn remember_selected_physical_endpoint(direction: Direction, selector: &str) -> 
 		ensure_capture_endpoint_ready(&endpoint.id)?;
 	}
 	let path = physical_state_path()?;
+	let _lock = lock_physical_state(&path)?;
 	let mut state = load_physical_state(&path)?;
 	let changed = state.migrate_legacy() | state.remember(direction, endpoint.clone());
 	if changed {
@@ -674,7 +628,10 @@ fn effective_physical_config(config: &Config) -> Result<Config> {
 fn effective_session_config(config: &Config) -> Result<Config> {
 	let mut effective = effective_physical_config(config)?;
 	if let Some(temporary_output) = temporary_output_for_session(config)? {
-		effective.monitor.output = temporary_output.clone();
+		let state = load_physical_state(&physical_state_path()?)?;
+		if !state.physical_output_selected(Some(&temporary_output)) {
+			effective.monitor.output = temporary_output.clone();
+		}
 		if let Some(temporary_input) = temporary_input_for_output(config, Some(&temporary_output)) {
 			effective.microphone.input = temporary_input;
 		}
@@ -774,7 +731,7 @@ pub(crate) fn doctor(config: &Config) -> Result<()> {
 	println!(
 		"  Suppression:     {}",
 		if config.noise_suppression.enabled {
-			configured_suppression_label(&config.noise_suppression.engine)
+			NVIDIA_AFX_LABEL
 		} else {
 			"disabled"
 		}
@@ -796,7 +753,7 @@ pub(crate) fn benchmark(config: &Config, seconds: u32) -> Result<()> {
 	if seconds == 0 || seconds > 300 {
 		bail!("benchmark duration must be between 1 and 300 seconds");
 	}
-	let mut processor = SuppressionProcessor::new(&config.noise_suppression)?;
+	let mut processor = NvidiaAfx::new(crate::suppression_intensity(&config.noise_suppression))?;
 	let frame_samples = processor.frame_samples();
 	let mut input = vec![0.0_f32; frame_samples];
 	let mut output = vec![0.0_f32; frame_samples];
@@ -820,7 +777,7 @@ pub(crate) fn benchmark(config: &Config, seconds: u32) -> Result<()> {
 	let realtime = Duration::from_secs(seconds as u64);
 	println!(
 		"{} processed {seconds}s of noisy audio in {:.3}s.",
-		processor.label(),
+		NVIDIA_AFX_LABEL,
 		elapsed.as_secs_f64()
 	);
 	println!(
@@ -910,9 +867,27 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 	let state_path = physical_state_path()?;
 	let mut state = load_physical_state(&state_path)?;
 	state.migrate_legacy();
-	let mut input_devices = physical_endpoints(Direction::Input, state.history(Direction::Input))?;
-	let mut output_devices =
-		physical_endpoints(Direction::Output, state.history(Direction::Output))?;
+	let mut input_devices = physical_endpoints(
+		Direction::Input,
+		state.history(Direction::Input),
+		&[&config.microphone.vr_input],
+	)?;
+	let mut output_devices = physical_endpoints(
+		Direction::Output,
+		state.history(Direction::Output),
+		&[&config.monitor.remote_output, &config.monitor.vr_output],
+	)?;
+	let session_override = temporary_output_for_session(config)?;
+	let session_input_override = temporary_input_for_output(config, session_override.as_deref());
+	if let Some(session_input) = &session_input_override {
+		mark_selected_endpoint(&mut input_devices, session_input);
+	}
+	if let Some(output) = session_override
+		.as_deref()
+		.filter(|_| !state.physical_output_selected(session_override.as_deref()))
+	{
+		mark_selected_endpoint(&mut output_devices, output);
+	}
 	let main_input = input_devices
 		.iter()
 		.find(|endpoint| endpoint.selected)
@@ -921,28 +896,15 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 		.iter()
 		.find(|endpoint| endpoint.selected)
 		.cloned();
-	let session_override = temporary_output_for_session(config)?;
-	let session_input_override = temporary_input_for_output(config, session_override.as_deref());
-	if let Some(session_input) = &session_input_override {
-		mark_selected_endpoint(&mut input_devices, session_input);
-	}
-	if session_override
-		.as_deref()
-		.is_some_and(|output| output.eq_ignore_ascii_case(config.monitor.vr_output.trim()))
-	{
-		mark_selected_endpoint(&mut output_devices, &config.monitor.vr_output);
-	}
 	let routing_ready = input_defaults_match(config)?
 		&& (temporary_output_yields_defaults(config, session_override.as_deref())
 			|| output_defaults_match(config)?);
 	let engine_online = process_is_running("amps.exe")?;
 	let suppression = if config.noise_suppression.enabled {
 		if engine_online {
-			read_active_suppression().unwrap_or_else(|| {
-				configured_suppression_label(&config.noise_suppression.engine).to_string()
-			})
+			read_active_suppression().unwrap_or_else(|| NVIDIA_AFX_LABEL.to_string())
 		} else {
-			configured_suppression_label(&config.noise_suppression.engine).to_string()
+			NVIDIA_AFX_LABEL.to_string()
 		}
 	} else {
 		"Bypassed".to_string()
@@ -962,6 +924,7 @@ pub(crate) fn graph_snapshot(config: &Config) -> Result<GraphSnapshot> {
 		main_output,
 		input_devices,
 		output_devices,
+		devices: config.devices.clone(),
 		session_override,
 		session_input_override,
 		buses: vec![
@@ -1024,7 +987,7 @@ pub(crate) fn meter_snapshot(config: &Config) -> Result<Vec<MeterReading>> {
 }
 
 struct SignalProbe {
-	id: &'static str,
+	id: String,
 	peak: Arc<AtomicU32>,
 	samples: Arc<ArrayQueue<f32>>,
 	history: VecDeque<f32>,
@@ -1189,6 +1152,7 @@ fn silent_meter_reading(id: &'static str) -> MeterReading {
 }
 
 pub(crate) struct MeterProbe {
+	devices: Vec<crate::devices::Binding>,
 	input_name: String,
 	patches: Vec<PatchConnection>,
 	signals: Vec<SignalProbe>,
@@ -1270,33 +1234,67 @@ impl MeterProbe {
 				resolve_named_device(&host, Direction::Input, &config.cables.clean_mic)?,
 			),
 		];
+		let mut devices = devices
+			.into_iter()
+			.map(|(id, d)| (id.to_string(), d))
+			.collect::<Vec<_>>();
+		for binding in &config.devices {
+			if binding.direction == crate::devices::Direction::Input
+				&& config
+					.patchbay
+					.connections
+					.iter()
+					.any(|p| p.source == binding.id)
+			{
+				if let Ok(device) = resolve_pinned_device(&host, binding) {
+					devices.push((binding.id.clone(), device));
+				}
+			}
+		}
 		let mut signals = Vec::new();
 		let mut streams = Vec::new();
 		for (id, device) in devices {
-			let supported = preferred_config(&device, Direction::Input, true)?;
-			let stream_config: StreamConfig = supported.clone().into();
-			let peak = Arc::new(AtomicU32::new(0.0_f32.to_bits()));
-			let history_limit =
-				(stream_config.sample_rate.0 as usize * WAVEFORM_WINDOW_MS / 1_000).max(WAVEFORM_BINS);
-			let samples = Arc::new(ArrayQueue::new(history_limit * 2));
-			let stream = build_level_input(
-				&device,
-				&stream_config,
-				supported.sample_format(),
-				peak.clone(),
-				Some(samples.clone()),
-			)?;
-			stream.play()?;
-			signals.push(SignalProbe {
-				id,
-				peak,
-				samples,
-				history: VecDeque::with_capacity(history_limit),
-				history_limit,
-			});
-			streams.push(stream);
+			let staged = (|| -> Result<(SignalProbe, Stream)> {
+				let supported = preferred_config(&device, Direction::Input, true)?;
+				let stream_config: StreamConfig = supported.clone().into();
+				let peak = Arc::new(AtomicU32::new(0.0_f32.to_bits()));
+				let history_limit = (stream_config.sample_rate.0 as usize * WAVEFORM_WINDOW_MS / 1_000)
+					.max(WAVEFORM_BINS);
+				let samples = Arc::new(ArrayQueue::new(history_limit * 2));
+				let stream = build_level_input(
+					&device,
+					&stream_config,
+					supported.sample_format(),
+					peak.clone(),
+					Some(samples.clone()),
+				)?;
+				stream.play()?;
+				Ok((
+					SignalProbe {
+						id: id.clone(),
+						peak,
+						samples,
+						history: VecDeque::with_capacity(history_limit),
+						history_limit,
+					},
+					stream,
+				))
+			})();
+			match staged {
+				Ok((signal, stream)) => {
+					signals.push(signal);
+					streams.push(stream);
+				}
+				// Hotplug or an unsupported additional input must not erase all
+				// existing bus meters. The pinned route reports its own error.
+				Err(error) if id.starts_with("device-") => {
+					warn!(%id, %error, "additional input meter unavailable");
+				}
+				Err(error) => return Err(error),
+			}
 		}
 		Ok(Self {
+			devices: config.devices.clone(),
 			input_name,
 			patches: config.patchbay.connections.clone(),
 			signals,
@@ -1315,7 +1313,7 @@ impl MeterProbe {
 				signal.history.pop_front();
 			}
 			readings.push(meter_reading(
-				signal.id,
+				&signal.id,
 				f32::from_bits(signal.peak.swap(0, Ordering::AcqRel)),
 				waveform_from_history(&signal.history),
 			));
@@ -1326,14 +1324,14 @@ impl MeterProbe {
 		));
 		let monitor_peak = readings
 			.iter()
-			.filter(|reading| self.is_patched_to_monitor(reading.id))
+			.filter(|reading| self.is_patched_to_monitor(&reading.id))
 			.map(|reading| reading.peak)
 			.fold(0.0_f32, f32::max);
 		let monitor_waveform = (0..WAVEFORM_SAMPLES)
 			.map(|index| {
 				readings
 					.iter()
-					.filter(|reading| self.is_patched_to_monitor(reading.id))
+					.filter(|reading| self.is_patched_to_monitor(&reading.id))
 					.map(|reading| reading.waveform.get(index).copied().unwrap_or(0.0))
 					.sum::<f32>()
 					.clamp(-1.0, 1.0)
@@ -1345,14 +1343,24 @@ impl MeterProbe {
 			.map_or(0.0, |reading| reading.peak);
 		let complete_peak = readings
 			.iter()
-			.filter(|reading| matches!(reading.id, "game" | "comms" | "music" | "clean-mic"))
+			.filter(|reading| {
+				matches!(
+					reading.id.as_str(),
+					"game" | "comms" | "music" | "clean-mic"
+				)
+			})
 			.map(|reading| reading.peak)
 			.fold(0.0_f32, f32::max);
 		let complete_waveform = (0..WAVEFORM_SAMPLES)
 			.map(|index| {
 				readings
 					.iter()
-					.filter(|reading| matches!(reading.id, "game" | "comms" | "music" | "clean-mic"))
+					.filter(|reading| {
+						matches!(
+							reading.id.as_str(),
+							"game" | "comms" | "music" | "clean-mic"
+						)
+					})
 					.map(|reading| reading.waveform.get(index).copied().unwrap_or(0.0))
 					.sum::<f32>()
 					.clamp(-1.0, 1.0)
@@ -1368,10 +1376,27 @@ impl MeterProbe {
 	}
 
 	pub(crate) fn is_current(&self, config: &Config) -> Result<bool> {
+		let host = cpal::default_host();
+		for binding in &config.devices {
+			if binding.direction == crate::devices::Direction::Input
+				&& config
+					.patchbay
+					.connections
+					.iter()
+					.any(|p| p.source == binding.id)
+			{
+				if self.signals.iter().any(|s| s.id == binding.id)
+					!= resolve_pinned_device(&host, binding).is_ok()
+				{
+					return Ok(false);
+				}
+			}
+		}
 		Ok(self
 			.input_name
 			.eq_ignore_ascii_case(&effective_session_config(config)?.microphone.input)
-			&& self.patches == config.patchbay.connections)
+			&& self.patches == config.patchbay.connections
+			&& self.devices == config.devices)
 	}
 
 	fn is_patched_to_monitor(&self, source: &str) -> bool {
@@ -1408,7 +1433,7 @@ fn waveform_from_history(history: &VecDeque<f32>) -> Vec<f32> {
 	waveform
 }
 
-fn meter_reading(id: &'static str, peak: f32, waveform: Vec<f32>) -> MeterReading {
+fn meter_reading(id: &str, peak: f32, waveform: Vec<f32>) -> MeterReading {
 	let peak = peak.clamp(0.0, 1.0);
 	let dbfs = if peak > 0.0 {
 		20.0 * peak.log10()
@@ -1416,7 +1441,7 @@ fn meter_reading(id: &'static str, peak: f32, waveform: Vec<f32>) -> MeterReadin
 		-96.0
 	};
 	MeterReading {
-		id,
+		id: id.into(),
 		peak,
 		dbfs,
 		waveform,
@@ -1426,6 +1451,7 @@ fn meter_reading(id: &'static str, peak: f32, waveform: Vec<f32>) -> MeterReadin
 fn physical_endpoints(
 	direction: Direction,
 	history: &[SavedEndpoint],
+	session_devices: &[&str],
 ) -> Result<Vec<EndpointSummary>> {
 	let wasapi_direction = match direction {
 		Direction::Input => WasapiDirection::Capture,
@@ -1444,7 +1470,7 @@ fn physical_endpoints(
 			id: device.get_id()?,
 			name: device.get_friendlyname()?,
 		};
-		if is_non_physical_endpoint_name(&endpoint.name) && !is_quest_endpoint_name(&endpoint.name) {
+		if !selectable_main_endpoint(&endpoint.name, session_devices) {
 			continue;
 		}
 		endpoints.push(EndpointSummary {
@@ -1565,6 +1591,7 @@ fn build_level_input(
 pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -> Result<()> {
 	let _control_owner = crate::control::EngineLock::acquire(&config_path)?;
 	crate::control::mark_offline(&config_path)?;
+	let phone = Arc::new(crate::phone::Service::start(&config_path));
 	// Discard any uncommitted filter target left by an interrupted transaction.
 	for name in ["filter-target.json", "filter-applied.json"] {
 		let _ = fs::remove_file(config_path.with_file_name(name));
@@ -1572,7 +1599,7 @@ pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -
 	clear_active_suppression();
 	let _active_suppression_guard = ActiveSuppressionGuard;
 	let mut endpoints = EndpointCoordinator::new(&config)?;
-	let (mut graph, _) = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?;
+	let (mut graph, _) = wait_for_graph(&config, &config_path, &mut endpoints, &stop, &phone)?;
 	let mut app_router = AppRouter::new(&config)?;
 	app_router.reconcile()?;
 	let mut next_route_reconcile = Instant::now() + Duration::from_secs(3);
@@ -1584,7 +1611,7 @@ pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -
 		match endpoints.reconcile(&config) {
 			Ok(true) => {
 				drop(graph);
-				graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?.0;
+				graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop, &phone)?.0;
 				continue;
 			}
 			Ok(false) => {}
@@ -1596,7 +1623,7 @@ pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -
 			{
 				info!(%direction, %endpoint, "a higher-priority physical endpoint returned; rebuilding graph");
 				drop(graph);
-				graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?.0;
+				graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop, &phone)?.0;
 				continue;
 			}
 		}
@@ -1609,7 +1636,7 @@ pub(crate) fn run(config: Config, config_path: PathBuf, stop: Arc<AtomicBool>) -
 		if graph.failed.swap(false, Ordering::AcqRel) {
 			warn!("an audio stream failed; rebuilding the complete graph");
 			drop(graph);
-			graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop)?.0;
+			graph = wait_for_graph(&config, &config_path, &mut endpoints, &stop, &phone)?.0;
 		}
 	}
 
@@ -1622,6 +1649,7 @@ fn wait_for_graph(
 	config_path: &Path,
 	endpoints: &mut EndpointCoordinator,
 	stop: &AtomicBool,
+	phone: &Arc<crate::phone::Service>,
 ) -> Result<(RunningGraph, Config)> {
 	let mut attempts = 0_u64;
 	let mut retry_delay = Duration::from_secs(1);
@@ -1654,7 +1682,7 @@ fn wait_for_graph(
 			}
 		};
 		endpoints.begin_graph_rebuild(config, &effective)?;
-		match build_graph(&effective, config_path) {
+		match build_graph(&effective, config_path, phone) {
 			Ok(graph) => {
 				// Opening a Bluetooth Classic microphone makes Windows transition the
 				// paired render endpoint from A2DP to HFP. Some drivers complete that
@@ -1757,7 +1785,11 @@ fn validate_cables(host: &cpal::Host, config: &Config) -> Result<()> {
 	Ok(())
 }
 
-fn build_graph(config: &Config, config_path: &Path) -> Result<RunningGraph> {
+fn build_graph(
+	config: &Config,
+	config_path: &Path,
+	phone: &Arc<crate::phone::Service>,
+) -> Result<RunningGraph> {
 	let host = cpal::default_host();
 	validate_cables(&host, config)?;
 	let physical_input = resolve_microphone_device(&host, config)?;
@@ -1780,8 +1812,12 @@ fn build_graph(config: &Config, config_path: &Path) -> Result<RunningGraph> {
 	for stream in &streams {
 		stream.play().context("could not start an AMPS stream")?;
 	}
-	let (patch_stop, patch_worker) =
-		spawn_patchbay(config.clone(), config_path.to_path_buf(), failed.clone())?;
+	let (patch_stop, patch_worker) = spawn_patchbay(
+		config.clone(),
+		config_path.to_path_buf(),
+		failed.clone(),
+		phone.clone(),
+	)?;
 
 	Ok(RunningGraph {
 		_streams: streams,
@@ -1799,12 +1835,13 @@ fn spawn_patchbay(
 	config: Config,
 	config_path: PathBuf,
 	failed: Arc<AtomicBool>,
+	phone: Arc<crate::phone::Service>,
 ) -> Result<(Arc<AtomicBool>, thread::JoinHandle<()>)> {
 	let stop = Arc::new(AtomicBool::new(false));
 	let thread_stop = stop.clone();
 	let worker = thread::Builder::new()
 		.name("amps-patchbay".into())
-		.spawn(move || run_patchbay(config, config_path, failed, thread_stop))
+		.spawn(move || run_patchbay(config, config_path, failed, thread_stop, phone))
 		.context("could not start the AMPS patchbay worker")?;
 	Ok((stop, worker))
 }
@@ -1814,12 +1851,15 @@ fn run_patchbay(
 	config_path: PathBuf,
 	failed: Arc<AtomicBool>,
 	stop: Arc<AtomicBool>,
+	phone: Arc<crate::phone::Service>,
 ) {
 	use crate::control::Backend;
 	let result = (|| -> Result<()> {
 		let mut backend = LivePatchBackend {
+			phone,
 			routes: std::collections::BTreeMap::new(),
 			path: config_path.clone(),
+			unavailable: Default::default(),
 		};
 		let mut empty = config.clone();
 		empty.patchbay.connections.clear();
@@ -1833,18 +1873,42 @@ fn run_patchbay(
 			if backend
 				.routes
 				.values()
-				.any(|r| r.failed.load(Ordering::Acquire))
+				.any(|r| !r.dynamic && r.failed.load(Ordering::Acquire))
 			{
 				bail!("An active patch endpoint failed; rebuilding against current devices");
 			}
 			if let Some(request) = server.next_request()? {
 				let reply = server.execute(&request, &mut backend)?;
+				server.status.unavailable_routes = backend.unavailable.clone();
+				server.publish()?;
 				info!(request = %reply.id, applied = reply.applied, revision = reply.revision, error = ?reply.error, "routing command acknowledged");
 				if server.status.applied_revision.is_none() {
 					bail!("Controller requires recovery from the last committed graph");
 				}
 			}
 			if heartbeat.elapsed() >= Duration::from_secs(2) {
+				// Pinned device hotplug affects only its own routes.
+				backend.routes.retain(|id, r| {
+					if r.dynamic && r.failed.load(Ordering::Acquire) {
+						backend.unavailable.insert(
+							id.clone(),
+							"Device disconnected; waiting to reconnect".into(),
+						);
+						false
+					} else {
+						true
+					}
+				});
+				if !backend.unavailable.is_empty() {
+					if let Ok(mut staged) = backend.stage(server.config(), server.config()) {
+						if backend.activate(&mut staged).is_ok() {
+							backend.finish(staged);
+						} else {
+							backend.rollback(staged)?;
+						}
+					}
+				}
+				server.status.unavailable_routes = backend.unavailable.clone();
 				server.publish()?;
 				heartbeat = Instant::now();
 			}
@@ -1859,19 +1923,62 @@ fn run_patchbay(
 }
 
 struct LivePatch {
+	_phone: Option<crate::phone::Fanout>,
 	_streams: Vec<Stream>,
 	gate: Arc<AtomicBool>,
 	failed: Arc<AtomicBool>,
+	dynamic: bool,
 }
 struct LivePatchBackend {
+	phone: Arc<crate::phone::Service>,
 	routes: std::collections::BTreeMap<String, LivePatch>,
 	path: PathBuf,
+	unavailable: std::collections::BTreeMap<String, String>,
 }
 struct StagedPatch {
 	added: std::collections::BTreeMap<String, LivePatch>,
 	removed: Vec<String>,
 	previous_filter: crate::NoiseSuppressionConfig,
 	filter_changed: bool,
+	unavailable: std::collections::BTreeMap<String, String>,
+}
+fn dynamic_patch(p: &PatchConnection) -> bool {
+	p.source == "phone" || p.source.starts_with("device-") || p.destination.starts_with("device-")
+}
+impl Drop for LivePatch {
+	fn drop(&mut self) {
+		self.gate.store(false, Ordering::Release);
+	}
+}
+
+fn resolve_pinned_device(host: &cpal::Host, binding: &crate::devices::Binding) -> Result<Device> {
+	let (direction, native_direction) = match binding.direction {
+		crate::devices::Direction::Input => (Direction::Input, WasapiDirection::Capture),
+		crate::devices::Direction::Output => (Direction::Output, WasapiDirection::Render),
+	};
+	let endpoint = resolve_endpoint(native_direction, &binding.endpoint_id)?;
+	if !endpoint.id.eq_ignore_ascii_case(&binding.endpoint_id)
+		|| endpoint
+			.name
+			.to_ascii_lowercase()
+			.contains("virtual audio cable")
+	{
+		bail!("Pinned physical node does not resolve to its exact hardware endpoint");
+	}
+	// CPAL 0.16 exposes names rather than endpoint IDs. Resolve the saved ID
+	// first, then require a unique exact name; never guess via a substring.
+	let devices: Vec<_> = match direction {
+		Direction::Input => host.input_devices()?.collect(),
+		Direction::Output => host.output_devices()?.collect(),
+	};
+	let mut matching = devices
+		.into_iter()
+		.filter(|d| d.name().is_ok_and(|n| n == endpoint.name));
+	let device = matching.next().context("Pinned device is unavailable")?;
+	if matching.next().is_some() {
+		bail!("Multiple devices share this name; refusing an ambiguous binding");
+	}
+	Ok(device)
 }
 fn patch_id(patch: &PatchConnection) -> String {
 	format!("{}:{}", patch.source, patch.destination)
@@ -1883,6 +1990,12 @@ impl crate::control::Backend for LivePatchBackend {
 		next.validate()?;
 		let host = cpal::default_host();
 		let mut added = std::collections::BTreeMap::new();
+		let mut unavailable = std::collections::BTreeMap::new();
+		for device in &next.devices {
+			if !previous.devices.contains(device) {
+				resolve_pinned_device(&host, device)?;
+			}
+		}
 		let wanted = next
 			.patchbay
 			.connections
@@ -1894,53 +2007,109 @@ impl crate::control::Backend for LivePatchBackend {
 			if self.routes.contains_key(&id) {
 				continue;
 			}
-			let input = resolve_named_device(
-				&host,
-				Direction::Input,
-				patch_source_selector(next, &patch.source)?,
-			)?;
-			let output = if patch.destination == "monitor" {
-				resolve_monitor_device(&host, next)?
-			} else {
-				resolve_named_device(
-					&host,
-					Direction::Output,
-					patch_source_selector(next, &patch.destination)?,
-				)?
-			};
-			let gain = if patch.destination == "monitor" {
-				match patch.source.as_str() {
-					"game" => next.monitor.game_gain,
-					"comms" => next.monitor.comms_gain,
-					"music" => next.monitor.music_gain,
-					"chatgpt" => next.monitor.chatgpt_gain,
-					_ => 1.0,
+			let built = (|| -> Result<LivePatch> {
+				if patch.source == "phone" && patch.destination == "main_output" {
+					return Ok(LivePatch {
+						_streams: vec![],
+						_phone: None,
+						gate: self.phone.hub.main_gate.clone(),
+						failed: Arc::new(AtomicBool::new(false)),
+						dynamic: true,
+					});
 				}
-			} else {
-				1.0
-			};
-			let gate = Arc::new(AtomicBool::new(false));
-			let local_failed = Arc::new(AtomicBool::new(false));
-			let streams = build_gated_stereo_route(
-				patch_label(&patch.source),
-				&input,
-				&[output],
-				next.monitor.latency_ms,
-				gain,
-				local_failed.clone(),
-				gate.clone(),
-			)?;
-			for stream in &streams {
-				stream.play().context("Could not stage new connection")?;
-			}
-			added.insert(
-				id,
-				LivePatch {
+				if patch.source == "phone" {
+					let selector =
+						if let Some(binding) = next.devices.iter().find(|d| d.id == patch.destination) {
+							binding.endpoint_id.as_str()
+						} else if patch.destination == "monitor" {
+							&next.monitor.output
+						} else {
+							patch_source_selector(next, &patch.destination)?
+						};
+					let output = resolve_endpoint(WasapiDirection::Render, selector)?;
+					let gate = Arc::new(AtomicBool::new(false));
+					let local_failed = Arc::new(AtomicBool::new(false));
+					let worker = crate::phone::Fanout::start(
+						self.phone.hub.clone(),
+						output.id,
+						gate.clone(),
+						local_failed.clone(),
+					)?;
+					return Ok(LivePatch {
+						_streams: vec![],
+						_phone: Some(worker),
+						gate,
+						failed: local_failed,
+						dynamic: true,
+					});
+				}
+				let input = if let Some(binding) = next.devices.iter().find(|d| d.id == patch.source) {
+					resolve_pinned_device(&host, binding)?
+				} else {
+					resolve_named_device(
+						&host,
+						Direction::Input,
+						patch_source_selector(next, &patch.source)?,
+					)?
+				};
+				let output =
+					if let Some(binding) = next.devices.iter().find(|d| d.id == patch.destination) {
+						resolve_pinned_device(&host, binding)?
+					} else if matches!(patch.destination.as_str(), "monitor" | "main_output") {
+						resolve_monitor_device(&host, next)?
+					} else {
+						resolve_named_device(
+							&host,
+							Direction::Output,
+							patch_source_selector(next, &patch.destination)?,
+						)?
+					};
+				let gain = if patch.destination == "monitor" {
+					match patch.source.as_str() {
+						"game" => next.monitor.game_gain,
+						"comms" => next.monitor.comms_gain,
+						"music" => next.monitor.music_gain,
+						"chatgpt" => next.monitor.chatgpt_gain,
+						_ => 1.0,
+					}
+				} else {
+					1.0
+				};
+				let gate = Arc::new(AtomicBool::new(false));
+				let local_failed = Arc::new(AtomicBool::new(false));
+				let streams = build_gated_stereo_route(
+					patch_label(&patch.source),
+					&input,
+					&[output],
+					next.monitor.latency_ms,
+					gain,
+					local_failed.clone(),
+					gate.clone(),
+				)?;
+				for stream in &streams {
+					stream.play().context("Could not stage new connection")?;
+				}
+				Ok(LivePatch {
+					_phone: None,
 					_streams: streams,
 					gate,
 					failed: local_failed,
-				},
-			);
+					dynamic: dynamic_patch(patch),
+				})
+			})();
+			match built {
+				Ok(route) => {
+					added.insert(id, route);
+				}
+				Err(error)
+					if dynamic_patch(patch)
+						&& (previous.patchbay.connections.contains(patch)
+							|| previous.patchbay.connections.is_empty()) =>
+				{
+					unavailable.insert(id, format!("{error:#}"));
+				}
+				Err(error) => return Err(error),
+			}
 		}
 		// Warm new streams muted. Existing routes remain untouched and audible.
 		if !added.is_empty() {
@@ -1965,6 +2134,7 @@ impl crate::control::Backend for LivePatchBackend {
 		}
 		Ok(StagedPatch {
 			added,
+			unavailable,
 			removed: self
 				.routes
 				.keys()
@@ -2013,6 +2183,7 @@ impl crate::control::Backend for LivePatchBackend {
 			self.routes.remove(&id);
 		}
 		self.routes.extend(staged.added);
+		self.unavailable = staged.unavailable;
 	}
 }
 
@@ -2032,11 +2203,7 @@ impl FilterReceipt {
 		self.token == target.token && self.config == target.config
 	}
 }
-fn publish_filter_receipt(
-	path: &Path,
-	target: &FilterTarget,
-	processor: &Option<SuppressionProcessor>,
-) {
+fn publish_filter_receipt(path: &Path, target: &FilterTarget, processor: &Option<NvidiaAfx>) {
 	let config = &target.config;
 	let receipt = FilterReceipt {
 		token: target.token.clone(),
@@ -2262,7 +2429,7 @@ fn run_suppression(
 		}
 	});
 	let mut active_config = active_target.config.clone();
-	let mut processor = create_suppression_processor(&active_config, &clean);
+	let mut processor = create_suppression_processor(&active_config);
 	publish_filter_receipt(config_path, &active_target, &processor);
 	let mut telemetry = ProcessedMicPublisher::new();
 	let mut input_frame = Vec::new();
@@ -2280,7 +2447,7 @@ fn run_suppression(
 						let updated = target.config.clone();
 						revision = observed_revision;
 						if updated != active_config || (updated.enabled && processor.is_none()) {
-							reconfigure_suppression(&mut processor, &active_config, &updated, &clean);
+							reconfigure_suppression(&mut processor, &updated);
 							active_config = updated;
 						}
 						active_target = target;
@@ -2335,24 +2502,16 @@ fn run_suppression(
 	Ok(())
 }
 
-fn create_suppression_processor(
-	config: &crate::NoiseSuppressionConfig,
-	clean: &ArrayQueue<f32>,
-) -> Option<SuppressionProcessor> {
+fn create_suppression_processor(config: &crate::NoiseSuppressionConfig) -> Option<NvidiaAfx> {
 	if !config.enabled {
 		publish_active_suppression("Bypassed");
 		info!("Clean Mic suppression bypassed");
 		return None;
 	}
-	let mut processor = match SuppressionProcessor::new(config) {
+	let mut processor = match NvidiaAfx::new(crate::suppression_intensity(config)) {
 		Ok(processor) => processor,
 		Err(error) => {
-			let label = if config.engine == "nvidia_afx" {
-				"NVIDIA AFX error · mic bypassed"
-			} else {
-				"Suppression error · mic bypassed"
-			};
-			publish_active_suppression(label);
+			publish_active_suppression("NVIDIA AFX error · mic bypassed");
 			error!(
 				error = %format!("{error:#}"),
 				"Clean Mic suppression could not initialize; preserving an unfiltered passthrough without rebuilding playback buses"
@@ -2371,66 +2530,25 @@ fn create_suppression_processor(
 		);
 		return None;
 	}
-	for _ in 0..processor.startup_silence() {
-		push_latest(clean, 0.0);
-	}
-	publish_active_suppression(processor.label());
+	publish_active_suppression(NVIDIA_AFX_LABEL);
 	info!(
-		backend = processor.label(),
+		backend = NVIDIA_AFX_LABEL,
 		frame_samples, "GPU-capable Clean Mic worker ready"
 	);
 	Some(processor)
 }
 
 fn reconfigure_suppression(
-	processor: &mut Option<SuppressionProcessor>,
-	current: &crate::NoiseSuppressionConfig,
+	processor: &mut Option<NvidiaAfx>,
 	updated: &crate::NoiseSuppressionConfig,
-	clean: &ArrayQueue<f32>,
 ) {
-	let transition = crate::suppression_transition(
-		current,
-		updated,
-		processor.as_ref().map(SuppressionProcessor::backend),
+	// NVIDIA does not reliably apply intensity changes after loading a model.
+	// Rebuild only Clean Mic; playback buses and their streams stay alive.
+	info!(
+		intensity = crate::suppression_intensity(updated),
+		"reconfiguring NVIDIA Clean Mic suppression"
 	);
-	match transition {
-		SuppressionTransition::Bypass => {
-			*processor = None;
-			publish_active_suppression("Bypassed");
-			info!("hot-reloaded Clean Mic suppression bypass");
-		}
-		SuppressionTransition::UpdateInPlace => {
-			let Some(active_processor) = processor.as_mut() else {
-				*processor = create_suppression_processor(updated, clean);
-				return;
-			};
-			match active_processor.update_parameters(updated) {
-				Ok(()) => {
-					publish_active_suppression(active_processor.label());
-					info!(
-						backend = active_processor.label(),
-						intensity = crate::suppression_intensity(updated),
-						"hot-reloaded Clean Mic suppression parameters"
-					);
-				}
-				Err(error) => {
-					error!(
-						error = %format!("{error:#}"),
-						"could not hot-reload Clean Mic suppression parameters; rebuilding only its processor"
-					);
-					*processor = create_suppression_processor(updated, clean);
-				}
-			}
-		}
-		SuppressionTransition::Rebuild => {
-			info!(
-				engine = updated.engine,
-				intensity = crate::suppression_intensity(updated),
-				"rebuilding only the Clean Mic suppression processor"
-			);
-			*processor = create_suppression_processor(updated, clean);
-		}
-	}
+	*processor = create_suppression_processor(updated);
 }
 
 fn suppression_revision(
@@ -2617,8 +2735,11 @@ fn is_non_physical_endpoint_name(name: &str) -> bool {
 		|| name.starts_with("amps ")
 }
 
-fn is_quest_endpoint_name(name: &str) -> bool {
-	name.to_ascii_lowercase().contains("oculus virtual audio")
+fn selectable_main_endpoint(name: &str, session_devices: &[&str]) -> bool {
+	!is_non_physical_endpoint_name(name)
+		|| session_devices
+			.iter()
+			.any(|allowed| name.eq_ignore_ascii_case(allowed.trim()))
 }
 
 fn resolve_named_device(host: &cpal::Host, direction: Direction, selector: &str) -> Result<Device> {
@@ -2984,6 +3105,64 @@ fn build_mono_output(
 #[cfg(test)]
 mod tests {
 	use super::stereo_output_value;
+	#[test]
+	fn main_output_includes_session_endpoints_but_never_routing_buses() {
+		let sessions = [
+			"Speakers (Steam Streaming Speakers)",
+			"Headphones (Oculus Virtual Audio Device)",
+		];
+		assert!(super::selectable_main_endpoint(sessions[0], &sessions));
+		assert!(super::selectable_main_endpoint(sessions[1], &sessions));
+		assert!(super::selectable_main_endpoint(
+			"Speakers (Physical USB)",
+			&sessions
+		));
+		assert!(!super::selectable_main_endpoint(
+			"AMPS Game (Virtual Audio Cable)",
+			&sessions
+		));
+		assert!(!super::selectable_main_endpoint(
+			"Unconfigured Remote Audio",
+			&sessions
+		));
+	}
+
+	#[test]
+	fn explicit_listening_choice_overrides_only_its_session_and_survives_restart() {
+		let mut state = super::PhysicalEndpointState::default();
+		let physical = super::SavedEndpoint {
+			id: "physical-id".into(),
+			name: "USB headphones".into(),
+		};
+		state.select_output(physical.clone(), false, Some("Moonlight".into()));
+		assert!(state.physical_output_selected(Some("Moonlight")));
+		assert!(!state.physical_output_selected(Some("Quest")));
+		let mut restored: super::PhysicalEndpointState =
+			toml::from_str(&toml::to_string(&state).unwrap()).unwrap();
+		assert!(restored.physical_output_selected(Some("Moonlight")));
+		assert!(!restored.reconcile_session(Some("Moonlight")));
+		assert!(restored.reconcile_session(None));
+		assert!(!restored.physical_output_selected(Some("Moonlight")));
+		assert_eq!(restored.outputs, vec![physical]);
+	}
+
+	#[test]
+	fn choosing_session_sink_restores_automatic_output_without_polluting_history() {
+		let mut state = super::PhysicalEndpointState::default();
+		let physical = super::SavedEndpoint {
+			id: "physical-id".into(),
+			name: "USB headphones".into(),
+		};
+		let remote = super::SavedEndpoint {
+			id: "remote-id".into(),
+			name: "Moonlight".into(),
+		};
+		state.select_output(physical.clone(), false, Some("Moonlight".into()));
+		state.select_output(remote, true, Some("Moonlight".into()));
+		assert!(!state.physical_output_selected(Some("Moonlight")));
+		assert_eq!(state.outputs, vec![physical]);
+	}
+
 	#[test]
 	fn repeated_filter_settings_require_a_fresh_acknowledgement() {
 		let config = toml::from_str::<crate::Config>(crate::DEFAULT_CONFIG)

@@ -58,6 +58,8 @@ config.webgpu_power_preference = "HighPerformance"
 config.window_background_opacity = 0.9
 config.window_close_confirmation = "AlwaysPrompt"
 config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
+-- Leave the top status line flush with the window; whole-cell rounding is
+-- handled by the top alignment above and leaves only a bottom remainder.
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
 
 if wezterm.target_triple:match("windows") then
@@ -90,9 +92,6 @@ elseif wezterm.target_triple:match("linux") then
 	-- Plasma owns the sole title bar and resize frame; tmux owns terminal tabs.
 	config.enable_tab_bar = false
 	config.enable_wayland = true
-	-- Terminal rows are whole cells. Keep any unavoidable vertical remainder at
-	-- the bottom, away from tmux's top-anchored status line.
-	config.window_content_alignment = { horizontal = "Left", vertical = "Top" }
 	-- Niri delivers keyboard events correctly, but WezTerm's WebGPU frontend
 	-- stops processing them on this native Wayland/NVIDIA combination. OpenGL
 	-- keeps the native Wayland path fully responsive.

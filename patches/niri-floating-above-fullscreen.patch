@@ -1,0 +1,70 @@
+--- a/niri-config/src/layout.rs
++++ b/niri-config/src/layout.rs
+@@ -21,2 +21,3 @@
+     pub always_center_single_column: bool,
++    pub floating_above_fullscreen: bool,
+     pub empty_workspace_above_first: bool,
+@@ -44,2 +45,3 @@
+             always_center_single_column: false,
++            floating_above_fullscreen: false,
+             empty_workspace_above_first: false,
+@@ -68,2 +70,3 @@
+             always_center_single_column,
++            floating_above_fullscreen,
+             empty_workspace_above_first,
+@@ -118,2 +121,4 @@
+     pub always_center_single_column: Option<Flag>,
++    #[knuffel(child)]
++    pub floating_above_fullscreen: Option<Flag>,
+     #[knuffel(child)]
+--- a/src/layout/workspace.rs
++++ b/src/layout/workspace.rs
+@@ -1690,4 +1690,4 @@
+     pub fn is_floating_visible(&self) -> bool {
+-        // If the focus is on a fullscreen scrolling window, hide the floating windows.
+-        matches!(
++        // Keep rendering and hit-testing floating windows when explicitly enabled.
++        self.options.layout.floating_above_fullscreen || matches!(
+             self.floating_is_active,
+--- a/src/layout/tests/fullscreen.rs
++++ b/src/layout/tests/fullscreen.rs
+@@ -659 +659,33 @@
+ }
++
++#[test]
++fn floating_above_fullscreen_visibility_and_input() {
++    for enabled in [false, true] {
++        let options = Options {
++            layout: niri_config::Layout {
++                floating_above_fullscreen: enabled,
++                ..Default::default()
++            },
++            ..Default::default()
++        };
++        let layout = check_ops_with_options(options, [
++            Op::AddOutput(1),
++            Op::AddWindow { params: TestWindowParams::new(1) },
++            Op::FullscreenWindow(1),
++            Op::AddWindow { params: TestWindowParams::new(2) },
++            Op::SetWindowFloating { id: Some(2), floating: true },
++            Op::Communicate(1),
++            Op::Communicate(2),
++            Op::FocusWindow(1),
++            Op::CompleteAnimations,
++        ]);
++        let ws = layout.active_workspace().unwrap();
++        assert!(ws.render_above_top_layer());
++        assert_eq!(ws.is_floating_visible(), enabled);
++        let (tile, pos) = ws.floating().tiles_with_render_positions().next().unwrap();
++        let point = pos + Point::from((tile.tile_size().w / 2., tile.tile_size().h / 2.));
++        let (window, _) = ws.window_under(point).unwrap();
++        assert_eq!(*window.id(), if enabled { 2 } else { 1 });
++        assert_eq!(ws.active_window().unwrap().id(), &1);
++    }
++}
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -1496,2 +1496,3 @@
+                 always_center_single_column: false,
++                floating_above_fullscreen: false,
+                 empty_workspace_above_first: false,

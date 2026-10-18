@@ -2,6 +2,7 @@ param(
 	[ValidateSet("Ensure", "Apply")]
 	[string]$Mode = "Ensure",
 	[string]$ConfigurationPath = "$env:ProgramFiles\Sunshine\config\sunshine.conf",
+	[string]$ApplicationsPath = "",
 	[string]$OutputStatePath = "$env:LOCALAPPDATA\dotfiles\virtual-display\sunshine-output-name.txt",
 	[string]$ServiceName = "SunshineService",
 	[string]$StreamingMixName = "Speakers (Steam Streaming Speakers)",
@@ -10,6 +11,52 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+function Get-SunshineAdaptiveDisplaySettings {
+	param([string]$BinaryPath, [string]$VirtualOutput)
+	$binaryText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($BinaryPath))
+	if (-not $binaryText.Contains('preferred_output_name')) {
+		throw 'Install the adaptive-display Sunshine fork before applying this policy. The existing configuration has not been changed.'
+	}
+	return [ordered]@{
+		output_name = $VirtualOutput
+		preferred_output_name = ''
+		dd_configuration_option = 'ensure_active'
+		dd_resolution_option = 'auto'
+		dd_refresh_rate_option = 'auto'
+		dd_hdr_option = 'auto'
+		dd_config_revert_on_disconnect = 'enabled'
+	}
+}
+
+function Get-SunshineSignInApplicationsJson {
+	param([string]$Json)
+	$document = $Json | ConvertFrom-Json
+	if ($null -eq $document.apps) { throw "Sunshine's application list is missing." }
+	$matching = @($document.apps | Where-Object name -EQ 'Windows Sign-In')
+	if ($matching.Count -gt 1) { throw "Sunshine has duplicate Windows Sign-In applications." }
+	if ($matching.Count -eq 1) {
+		$app = $matching[0]
+		if ($app.cmd -or $app.'prep-cmd' -or $app.detached) {
+			throw "The existing Windows Sign-In application runs commands; refusing to overwrite it."
+		}
+		$app | Add-Member -MemberType NoteProperty -Name 'exclude-global-prep-cmd' -Value $true -Force
+	} else {
+		$document.apps = @($document.apps) + @([pscustomobject][ordered]@{
+			name = 'Windows Sign-In'
+			'image-path' = 'desktop.png'
+			'exclude-global-prep-cmd' = $true
+		})
+	}
+	return ConvertTo-Json -InputObject $document -Depth 100
+}
+
+if (-not $ApplicationsPath) {
+	$ApplicationsPath = Join-Path (Split-Path -Parent $ConfigurationPath) 'apps.json'
+}
+$applicationsJson = Get-Content -LiteralPath $ApplicationsPath -Raw
+$currentApplications = ConvertTo-Json -InputObject ($applicationsJson | ConvertFrom-Json) -Depth 100
+$desiredApplications = Get-SunshineSignInApplicationsJson -Json $applicationsJson
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -61,25 +108,35 @@ $globalPrepCommand = ConvertTo-Json -InputObject @(
 		elevated = $true
 	}
 ) -Compress
-$settings = [ordered]@{
-	output_name = $outputName
-	dd_configuration_option = "ensure_only_display"
-	dd_resolution_option = "auto"
-	dd_refresh_rate_option = "auto"
-	dd_hdr_option = "auto"
-	dd_config_revert_on_disconnect = "enabled"
+$settings = Get-SunshineAdaptiveDisplaySettings -BinaryPath (Join-Path $env:ProgramFiles 'Sunshine\sunshine.exe') -VirtualOutput $outputName
+$audioSettings = [ordered]@{
 	# Sunshine makes this sink the Windows default only while a client is
 	# connected. AMPS observes that real endpoint transition directly.
 	virtual_sink = $StreamingMixName
 	install_steam_audio_drivers = "disabled"
 	global_prep_cmd = $globalPrepCommand
 }
+foreach ($key in $audioSettings.Keys) { $settings[$key] = $audioSettings[$key] }
 
 $obsoleteSettings = @(
 	"audio_sink"
+	"external_audio"
 	"dd_manual_resolution"
 	"dd_manual_refresh_rate"
 )
+
+$forkStatePath = Join-Path $env:LOCALAPPDATA 'dotfiles\sunshine-fork\active.json'
+if (Test-Path -LiteralPath $forkStatePath) {
+	$fork = Get-Content -LiteralPath $forkStatePath -Raw | ConvertFrom-Json
+	$installedHash = (Get-FileHash (Join-Path $env:ProgramFiles 'Sunshine\sunshine.exe')).Hash
+	if ($fork.schema -ne 1 -or -not $fork.audioSink -or $installedHash -ne $fork.binaryHash) {
+		throw 'The managed Sunshine fork differs from its activation record. Repair it before reconciling audio.'
+	}
+	$settings.Remove('virtual_sink')
+	$settings.external_audio = 'enabled'
+	$settings.audio_sink = $fork.audioSink
+	$obsoleteSettings = @('virtual_sink', 'dd_manual_resolution', 'dd_manual_refresh_rate')
+}
 
 $lines = if (Test-Path -LiteralPath $ConfigurationPath) {
 	@(Get-Content -LiteralPath $ConfigurationPath)
@@ -119,7 +176,7 @@ foreach ($key in $settings.Keys) {
 
 $currentConfiguration = ($lines -join "`n").TrimEnd()
 $desiredConfiguration = (@($updatedLines) -join "`n").TrimEnd()
-$configurationIsCurrent = $currentConfiguration -ceq $desiredConfiguration
+$configurationIsCurrent = ($currentConfiguration -ceq $desiredConfiguration) -and ($currentApplications -ceq $desiredApplications)
 
 function Invoke-ElevatedApply {
 	$arguments = @(
@@ -132,6 +189,7 @@ function Invoke-ElevatedApply {
 	$process = Start-Process `
 		-FilePath $PowerShell `
 		-Verb RunAs `
+		-WindowStyle Hidden `
 		-Wait `
 		-PassThru `
 		-ArgumentList $arguments
@@ -155,8 +213,9 @@ if (-not $isAdministrator) {
 
 $backupDirectory = Join-Path $env:LOCALAPPDATA "dotfiles\backups"
 New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+Copy-Item -LiteralPath $ApplicationsPath -Destination (Join-Path $backupDirectory "sunshine-apps.json-$stamp")
 if (Test-Path -LiteralPath $ConfigurationPath) {
-	$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 	Copy-Item `
 		-LiteralPath $ConfigurationPath `
 		-Destination (Join-Path $backupDirectory "sunshine.conf-$stamp")
@@ -167,12 +226,15 @@ if (Test-Path -LiteralPath $ConfigurationPath) {
 	$updatedLines,
 	[Text.UTF8Encoding]::new($false)
 )
+[IO.File]::WriteAllText($ApplicationsPath, $desiredApplications, [Text.UTF8Encoding]::new($false))
 
 & $FrameLimitScriptPath -Mode Local
 Restart-Service -Name $ServiceName -Force
 (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(15))
 
-Write-Host "Sunshine now targets $outputName (VDD by MTT)."
-Write-Host "Resolution, refresh rate, and HDR now follow the Moonlight client request."
-Write-Host "AMPS now follows Sunshine's real $StreamingMixName default-device transitions."
+Write-Host "Sunshine mirrors the active LG without changing its mode; otherwise it uses $outputName (VDD by MTT)."
+Write-Host "The VDD is no longer used as a secondary monitor beside the LG."
+Write-Host "Windows Sign-In provides desktop access without commands that require a signed-in user."
+Write-Host "Virtual-display resolution, refresh rate, and HDR follow the Moonlight client request."
+Write-Host "Sunshine audio and display policy reconciled. External audio management: $($settings.external_audio -eq 'enabled')."
 Write-Host "The NVIDIA driver now limits local play to 158 FPS and reserves three frames of headroom on Moonlight."

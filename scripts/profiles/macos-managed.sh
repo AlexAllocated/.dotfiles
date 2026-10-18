@@ -140,18 +140,18 @@ ensure_macos_lan_mouse() (
 	local current_identifier current_version current_build actual_checksum install_root backup=""
 
 	case "$(uname -m)" in
-	arm64)
-		asset="lan-mouse-macos-arm64.zip"
-		checksum="5ff9965d05be7f125b1d75b9e7259d874ec98aa086ce40012522bc25406500a9"
-		;;
-	x86_64)
-		asset="lan-mouse-macos-intel.zip"
-		checksum="d24c38ccf50061ab710826003c19d10e1243415ffa18f421d4498b2b858c8b64"
-		;;
-	*)
-		printf 'Lan Mouse v%s has no supported macOS build for %s.\n' "$version" "$(uname -m)" >&2
-		return 1
-		;;
+		arm64)
+			asset="lan-mouse-macos-arm64.zip"
+			checksum="5ff9965d05be7f125b1d75b9e7259d874ec98aa086ce40012522bc25406500a9"
+			;;
+		x86_64)
+			asset="lan-mouse-macos-intel.zip"
+			checksum="d24c38ccf50061ab710826003c19d10e1243415ffa18f421d4498b2b858c8b64"
+			;;
+		*)
+			printf 'Lan Mouse v%s has no supported macOS build for %s.\n' "$version" "$(uname -m)" >&2
+			return 1
+			;;
 	esac
 
 	if [[ -e "$target" && ! -d "$target" ]]; then

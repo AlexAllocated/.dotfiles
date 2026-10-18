@@ -2,8 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	validateConnection,
+	edgeRoute,
+	connectionRoute,
 	waveformPoints,
 	trace,
+	focusTrace,
 	loadLayout,
 	reconcilePositions
 } from "../src/graph.mjs";
@@ -15,13 +18,13 @@ const ids = [
 	"clean_mic",
 	"chatgpt_in",
 	"comms_send",
-	"monitor"
+	"main_output"
 ];
 const topology = {
 	nodes: ids.map(id => ({
 		id,
 		inputs: [{ id: "in", editable: !["clean_mic", "chatgpt"].includes(id) }],
-		outputs: [{ id: "out", editable: !["chatgpt_in", "comms_send", "monitor"].includes(id) }]
+		outputs: [{ id: "out", editable: !["chatgpt_in", "comms_send", "main_output"].includes(id) }]
 	})),
 	edges: []
 };
@@ -40,6 +43,23 @@ const connection = (source, target) => ({
 	target,
 	sourceHandle: "out",
 	targetHandle: "in"
+});
+test("focus dims nodes and wires using the same upstream/downstream trace", () => {
+	const graph = {
+		nodes: ["game", "music", "mix", "output", "unwired"].map(id => ({ id })),
+		edges: [
+			{ id: "g", source: "game", target: "mix" },
+			{ id: "m", source: "music", target: "mix" },
+			{ id: "o", source: "mix", target: "output" }
+		]
+	};
+	const focus = focusTrace(graph, "game", null);
+	assert.deepEqual([...focus.edgeIds].sort(), ["g", "o"]);
+	assert.deepEqual([...focus.nodeIds].sort(), ["game", "mix", "output"]);
+	assert.deepEqual([...focusTrace(graph, "unwired", null).nodeIds], ["unwired"]);
+	assert.deepEqual([...focusTrace(graph, null, "m").nodeIds].sort(), ["mix", "music"]);
+	assert.equal(focusTrace(graph, null, null).nodeIds, null);
+	assert.equal(focusTrace(graph, "deleted-node", "deleted-edge").nodeIds, null);
 });
 test("direct and indirect participant self-return blocked with clear display names", () => {
 	for (const [source, target, label] of [
@@ -64,27 +84,66 @@ test("protected ports and duplicate links rejected", () => {
 	assert.match(validateConnection(topology, patches, connection("music", "clean_mic")), /fixed/);
 	assert.match(validateConnection(topology, patches, connection("chatgpt_in", "music")), /fixed/);
 	assert.match(
-		validateConnection(topology, patches, connection("game", "monitor")),
+		validateConnection(topology, patches, connection("game", "main_output")),
 		/already exists/
 	);
 });
-test("private phone cannot be plugged into recording or voice buses", () => {
+test("phone and extra physical nodes support explicit fanout but preserve protected ports", () => {
 	const withPhone = {
 		...topology,
 		nodes: [
 			...topology.nodes,
-			{ id: "phone", inputs: [], outputs: [{ id: "out", editable: false }] }
+			{ id: "phone", inputs: [], outputs: [{ id: "out", editable: true }] },
+			{ id: "device-output", inputs: [{ id: "in", editable: true }], outputs: [] },
+			{ id: "device-input", inputs: [], outputs: [{ id: "out", editable: true }] }
 		]
 	};
-	for (const target of ids) {
-		assert.match(validateConnection(withPhone, patches, connection("phone", target)), /fixed/);
+	for (const target of ["music", "comms_send", "device-output"]) {
+		assert.equal(validateConnection(withPhone, patches, connection("phone", target)), null);
 	}
+	assert.equal(
+		validateConnection(withPhone, patches, connection("device-input", "device-output")),
+		null
+	);
+	assert.match(validateConnection(withPhone, patches, connection("phone", "clean_mic")), /fixed/);
+	assert.match(
+		validateConnection(withPhone, patches, connection("device-output", "music")),
+		/fixed/
+	);
 });
 test("valid fanout and reconnect validate the final graph", () => {
 	assert.equal(validateConnection(topology, patches, connection("music", "comms_send")), null);
 	assert.equal(
-		validateConnection(topology, patches, connection("game", "monitor"), "game:monitor"),
+		validateConnection(topology, patches, connection("game", "main_output"), "game:monitor"),
 		null
+	);
+});
+test("Main Output projects the legacy mix without rewriting saved route identities", () => {
+	const old = { source: "game", target: "main_output", routeDestination: "monitor" };
+	assert.deepEqual(edgeRoute(old), { source: "game", destination: "monitor" });
+	assert.deepEqual(connectionRoute(connection("music", "main_output"), old), {
+		source: "music",
+		destination: "monitor"
+	});
+	assert.deepEqual(connectionRoute(connection("game", "main_output")), {
+		source: "game",
+		destination: "monitor"
+	});
+	assert.deepEqual(connectionRoute(connection("phone", "main_output")), {
+		source: "phone",
+		destination: "main_output"
+	});
+	assert.deepEqual(connectionRoute(connection("game", "device-moonlight"), old), {
+		source: "game",
+		destination: "device-moonlight"
+	});
+	assert.match(
+		validateConnection(
+			topology,
+			[{ source: "game", destination: "main_output" }],
+			connection("game", "main_output")
+		),
+		/already exists/
 	);
 });
 test("waveform has no fake activity and consistent distance mapping", () => {

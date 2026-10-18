@@ -1,11 +1,10 @@
+use super::recovery::RetryComponent;
 use super::*;
 use ::windows::{
 	core::{BSTR, GUID, HSTRING, PROPVARIANT},
 	Devices::Enumeration::{DeviceInformation, DeviceInformationUpdate, DeviceWatcher},
-	Foundation::{AsyncStatus, IAsyncAction, IAsyncOperation, TypedEventHandler},
-	Media::Audio::{
-		AudioPlaybackConnection, AudioPlaybackConnectionOpenResult, AudioPlaybackConnectionState,
-	},
+	Foundation::{AsyncStatus, IAsyncAction, TypedEventHandler},
+	Media::Audio::{AudioPlaybackConnection, AudioPlaybackConnectionState},
 	Win32::{
 		Media::Audio::*,
 		System::{
@@ -54,27 +53,6 @@ fn wait_action(action: &IAsyncAction, stop: &AtomicBool) -> Result<()> {
 			}
 		}
 	}
-}
-fn wait_open(
-	action: &IAsyncOperation<AudioPlaybackConnectionOpenResult>,
-	stop: &AtomicBool,
-) -> Result<()> {
-	let deadline = Instant::now() + Duration::from_secs(20);
-	loop {
-		match check_wait(action.Status()?, deadline, stop) {
-			Ok(true) => {}
-			Ok(false) => break,
-			Err(e) => {
-				let _ = action.Cancel();
-				return Err(e);
-			}
-		}
-	}
-	let result = action.GetResults()?.Status()?;
-	if result.0 != 0 {
-		bail!("Windows could not open phone audio ({result:?}). Check Bluetooth on the phone.");
-	}
-	Ok(())
 }
 fn discover(stop: &AtomicBool) -> Result<Vec<Device>> {
 	let operation =
@@ -140,6 +118,24 @@ struct Session {
 	store: IPropertyStore,
 	output: String,
 	relay: Option<super::relay::Relay>,
+	source_id: String,
+	status_path: PathBuf,
+	hub: Arc<super::hub::Hub>,
+}
+pub(super) fn disable_native_listen(config: &Path) -> Result<()> {
+	let settings = Settings::load(&config.with_file_name("phone.toml"))?;
+	let Some(id) = settings.device_id else {
+		return Ok(());
+	};
+	unsafe {
+		let _ = RoInitialize(RO_INIT_MULTITHREADED);
+		let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+		let source = en.GetDevice(&HSTRING::from(capture_id(&id)?))?;
+		let store = source.OpenPropertyStore(STGM_READWRITE)?;
+		store.SetValue(&key(1), &PROPVARIANT::from(false))?;
+		store.Commit()?;
+	}
+	Ok(())
 }
 impl Session {
 	fn start(
@@ -147,7 +143,7 @@ impl Session {
 		target: &Device,
 		config: &Path,
 		stop: &AtomicBool,
-		buffer_ms: u32,
+		hub: Arc<super::hub::Hub>,
 	) -> Result<Self> {
 		unsafe {
 			let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
@@ -175,22 +171,21 @@ impl Session {
 				store,
 				output: String::new(),
 				relay: None,
+				source_id: capture_id,
+				status_path: config.with_file_name("phone-buffer-status.json"),
+				hub: hub.clone(),
 			};
 			// Explicit physical destination BEFORE enabling Listen or opening Bluetooth.
 			session.route(target)?;
-			session.store.SetValue(&key(1), &PROPVARIANT::from(true))?;
+			session.store.SetValue(
+				&key(1),
+				&PROPVARIANT::from(hub.main_gate.load(Ordering::Acquire)),
+			)?;
 			session.store.Commit()?;
 			let connection = AudioPlaybackConnection::TryCreateFromId(&HSTRING::from(&phone.id))?;
 			session.connection = Some(connection.clone());
 			// Retain the discovery ID. Do not call Connection.DeviceId (Windows API bug).
 			wait_action(&connection.StartAsync()?, stop)?;
-			wait_open(&connection.OpenAsync()?, stop)?;
-			session.relay = Some(super::relay::Relay::start(
-				capture_id,
-				target.id.clone(),
-				config.with_file_name("phone-buffer-status.json"),
-				buffer_ms,
-			));
 			Ok(session)
 		}
 	}
@@ -227,14 +222,32 @@ impl Session {
 			Ok(())
 		}
 	}
-	fn is_open(&self) -> bool {
-		self
+	fn is_open(&self) -> Result<bool> {
+		Ok(self
 			.connection
 			.as_ref()
-			.is_some_and(|c| c.State().ok() == Some(AudioPlaybackConnectionState::Opened))
+			.context("Phone receiver registration missing")?
+			.State()?
+			== AudioPlaybackConnectionState::Opened)
+	}
+	fn start_capture(&mut self) {
+		if self.relay.is_none() {
+			self.relay = Some(super::relay::Relay::start(
+				self.source_id.clone(),
+				self.output.clone(),
+				self.status_path.clone(),
+				self.hub.clone(),
+			));
+		}
+	}
+	fn stop_capture(&mut self) {
+		drop(self.relay.take());
 	}
 	fn meter(&self) -> Result<Option<crate::MeterReading>> {
 		self.relay.as_ref().map(|r| r.meter()).unwrap_or(Ok(None))
+	}
+	fn ready(&self) -> bool {
+		self.is_open().unwrap_or(false) && self.relay.as_ref().is_some_and(|r| r.ready())
 	}
 }
 impl Drop for Session {
@@ -253,14 +266,70 @@ impl Drop for Session {
 	}
 }
 
+fn schedule_reconnect(
+	session: &mut Option<Session>,
+	retry: &mut super::recovery::RetryBackoff,
+	next_try: &mut Instant,
+	state: &mut Snapshot,
+	reason: String,
+) {
+	// Drop fully before restarting: two phone owners must never overlap.
+	schedule_retry(
+		session,
+		retry,
+		next_try,
+		state,
+		reason,
+		RetryComponent::Registration,
+	);
+}
+
+fn schedule_retry(
+	session: &mut Option<Session>,
+	retry: &mut super::recovery::RetryBackoff,
+	next_try: &mut Instant,
+	state: &mut Snapshot,
+	reason: String,
+	component: RetryComponent,
+) {
+	if component.withdraws_receiver() {
+		*session = None;
+	} else if component == RetryComponent::Capture {
+		if let Some(current) = session.as_mut() {
+			current.stop_capture();
+		}
+	}
+	let delay = retry.failed();
+	*next_try = Instant::now() + delay;
+	let component = component.name();
+	tracing::warn!(error = %reason, retry_seconds = delay.as_secs(), component, "retrying phone component");
+	state.error = Some(format!(
+		"{reason}. Retrying {component} in {} seconds.",
+		delay.as_secs()
+	));
+}
+
+fn publish_snapshot(path: &Path, state: &Snapshot, shared: &Mutex<Snapshot>) {
+	*shared.lock().unwrap() = state.clone();
+	if let Ok(bytes) = serde_json::to_vec_pretty(state) {
+		if let Err(error) =
+			crate::control::atomic_write(&path.with_file_name("phone-status.json"), &bytes)
+		{
+			tracing::warn!(%error, "could not publish phone status");
+		}
+	}
+}
+
 pub(super) fn run(
-	path: PathBuf,
+	config_path: PathBuf,
 	receiver: mpsc::Receiver<Message>,
 	shared: Arc<Mutex<Snapshot>>,
 	levels: Arc<Mutex<Option<crate::MeterReading>>>,
 	stop: Arc<AtomicBool>,
 	wakeup: mpsc::Sender<Message>,
+	hub: Arc<super::hub::Hub>,
 ) {
+	let path = config_path.with_file_name("phone.toml");
 	let result = || -> Result<()> {
 		unsafe {
 			RoInitialize(RO_INIT_MULTITHREADED)?;
@@ -295,28 +364,60 @@ pub(super) fn run(
 		let mut session: Option<Session> = None;
 		let mut output: Option<Device> = None;
 		let mut next_try = Instant::now();
+		let mut retry = super::recovery::RetryBackoff::default();
+		let clock = Instant::now();
 		let mut published = None;
+		let telemetry = super::ipc::publisher();
+		let mut next_output_check = Instant::now();
 		while !stop.load(Ordering::Acquire) {
-			let message = if session.is_some() {
+			if Instant::now() >= next_output_check {
+				output = crate::Config::load(&config_path)
+					.ok()
+					.and_then(|config| crate::graph_snapshot(&config).ok())
+					.and_then(|graph| {
+						super::applied_output(&graph, crate::control::status(&config_path).ok().as_ref())
+					});
+				next_output_check = Instant::now() + Duration::from_secs(2);
+			}
+			let mut message = if session.is_some() {
 				receiver.recv_timeout(Duration::from_millis(33)).ok()
 			} else {
-				match receiver.recv() {
-					Ok(message) => Some(message),
-					Err(_) => break,
-				}
+				receiver.recv_timeout(Duration::from_millis(250)).ok()
 			};
+			let mut receipt = None;
+			if message.is_none() {
+				if let Some(envelope) = super::ipc::next(&path)? {
+					let (tx, rx) = mpsc::channel();
+					message = Some(Message::Edit(envelope.request, tx));
+					receipt = Some((envelope.id, rx));
+				}
+			}
 			if let Some(message) = message {
 				match message {
 					Message::Stop => break,
 					Message::Discover => {
+						let previously_present = state
+							.devices
+							.iter()
+							.any(|d| Some(&d.id) == state.settings.device_id.as_ref());
 						match discover(&stop) {
 							Ok(devices) => state.devices = devices,
 							Err(e) => state.error = Some(format!("{e:#}")),
 						}
-						next_try = Instant::now();
+						// Unrelated discovery events must not defeat failure backoff.
+						if !previously_present
+							&& state
+								.devices
+								.iter()
+								.any(|d| Some(&d.id) == state.settings.device_id.as_ref())
+						{
+							retry.reset();
+							next_try = Instant::now();
+						}
 					}
 					Message::Restart => {
 						session = None;
+						retry.reset();
 						next_try = Instant::now();
 					}
 					Message::Output(value) => {
@@ -324,6 +425,12 @@ pub(super) fn run(
 					}
 					Message::Edit(request, reply) => {
 						let edit = || -> Result<()> {
+							request.validate()?;
+							if request.action == "quiesce" {
+								state.wanted = false;
+								session = None;
+								return Ok(());
+							}
 							if request.action == "refresh" {
 								state.devices = discover(&stop)?;
 								return Ok(());
@@ -338,29 +445,31 @@ pub(super) fn run(
 							if let Some(value) = request.auto_connect {
 								settings.auto_connect = value;
 							}
-							if let Some(value) = request.buffer_ms {
-								check_buffer_ms(value)?;
-								settings.buffer_ms = value;
-							}
-							if request.action == "connect" && settings.device_id.is_none() {
+							if matches!(request.action.as_str(), "connect" | "reconnect")
+								&& settings.device_id.is_none()
+							{
 								bail!("Select a paired phone first");
 							}
 							settings.save(&path)?;
 							if settings.device_id != state.settings.device_id {
 								session = None;
+								retry.reset();
+								next_try = Instant::now();
 							}
 							state.settings = settings;
-							if let Some(relay) = session.as_ref().and_then(|s| s.relay.as_ref()) {
-								relay.buffer_ms(state.settings.buffer_ms);
-							}
-							if request.action == "connect" {
+							if matches!(request.action.as_str(), "connect" | "reconnect") {
 								state.wanted = true;
+								if request.action == "reconnect" {
+									session = None;
+								}
+								retry.reset();
+								next_try = Instant::now();
 							}
 							if request.action == "disconnect" {
 								state.wanted = false;
 								session = None;
+								retry.reset();
 							}
-							next_try = Instant::now();
 							state.error = None;
 							Ok(())
 						};
@@ -372,24 +481,36 @@ pub(super) fn run(
 					}
 				}
 			}
+			if let Some((id, rx)) = receipt {
+				super::ipc::reply(
+					&path,
+					&id,
+					rx.try_recv()
+						.unwrap_or_else(|_| Err("Phone command did not complete".into())),
+				)?;
+			}
 			if !state.wanted || output.is_none() {
 				session = None;
 			}
 			if let (Some(current), Some(target)) = (session.as_mut(), output.as_ref()) {
-				if !current.is_open() {
-					session = None;
-					next_try = Instant::now() + Duration::from_secs(5);
-				} else if let Err(error) = current.route(target) {
-					state.error = Some(format!("{error:#}"));
-					session = None;
-					next_try = Instant::now() + Duration::from_secs(5);
+				if let Err(error) = current.route(target) {
+					schedule_reconnect(
+						&mut session,
+						&mut retry,
+						&mut next_try,
+						&mut state,
+						format!("{error:#}"),
+					);
 				}
 			}
 			if state.wanted && session.is_none() && output.is_some() && Instant::now() >= next_try {
 				state.phase = "connecting".into();
 				state.connected = false;
 				state.output = None;
-				*shared.lock().unwrap() = state.clone();
+				*levels.lock().unwrap() = None;
+				super::ipc::publish(telemetry.as_ref(), None);
+				publish_snapshot(&path, &state, &shared);
+				published = Some(state.clone());
 				let phone = state
 					.devices
 					.iter()
@@ -397,36 +518,63 @@ pub(super) fn run(
 				let result = phone
 					.context("Selected phone is unavailable; refresh the paired device list")
 					.and_then(|phone| {
-						Session::start(
-							phone,
-							output.as_ref().unwrap(),
-							&path,
-							&stop,
-							state.settings.buffer_ms,
-						)
+						Session::start(phone, output.as_ref().unwrap(), &path, &stop, hub.clone())
 					});
 				match result {
 					Ok(current) => {
 						session = Some(current);
-						state.error = None;
 					}
 					Err(error) => {
-						state.error = Some(format!("{error:#}"));
-						next_try = Instant::now() + Duration::from_secs(15);
+						schedule_reconnect(
+							&mut session,
+							&mut retry,
+							&mut next_try,
+							&mut state,
+							format!("{error:#}"),
+						);
 					}
+				}
+			}
+			if let Some(current) = session.as_mut() {
+				match current.is_open() {
+					Ok(false) => current.stop_capture(),
+					Err(error) => schedule_reconnect(
+						&mut session,
+						&mut retry,
+						&mut next_try,
+						&mut state,
+						format!("{error:#}"),
+					),
+					_ => {}
+				}
+			}
+			if let Some(current) = session.as_mut() {
+				if current.is_open().unwrap_or(false) && Instant::now() >= next_try {
+					current.start_capture();
 				}
 			}
 			*levels.lock().unwrap() = match session.as_ref().map(Session::meter).transpose() {
 				Ok(reading) => reading.flatten(),
 				Err(error) => {
-					state.error = Some(format!("{error:#}"));
-					session = None;
-					next_try = Instant::now() + Duration::from_secs(15);
+					// A WASAPI failure is not a reason to withdraw Bluetooth service.
+					schedule_retry(
+						&mut session,
+						&mut retry,
+						&mut next_try,
+						&mut state,
+						format!("{error:#}"),
+						RetryComponent::Capture,
+					);
 					None
 				}
 			};
-			state.connected = session.is_some();
-			state.output = if state.connected {
+			state.connected = session.as_ref().is_some_and(Session::ready);
+			retry.observe(clock.elapsed(), state.connected);
+			if state.connected {
+				state.error = None;
+			}
+			super::ipc::publish(telemetry.as_ref(), levels.lock().unwrap().as_ref());
+			state.output = if state.connected && hub.main_gate.load(Ordering::Acquire) {
 				output.clone()
 			} else {
 				None
@@ -437,19 +585,19 @@ pub(super) fn run(
 				"off"
 			} else if output.is_none() {
 				"waiting for Main Output"
+			} else if session
+				.as_ref()
+				.is_some_and(|s| s.is_open().unwrap_or(false))
+			{
+				"receiver available — select PC and play audio on phone"
+			} else if session.is_some() {
+				"receiver available — connect from your phone"
 			} else {
-				"waiting to reconnect"
+				"waiting for receiver registration"
 			}
 			.into();
 			if published.as_ref() != Some(&state) {
-				*shared.lock().unwrap() = state.clone();
-				if let Ok(bytes) = serde_json::to_vec_pretty(&state) {
-					if let Err(error) =
-						crate::control::atomic_write(&path.with_file_name("phone-status.json"), &bytes)
-					{
-						tracing::warn!(%error, "could not publish phone status");
-					}
-				}
+				publish_snapshot(&path, &state, &shared);
 				published = Some(state.clone());
 			}
 		}

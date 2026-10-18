@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 REPO_ROOT="$repo_root"
 
 # shellcheck source=scripts/lib/common.sh
@@ -20,25 +20,26 @@ assert_equal() {
 	}
 }
 
-assert_equal "path:$repo_root#linux" "$(flake_ref_for_profile linux)"
-assert_equal "path:$repo_root#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
+repo_uri="$(python3 -c 'from pathlib import Path; import sys; print("git+" + Path(sys.argv[1]).as_uri())' "$repo_root")"
+assert_equal "$repo_uri#linux" "$(flake_ref_for_profile linux)"
+assert_equal "$repo_uri#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
-assert_equal "path:$repo_root#tracer" "$(flake_ref_for_profile tracer)"
-assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
-assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
-assert_equal "path:/tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
+assert_equal "$repo_uri#tracer" "$(flake_ref_for_profile tracer)"
+assert_equal "$repo_uri#macos-arm64" "$(flake_ref_for_profile macos)"
+assert_equal "$repo_uri#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
+canonical_tmp="$(cd /tmp && pwd -P)"
+assert_equal "git+file://$canonical_tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
-assert_equal "path:/tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
+assert_equal "git+file://$canonical_tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
 
 detected_tracer="$({
 	WSL_DISTRO_NAME=""
 	is_nixos() { return 0; }
 	uname() {
-		if [[ "$1" == "-s" ]]; then
-			printf 'Linux\n'
-		else
-			printf 'x86_64\n'
-		fi
+		case "$1" in
+			-s) printf 'Linux\n' ;;
+			-m) printf 'x86_64\n' ;;
+		esac
 	}
 	hostname() { printf 'tracer\n'; }
 	detect_profile
@@ -52,6 +53,79 @@ detected_ubuntu_wsl="$({
 	detect_profile
 })"
 assert_equal "ubuntu-wsl" "$detected_ubuntu_wsl"
+
+(
+	require_command() { :; }
+	sudo() { return 42; }
+	verify_native_nixos_activation() {
+		printf 'Unexpected activation verification\n' >&2
+		exit 99
+	}
+	status=0
+	apply_profile tracer || status=$?
+	assert_equal 42 "$status"
+)
+
+for failure in fetch rebase merge-base; do
+	(
+		git() {
+			shift 2
+			if [[ "$1" == "$failure" ]]; then return 42; fi
+			case "$1" in
+				rev-parse) printf 'origin/main\n' ;;
+				fetch) return 0 ;;
+				merge-base) return 1 ;;
+				*)
+					printf 'Unexpected Git command: %s\n' "$*" >&2
+					exit 99
+					;;
+			esac
+		}
+		rebased=0
+		status=0
+		fetch_and_rebase_upstream rebased || status=$?
+		assert_equal 42 "$status"
+		assert_equal 0 "$rebased"
+	)
+done
+
+(
+	command_exists() { return 0; }
+	nix_calls=0
+	nix() {
+		nix_calls=$((nix_calls + 1))
+		case "$nix_calls" in
+			1) assert_equal 'flake check path:/tmp/candidate' "$*" ;;
+			2) assert_equal 'flake check --all-systems --no-build path:/tmp/candidate' "$*" ;;
+			*) exit 99 ;;
+		esac
+	}
+	validate_update_candidate /tmp/candidate
+	assert_equal 2 "$nix_calls"
+	nix() { return 42; }
+	status=0
+	validate_update_candidate /tmp/candidate || status=$?
+	assert_equal 42 "$status"
+)
+
+set +e
+(
+	set -e
+	sync_before_update() { :; }
+	prepare_update_candidate() { :; }
+	apply_profile() {
+		false
+		printf 'Failure was ignored\n' >&2
+	}
+	accept_candidate_locks() { exit 99; }
+	accept_candidate_neovim_lock() { :; }
+	sync_live_neovim_runtime() { :; }
+	commit_updates() { exit 99; }
+	apply_with_update tracer
+)
+apply_status=$?
+set -e
+assert_equal 1 "$apply_status"
 
 cleanup_output="$({
 	command_exists() { return 0; }
@@ -109,6 +183,10 @@ bash -c 'set -u; source "$1"; cleanup_path="$2"; register_cleanup() { local work
 
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
+physical_fixture="$(cd "$fixture" && pwd -P)"
+fixture_uri="$(python3 -c 'from pathlib import Path; import sys; print("git+" + Path(sys.argv[1]).as_uri())' "$physical_fixture")"
+ln -s "$physical_fixture" "$fixture/alias"
+assert_equal "$fixture_uri/candidate#tracer" "$(flake_ref_for_profile tracer "$fixture/alias/candidate")"
 mkdir -p "$fixture/source/modules/home"
 printf 'untracked module\n' >"$fixture/source/modules/home/foundation.nix"
 REPO_ROOT="$fixture/source"
@@ -154,5 +232,67 @@ push_updates >/dev/null
 assert_equal "test: automatic updoot" "$(git -C "$fixture/checkout" log -1 --pretty=%s)"
 assert_equal "$(git -C "$fixture/checkout" rev-parse HEAD)" "$(git --git-dir="$fixture/remote.git" rev-parse main)"
 assert_equal "" "$(git -C "$fixture/checkout" status --short)"
+
+printf 'saved local change\n' >"$fixture/checkout/untracked"
+(
+	git() {
+		if [[ "$3" == fetch ]]; then return 42; fi
+		command git "$@"
+	}
+	status=0
+	sync_before_update || status=$?
+	assert_equal 1 "$status"
+)
+assert_equal "saved local change" "$(cat "$fixture/checkout/untracked")"
+assert_equal "" "$(git -C "$fixture/checkout" stash list)"
+
+printf 'local conflict\n' >"$fixture/checkout/tracked"
+git -C "$fixture/checkout" add tracked
+git -C "$fixture/checkout" commit --quiet -m 'local conflict'
+git -C "$fixture/peer" pull --quiet --rebase
+printf 'upstream conflict\n' >"$fixture/peer/tracked"
+git -C "$fixture/peer" commit --quiet -am 'upstream conflict'
+git -C "$fixture/peer" push --quiet
+(
+	git() {
+		if [[ "$3 $4" == 'stash apply' ]]; then exit 99; fi
+		command git "$@"
+	}
+	status=0
+	sync_before_update || status=$?
+	assert_equal 1 "$status"
+)
+[[ -d "$fixture/checkout/.git/rebase-merge" ]]
+assert_equal "saved local change" "$(git -C "$fixture/checkout" show 'stash@{0}:untracked')"
+
+# A stale, untrusted Mise shim must never service editor automation.
+mkdir -p "$fixture/mise/shims" "$fixture/runtime" "$fixture/custom-mise/shims"
+for shim_dir in "$fixture/mise/shims" "$fixture/custom-mise/shims"; do
+	printf '#!/bin/sh\nexit 99\n' >"$shim_dir/npm"
+	chmod +x "$shim_dir/npm"
+done
+printf '#!/bin/sh\nprintf "host npm\\n"\n' >"$fixture/runtime/npm"
+chmod +x "$fixture/runtime/npm"
+(
+	command_exists() { return 1; }
+	uname() { printf 'Linux\n'; }
+	nvim() { npm; }
+	MISE_DATA_DIR="$fixture/custom-mise"
+	# The automation subshell must leave the caller PATH unchanged.
+	# shellcheck disable=SC2031
+	PATH="$fixture/mise/shims:$fixture/custom-mise/shims:$fixture/runtime:$PATH"
+	assert_equal 'host npm' "$(run_neovim_automation)"
+)
+
+mkdir -p "$fixture/pins-source/pins" "$fixture/pins-target"
+for pin in flake.nix flake.lock pins/codex.json pins/chatgpt-desktop.json pins/iloader-cargo.json; do
+	printf 'validated %s\n' "$pin" >"$fixture/pins-source/$pin"
+done
+mkdir -p "$fixture/pins-target/pins"
+REPO_ROOT="$fixture/pins-target"
+accept_candidate_locks "$fixture/pins-source"
+for pin in flake.nix flake.lock pins/codex.json pins/chatgpt-desktop.json pins/iloader-cargo.json; do
+	cmp "$fixture/pins-source/$pin" "$fixture/pins-target/$pin"
+done
 
 printf 'dotctl helper tests passed\n'

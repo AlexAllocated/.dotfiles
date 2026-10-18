@@ -11,8 +11,14 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 pub mod control;
+pub mod devices;
 pub mod phone;
 pub mod topology;
+
+#[cfg(target_os = "linux")]
+mod linux_audio;
+#[cfg(target_os = "linux")]
+pub use linux_audio::*;
 
 #[cfg(windows)]
 mod app_routing;
@@ -29,6 +35,8 @@ pub const MAX_SUPPRESSION_ATTENUATION_DB: f32 = 40.0;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
 	pub cables: CableConfig,
+	#[serde(default)]
+	pub devices: Vec<devices::Binding>,
 	#[serde(default)]
 	pub monitor: MonitorConfig,
 	#[serde(default)]
@@ -180,22 +188,6 @@ pub struct NoiseSuppressionConfig {
 	pub enabled: bool,
 	pub engine: String,
 	pub attenuation_limit_db: f32,
-	pub post_filter_beta: f32,
-}
-
-#[cfg(any(windows, test))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SuppressionBackend {
-	Nvidia,
-	DeepFilter,
-}
-
-#[cfg(any(windows, test))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SuppressionTransition {
-	Bypass,
-	UpdateInPlace,
-	Rebuild,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -205,6 +197,7 @@ struct RuntimeControls {
 	revision: u64,
 	noise_suppression: Option<NoiseSuppressionControls>,
 	patchbay: Option<PatchbayControls>,
+	devices: Option<Vec<devices::Binding>>,
 }
 
 impl Default for RuntimeControls {
@@ -214,6 +207,7 @@ impl Default for RuntimeControls {
 			revision: 0,
 			noise_suppression: None,
 			patchbay: None,
+			devices: None,
 		}
 	}
 }
@@ -247,7 +241,6 @@ impl Default for NoiseSuppressionConfig {
 			enabled: true,
 			engine: "nvidia_afx".into(),
 			attenuation_limit_db: 20.0,
-			post_filter_beta: 0.0,
 		}
 	}
 }
@@ -292,6 +285,7 @@ pub struct GraphSnapshot {
 	pub main_output: Option<EndpointSummary>,
 	pub input_devices: Vec<EndpointSummary>,
 	pub output_devices: Vec<EndpointSummary>,
+	pub devices: Vec<devices::Binding>,
 	pub session_override: Option<String>,
 	pub session_input_override: Option<String>,
 	pub buses: Vec<BusSummary>,
@@ -303,13 +297,19 @@ pub struct GraphSnapshot {
 	pub microphone_latency_ms: u32,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeterReading {
-	pub id: &'static str,
+	pub id: String,
 	pub peak: f32,
+	#[serde(deserialize_with = "deserialize_dbfs")]
 	pub dbfs: f32,
 	pub waveform: Vec<f32>,
+}
+fn deserialize_dbfs<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> std::result::Result<f32, D::Error> {
+	Ok(Option::<f32>::deserialize(deserializer)?.unwrap_or(f32::NEG_INFINITY))
 }
 
 impl Config {
@@ -319,13 +319,18 @@ impl Config {
 		let mut config: Self = toml::from_str(&text)
 			.with_context(|| format!("could not parse AMPS config {}", path.display()))?;
 		let controls_path = runtime_controls_path(path);
+		let mut legacy_graph = true;
 		if controls_path.is_file() {
 			let controls_text = fs::read_to_string(&controls_path)
 				.with_context(|| format!("could not read AMPS controls {}", controls_path.display()))?;
 			let controls: RuntimeControls = toml::from_str(&controls_text).with_context(|| {
 				format!("could not parse AMPS controls {}", controls_path.display())
 			})?;
-			control::check_schema(controls.schema_version)?;
+			control::check_controls_schema(controls.schema_version)?;
+			legacy_graph = controls.schema_version == 1;
+			if let Some(devices) = controls.devices {
+				config.devices = devices;
+			}
 			if let Some(suppression) = controls.noise_suppression {
 				if suppression.intensity > 100 {
 					bail!("noise suppression intensity must be between 0 and 100");
@@ -340,6 +345,20 @@ impl Config {
 			if let Some(patchbay) = controls.patchbay {
 				config.patchbay.connections = patchbay.connections;
 			}
+		}
+		// The legacy phone path was fixed and private outside the saved patch list.
+		// Project it into the editable graph without rewriting imported state.
+		if legacy_graph
+			&& !config
+				.patchbay
+				.connections
+				.iter()
+				.any(|p| p.source == "phone")
+		{
+			config.patchbay.connections.push(PatchConnection {
+				source: "phone".into(),
+				destination: "main_output".into(),
+			});
 		}
 		config.validate()?;
 		Ok(config)
@@ -392,27 +411,20 @@ impl Config {
 		if self.microphone.vr_input.trim().is_empty() {
 			bail!("vr_input must be non-empty");
 		}
-		if !matches!(
-			self.noise_suppression.engine.as_str(),
-			"nvidia_afx" | "deepfilternet3"
-		) {
-			bail!("noise suppression engine must be nvidia_afx or deepfilternet3");
+		if self.noise_suppression.engine != "nvidia_afx" {
+			bail!("noise suppression engine must be nvidia_afx");
 		}
 		if !self.noise_suppression.attenuation_limit_db.is_finite()
 			|| !(0.0..=100.0).contains(&self.noise_suppression.attenuation_limit_db)
 		{
 			bail!("attenuation_limit_db must be between 0 and 100 dB");
 		}
-		if !self.noise_suppression.post_filter_beta.is_finite()
-			|| !(0.0..=1.0).contains(&self.noise_suppression.post_filter_beta)
-		{
-			bail!("post_filter_beta must be between 0 and 1");
-		}
-		validate_patch_connections(&self.patchbay.connections)?;
+		validate_device_connections(&self.patchbay.connections, &self.devices)?;
 		for route in &self.routes {
-			if route.process.trim().is_empty() || !route.process.to_ascii_lowercase().ends_with(".exe")
+			if route.process.trim().is_empty()
+				|| (cfg!(windows) && !route.process.to_ascii_lowercase().ends_with(".exe"))
 			{
-				bail!("route process names must be non-empty .exe names");
+				bail!("route process names must be non-empty executable names (.exe on Windows)");
 			}
 			if route.output.is_none() && route.input.is_none() {
 				bail!(
@@ -441,14 +453,16 @@ impl Config {
 	}
 }
 
-const PATCH_SOURCES: [(&str, &str); 5] = [
+const PATCH_SOURCES: [(&str, &str); 6] = [
+	("phone", "Phone Audio"),
 	("game", "Game"),
 	("comms", "Comms Audio"),
 	("music", "Media"),
 	("chatgpt", "AI Audio"),
 	("clean_mic", "Clean Mic"),
 ];
-const PATCH_DESTINATIONS: [(&str, &str); 6] = [
+const PATCH_DESTINATIONS: [(&str, &str); 7] = [
+	("main_output", "Main Output device"),
 	("game", "Game"),
 	("comms", "Comms Audio"),
 	("music", "Media"),
@@ -474,8 +488,28 @@ pub fn patch_destinations() -> Vec<PatchPortSummary> {
 }
 
 pub fn validate_patch_connections(connections: &[PatchConnection]) -> Result<()> {
-	let source_ids = PATCH_SOURCES.map(|(id, _)| id);
-	let destination_ids = PATCH_DESTINATIONS.map(|(id, _)| id);
+	validate_device_connections(connections, &[])
+}
+
+pub fn validate_device_connections(
+	connections: &[PatchConnection],
+	devices: &[devices::Binding],
+) -> Result<()> {
+	devices::validate(devices)?;
+	if connections.len() > 128 {
+		bail!("Too many audio routes");
+	}
+	let mut source_ids = PATCH_SOURCES.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+	let mut destination_ids = PATCH_DESTINATIONS
+		.iter()
+		.map(|(id, _)| *id)
+		.collect::<Vec<_>>();
+	for d in devices {
+		match d.direction {
+			devices::Direction::Input => source_ids.push(&d.id),
+			devices::Direction::Output => destination_ids.push(&d.id),
+		}
+	}
 	let mut seen = BTreeSet::new();
 	let mut adjacency = vec![Vec::new(); source_ids.len()];
 	for connection in connections {
@@ -599,7 +633,10 @@ pub fn setup_conversation(config_path: &Path) -> Result<()> {
 pub fn migrate_control_names(config_path: &Path) -> Result<()> {
 	let controls = load_runtime_controls(config_path)?;
 	if let Some(patchbay) = &controls.patchbay {
-		validate_patch_connections(&patchbay.connections)?;
+		validate_device_connections(
+			&patchbay.connections,
+			controls.devices.as_deref().unwrap_or(&[]),
+		)?;
 	}
 	write_runtime_controls(config_path, &controls)
 }
@@ -614,27 +651,6 @@ pub fn attenuation_for_intensity(intensity: u8) -> f32 {
 	intensity.min(100) as f32 / 100.0 * MAX_SUPPRESSION_ATTENUATION_DB
 }
 
-#[cfg(any(windows, test))]
-pub(crate) fn suppression_transition(
-	current: &NoiseSuppressionConfig,
-	updated: &NoiseSuppressionConfig,
-	backend: Option<SuppressionBackend>,
-) -> SuppressionTransition {
-	if !updated.enabled {
-		return SuppressionTransition::Bypass;
-	}
-	if !current.enabled || current.engine != updated.engine {
-		return SuppressionTransition::Rebuild;
-	}
-	match backend {
-		// NVIDIA accepts a post-load intensity update but does not reliably
-		// apply it to the loaded model. Recreate only the Clean Mic effect so
-		// the requested ratio is guaranteed to become effective.
-		Some(SuppressionBackend::Nvidia) | None => SuppressionTransition::Rebuild,
-		Some(SuppressionBackend::DeepFilter) => SuppressionTransition::UpdateInPlace,
-	}
-}
-
 pub fn save_suppression_controls(
 	config_path: &Path,
 	enabled: bool,
@@ -644,8 +660,8 @@ pub fn save_suppression_controls(
 	if intensity > 100 {
 		bail!("noise suppression intensity must be between 0 and 100");
 	}
-	if !matches!(engine, "nvidia_afx" | "deepfilternet3") {
-		bail!("noise suppression engine must be nvidia_afx or deepfilternet3");
+	if engine != "nvidia_afx" {
+		bail!("noise suppression engine must be nvidia_afx");
 	}
 	let mut controls = load_runtime_controls(config_path)?;
 	controls.noise_suppression = Some(NoiseSuppressionControls {
@@ -657,8 +673,9 @@ pub fn save_suppression_controls(
 }
 
 pub fn save_patch_connections(config_path: &Path, connections: Vec<PatchConnection>) -> Result<()> {
-	validate_patch_connections(&connections)?;
 	let mut controls = load_runtime_controls(config_path)?;
+	validate_device_connections(&connections, controls.devices.as_deref().unwrap_or(&[]))?;
+	controls.schema_version = 2;
 	controls.patchbay = Some(PatchbayControls { connections });
 	write_runtime_controls(config_path, &controls)
 }
@@ -672,7 +689,7 @@ fn load_runtime_controls(config_path: &Path) -> Result<RuntimeControls> {
 		.with_context(|| format!("could not read AMPS controls {}", path.display()))?;
 	let controls: RuntimeControls = toml::from_str(&text)
 		.with_context(|| format!("could not parse AMPS controls {}", path.display()))?;
-	control::check_schema(controls.schema_version)?;
+	control::check_controls_schema(controls.schema_version)?;
 	Ok(controls)
 }
 
@@ -742,9 +759,8 @@ pub fn levels(config: &Config, seconds: u32) -> Result<()> {
 }
 
 #[cfg(windows)]
-pub fn select_main_output(endpoint: &str) -> Result<()> {
-	app_routing::select_output(endpoint)?;
-	windows_audio::remember_selected_physical_output(endpoint)
+pub fn select_main_output(config: &Config, endpoint: &str) -> Result<()> {
+	windows_audio::select_main_output(config, endpoint)
 }
 
 #[cfg(windows)]
@@ -795,33 +811,33 @@ impl MeterProbe {
 	}
 }
 
-#[cfg(not(windows))]
-pub fn select_main_output(_endpoint: &str) -> Result<()> {
+#[cfg(not(any(windows, target_os = "linux")))]
+pub fn select_main_output(_config: &Config, _endpoint: &str) -> Result<()> {
 	bail!("AMPS's Linux endpoint backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn select_main_input(_endpoint: &str) -> Result<()> {
 	bail!("AMPS's Linux endpoint backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn graph_snapshot(_config: &Config) -> Result<GraphSnapshot> {
 	bail!("AMPS's Linux graph backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn meter_snapshot(_config: &Config) -> Result<Vec<MeterReading>> {
 	bail!("AMPS's Linux meter backend has not been connected yet")
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub struct MeterProbe;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 pub struct CleanMicMonitor;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 impl CleanMicMonitor {
 	pub fn new(_config: &Config) -> Result<Self> {
 		bail!("AMPS's Linux Clean Mic monitor backend has not been connected yet")
@@ -832,7 +848,7 @@ impl CleanMicMonitor {
 	}
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 impl MeterProbe {
 	pub fn new(_config: &Config) -> Result<Self> {
 		bail!("AMPS's Linux meter backend has not been connected yet")
@@ -851,9 +867,8 @@ impl MeterProbe {
 mod tests {
 	use super::{
 		attenuation_for_intensity, patch_destinations, patch_sources, suppression_intensity,
-		suppression_transition, validate_patch_connections, Config, NoiseSuppressionConfig,
-		PatchConnection, PatchbayConfig, SuppressionBackend, SuppressionTransition, DEFAULT_CONFIG,
-		MAX_SUPPRESSION_ATTENUATION_DB,
+		validate_patch_connections, Config, NoiseSuppressionConfig, PatchConnection, PatchbayConfig,
+		DEFAULT_CONFIG, MAX_SUPPRESSION_ATTENUATION_DB,
 	};
 
 	#[test]
@@ -963,7 +978,7 @@ mod tests {
 				},
 			],
 		] {
-			super::save_suppression_controls(&config_path, false, 23, "deepfilternet3").unwrap();
+			super::save_suppression_controls(&config_path, false, 23, "nvidia_afx").unwrap();
 			super::save_patch_connections(&config_path, connections.clone()).unwrap();
 			let before = std::fs::read(&controls_path).unwrap();
 			let loaded = Config::load(&config_path).unwrap();
@@ -1112,66 +1127,24 @@ mod tests {
 	}
 
 	#[test]
-	fn suppression_transition_covers_bypass_and_reenable() {
-		let current = NoiseSuppressionConfig::default();
-		let mut bypassed = current.clone();
-		bypassed.enabled = false;
-		assert_eq!(
-			suppression_transition(&current, &bypassed, Some(SuppressionBackend::Nvidia)),
-			SuppressionTransition::Bypass
-		);
-		assert_eq!(
-			suppression_transition(&bypassed, &current, None),
-			SuppressionTransition::Rebuild
-		);
-	}
-
-	#[test]
-	fn suppression_transition_rebuilds_engine_swaps() {
-		let current = NoiseSuppressionConfig::default();
-		let mut updated = current.clone();
-		updated.engine = "deepfilternet3".into();
-		assert_eq!(
-			suppression_transition(&current, &updated, Some(SuppressionBackend::Nvidia)),
-			SuppressionTransition::Rebuild
-		);
-		assert_eq!(
-			suppression_transition(&updated, &current, Some(SuppressionBackend::DeepFilter)),
-			SuppressionTransition::Rebuild
-		);
-	}
-
-	#[test]
-	fn suppression_transition_remembers_changes_while_bypassed() {
-		let mut current = NoiseSuppressionConfig::default();
-		current.enabled = false;
-		let mut updated = current.clone();
-		updated.engine = "deepfilternet3".into();
-		assert_eq!(
-			suppression_transition(&current, &updated, None),
-			SuppressionTransition::Bypass
-		);
-		let mut enabled = updated.clone();
-		enabled.enabled = true;
-		assert_eq!(
-			suppression_transition(&updated, &enabled, None),
-			SuppressionTransition::Rebuild
-		);
-	}
-
-	#[test]
-	fn suppression_transition_rebuilds_nvidia_but_updates_deepfilter_in_place() {
-		let current = NoiseSuppressionConfig::default();
-		let mut updated = current.clone();
-		updated.attenuation_limit_db = 40.0;
-		assert_eq!(
-			suppression_transition(&current, &updated, Some(SuppressionBackend::Nvidia)),
-			SuppressionTransition::Rebuild
-		);
-		assert_eq!(
-			suppression_transition(&current, &updated, Some(SuppressionBackend::DeepFilter)),
-			SuppressionTransition::UpdateInPlace
-		);
+	fn removed_suppression_engine_is_rejected_without_overwriting_controls() {
+		let root = tempfile::tempdir().unwrap();
+		let path = root.path().join("config.toml");
+		std::fs::write(&path, DEFAULT_CONFIG).unwrap();
+		super::save_suppression_controls(&path, true, 50, "nvidia_afx").unwrap();
+		let controls_path = root.path().join("controls.toml");
+		let original = std::fs::read(&controls_path).unwrap();
+		for engine in ["deepfilternet3", "unsupported"] {
+			let mut config: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+			config.noise_suppression.engine = engine.into();
+			assert!(config
+				.validate()
+				.unwrap_err()
+				.to_string()
+				.contains("nvidia_afx"));
+			assert!(super::save_suppression_controls(&path, true, 75, engine).is_err());
+			assert_eq!(std::fs::read(&controls_path).unwrap(), original);
+		}
 	}
 
 	#[test]

@@ -46,9 +46,6 @@
 					"PackageIdentifier": "dorssel.usbipd-win"
 				},
 				{
-					"PackageIdentifier": "Docker.DockerDesktop"
-				},
-				{
 					"PackageIdentifier": "DuongDieuPhap.ImageGlass"
 				},
 				{
@@ -65,6 +62,9 @@
 				},
 				{
 					"PackageIdentifier": "OBSProject.OBSStudio"
+				},
+				{
+					"PackageIdentifier": "BlenderFoundation.Blender"
 				},
 				{
 					"PackageIdentifier": "Rustlang.Rustup"

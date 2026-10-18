@@ -1,56 +1,37 @@
 local managed_macos = require("config.profile").managed_macos
-
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not (vim.uv or vim.loop).fs_stat(lazypath) then
-	local lazyrepo = "https://github.com/folke/lazy.nvim.git"
-	local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
-	if vim.v.shell_error ~= 0 then
-		vim.api.nvim_echo({
-			{ "Failed to clone lazy.nvim:\n", "ErrorMsg" },
-			{ out, "WarningMsg" },
-			{ "\nPress any key to exit..." },
-		}, true, {})
-		vim.fn.getchar()
-		os.exit(1)
-	end
-end
-vim.opt.rtp:prepend(lazypath)
+local lock_name = managed_macos and "lazy-lock.macos-managed.json" or "lazy-lock.json"
 
 local function resolve_lockfile()
-	local configured = vim.env.DOTFILES_NVIM_LOCKFILE
+	local configured = vim.env.DOTFILES_NVIM_AUTOMATION == "1" and vim.env.DOTFILES_NVIM_LOCKFILE or nil
 	if configured ~= nil and configured ~= "" then
 		return configured
 	end
 
-	local root = vim.env.DOTFILES_ROOT
-	if root == nil or root == "" then
-		root = vim.fs.joinpath(vim.fn.expand("~"), ".dotfiles")
-	end
-	local tracked = vim.fs.joinpath(root, "nvim", managed_macos and "lazy-lock.macos-managed.json" or "lazy-lock.json")
-	if vim.fn.filewritable(tracked) == 1 then
-		return tracked
-	end
+	-- An accepted editor release selects its own config root. Never redirect a
+	-- normal editor launch into an unrelated writable developer checkout.
+	local root = vim.env.DOTFILES_NVIM_CONFIG_ROOT or vim.fn.stdpath("config")
+	local tracked = vim.fs.joinpath(root, lock_name)
+	assert(vim.fn.filereadable(tracked) == 1, "Missing accepted Neovim lock: " .. tracked)
+	return tracked
+end
 
-	local generated = vim.fs.joinpath(vim.fn.stdpath("config"), "lazy-lock.json")
-	if vim.fn.filewritable(generated) == 1 then
-		return generated
-	end
-
-	local state = vim.fs.joinpath(vim.fn.stdpath("state"), "lazy-lock.json")
-	vim.fn.mkdir(vim.fs.dirname(state), "p")
-	if vim.fn.filereadable(state) == 0 and vim.fn.filereadable(generated) == 1 then
-		vim.fn.writefile(vim.fn.readfile(generated, "b"), state, "b")
-	end
-	return state
+local lockfile = resolve_lockfile()
+local pins = vim.json.decode(table.concat(vim.fn.readfile(lockfile), "\n"))
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local plugin_pins = require("config.plugin_pins")
+plugin_pins.bootstrap(lazypath, assert(pins["lazy.nvim"], "Missing lazy.nvim pin").commit)
+vim.opt.rtp:prepend(lazypath)
+if not (vim.env.DOTFILES_NVIM_AUTOMATION == "1" and vim.env.DOTFILES_NVIM_PLUGIN_UPDATE == "1") then
+	plugin_pins.protect(lockfile)
 end
 
 local function resolve_lazyvim_json()
-	local configured = vim.env.DOTFILES_LAZYVIM_JSON
+	local configured = vim.env.DOTFILES_NVIM_AUTOMATION == "1" and vim.env.DOTFILES_LAZYVIM_JSON or nil
 	if configured ~= nil and configured ~= "" then
 		return configured
 	end
 
-	local configured_lockfile = vim.env.DOTFILES_NVIM_LOCKFILE
+	local configured_lockfile = vim.env.DOTFILES_NVIM_AUTOMATION == "1" and vim.env.DOTFILES_NVIM_LOCKFILE or nil
 	if configured_lockfile ~= nil and configured_lockfile ~= "" then
 		local alongside_lockfile = vim.fs.joinpath(vim.fs.dirname(configured_lockfile), "lazyvim.json")
 		if vim.fn.filewritable(alongside_lockfile) == 1 then
@@ -58,32 +39,12 @@ local function resolve_lazyvim_json()
 		end
 	end
 
-	local root = vim.env.DOTFILES_ROOT
-	if root == nil or root == "" then
-		root = vim.fs.joinpath(vim.fn.expand("~"), ".dotfiles")
-	end
-	local tracked = vim.fs.joinpath(root, "nvim", "lazyvim.json")
-	if vim.fn.filewritable(tracked) == 1 then
-		return tracked
-	end
-
-	local generated = vim.fs.joinpath(vim.fn.stdpath("config"), "lazyvim.json")
-	if vim.fn.filewritable(generated) == 1 then
-		return generated
-	end
-
-	local state = vim.fs.joinpath(vim.fn.stdpath("state"), "lazyvim.json")
-	vim.fn.mkdir(vim.fs.dirname(state), "p")
-	if vim.fn.filereadable(state) == 0 and vim.fn.filereadable(generated) == 1 then
-		vim.fn.writefile(vim.fn.readfile(generated, "b"), state, "b")
-	end
-	return state
+	local root = vim.env.DOTFILES_NVIM_CONFIG_ROOT or vim.fn.stdpath("config")
+	return vim.fs.joinpath(root, "lazyvim.json")
 end
 
 vim.g.lazyvim_json = resolve_lazyvim_json()
 if managed_macos then
-	-- Keep company machines free of AI extras, including Copilot-backed Sidekick,
-	-- and of extras whose language servers cannot build without Nix.
 	local config = vim.json.decode(table.concat(vim.fn.readfile(vim.g.lazyvim_json), "\n"))
 	config.extras = require("config.extras").filter(config.extras)
 	local target = vim.fs.joinpath(vim.fn.stdpath("state"), "lazyvim.macos-managed.json")
@@ -93,7 +54,7 @@ if managed_macos then
 end
 
 require("lazy").setup({
-	lockfile = resolve_lockfile(),
+	lockfile = lockfile,
 	ui = {
 		border = "rounded",
 	},

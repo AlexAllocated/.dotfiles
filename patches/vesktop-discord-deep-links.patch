@@ -1,0 +1,131 @@
+--- a/src/main/index.ts
++++ b/src/main/index.ts
+@@ -14,7 +14,7 @@
+ 
+ import { DATA_DIR } from "./constants";
+ import { createFirstLaunchTour } from "./firstLaunch";
+-import { createWindows, mainWin } from "./mainWindow";
++import { createWindows, loadUrl, mainWin } from "./mainWindow";
+ import { registerMediaPermissionsHandler } from "./mediaPermissions";
+ import { registerScreenShareHandler } from "./screenShare";
+ import { Settings, State } from "./settings";
+@@ -106,9 +106,13 @@
+     // In the Flatpak on SteamOS the theme is detected as light, but SteamOS only has a dark mode, so we just override it
+     if (isDeckGameMode) nativeTheme.themeSource = "dark";
+ 
+-    app.on("second-instance", (_event, _cmdLine, _cwd, data: any) => {
++    app.on("second-instance", (_event, cmdLine, _cwd, data: any) => {
+         if (data.IS_DEV) app.quit();
+-        else if (mainWin) {
++        else {
++            const uri = cmdLine.find(arg => arg.startsWith("discord://"));
++            if (uri) darwinURL = uri;
++            if (!mainWin) return;
++            if (uri) loadUrl(uri);
+             if (mainWin.isMinimized()) mainWin.restore();
+             if (!mainWin.isVisible()) mainWin.show();
+             mainWin.focus();
+@@ -153,6 +157,7 @@
+ export let darwinURL: string | undefined;
+ app.on("open-url", (_, url) => {
+     darwinURL = url;
++    if (mainWin) loadUrl(url);
+ });
+ 
+ app.on("window-all-closed", () => {
+--- a/src/main/mainWindow.ts
++++ b/src/main/mainWindow.ts
+@@ -31,6 +31,7 @@
+ import { Settings, State, VencordSettings } from "./settings";
+ import { createSplashWindow, updateSplashMessage } from "./splash";
+ import { destroyTray, initTray } from "./tray";
++import { discordNavigationUrl } from "./utils/discordLinks";
+ import { clearData } from "./utils/clearData";
+ import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
+ import { applyDeckKeyboardFix, askToApplySteamLayout, isDeckGameMode } from "./utils/steamOS";
+@@ -421,11 +422,13 @@
+ 
+ export function loadUrl(uri: string | undefined) {
+     const branch = Settings.store.discordBranch;
+-    const subdomain = branch === "canary" || branch === "ptb" ? `${branch}.` : "";
++    let url: string;
++    try { url = discordNavigationUrl(uri, branch); }
++    catch { console.error("Rejected invalid Discord link"); return; }
+ 
+     // we do not rely on 'did-finish-load' because it fires even if loadURL fails which triggers early detruction of the splash
+     mainWin
+-        .loadURL(`https://${subdomain}discord.com/${uri ? new URL(uri).pathname.slice(1) || "app" : "app"}`)
++        .loadURL(url)
+         .then(() => AppEvents.emit("appLoaded"))
+         .catch(error => retryUrl(error.url, error.code));
+ }
+--- a/src/main/arrpc/index.ts
++++ b/src/main/arrpc/index.ts
+@@ -9,6 +9,8 @@
+ import { MessageChannel, Worker } from "worker_threads";
+ 
+ import { sendRendererCommand } from "../ipcCommands";
++import { loadUrl, mainWin } from "../mainWindow";
++import { oauthDeepLink } from "../utils/discordLinks";
+ import { Settings } from "../settings";
+ import { ArRpcEvent, ArRpcHostEvent } from "./types";
+ 
+@@ -62,7 +64,16 @@
+                         data: false
+                     };
+ 
+-                    response.data = await sendRendererCommand(IpcCommands.RPC_DEEP_LINK, data).catch(() => false);
++                    const oauthUrl = oauthDeepLink(data);
++                    if (oauthUrl && mainWin) {
++                        loadUrl(oauthUrl);
++                        if (mainWin.isMinimized()) mainWin.restore();
++                        mainWin.show();
++                        mainWin.focus();
++                        response.data = true;
++                    } else {
++                        response.data = await sendRendererCommand(IpcCommands.RPC_DEEP_LINK, data).catch(() => false);
++                    }
+ 
+                     hostPort.postMessage(response);
+                     break;
+--- /dev/null
++++ b/src/main/utils/discordLinks.ts
+@@ -0,0 +1,38 @@
++/*
++ * Vesktop, a desktop app aiming to give you a snappier Discord Experience
++ * Copyright (c) 2023 Vendicated and Vencord contributors
++ * SPDX-License-Identifier: GPL-3.0-or-later
++ */
++
++// Keep all navigation on Discord, including URLs received from local RPC.
++export function discordNavigationUrl(uri: string | undefined, branch?: string): string {
++    const host = branch === "canary" || branch === "ptb" ? `${branch}.discord.com` : "discord.com";
++    const target = new URL(`https://${host}/app`);
++    if (!uri) return target.href;
++
++    const input = new URL(uri);
++    if (input.protocol !== "discord:" &&
++        !(input.protocol === "https:" && /^(?:(?:canary|ptb)\.)?discord\.com$/.test(input.hostname))) {
++        throw new Error("Unsupported Discord link");
++    }
++    if (input.username || input.password || input.port) throw new Error("Invalid Discord link");
++    target.pathname = input.pathname === "/" || !input.pathname ? "/app" : input.pathname;
++    target.search = input.search;
++    target.hash = input.hash;
++
++    // Discord's standalone bot installer attempts another desktop handoff when
++    // response_type is absent from the search string. A Vesktop-only marker
++    // suppresses that handoff without changing OAuth response_type or grants.
++    if (target.pathname === "/oauth2/authorize" && !target.searchParams.has("response_type")) {
++        target.searchParams.set("vesktop_response_type", "bot");
++    }
++    return target.href;
++}
++
++export function oauthDeepLink(data: unknown): string | undefined {
++    if (!data || typeof data !== "object" || !("type" in data) || data.type !== "OAUTH2") return;
++    if (!("params" in data) || !data.params || typeof data.params !== "object" || !("search" in data.params)) return;
++    const search = data.params.search;
++    if (typeof search !== "string" || !search.startsWith("?") || search.length > 16384) return;
++    return discordNavigationUrl("discord://action/oauth2/authorize" + search);
++}

@@ -1,36 +1,31 @@
 #!/usr/bin/env bash
 
-run_neovim_automation() {
-	if command_exists mise && ! is_nixos && [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
-		local nvim_xdg_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
-		local nvim_xdg_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-		local nvim_xdg_data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-		local nvim_xdg_state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
-
-		# The update candidate gives Neovim an isolated XDG environment. Keep
-		# those paths away from Mise itself so it can read the persistent trust
-		# database, then restore them only for the Neovim child process.
-		env \
-			-u XDG_CACHE_HOME \
-			-u XDG_CONFIG_HOME \
-			-u XDG_DATA_HOME \
-			-u XDG_STATE_HOME \
-			mise exec -C "$REPO_ROOT" -- \
-			env \
-			XDG_CACHE_HOME="$nvim_xdg_cache_home" \
-			XDG_CONFIG_HOME="$nvim_xdg_config_home" \
-			XDG_DATA_HOME="$nvim_xdg_data_home" \
-			XDG_STATE_HOME="$nvim_xdg_state_home" \
-			nvim "$@"
-		return
+run_neovim_automation() (
+	local entry automation_path="" inherited_path="$PATH"
+	# Editor maintenance uses the host-declared runtimes, even when invoked
+	# from a project shell or an old session with Mise shims ahead of Nix/Brew.
+	while [[ -n "$inherited_path" ]]; do
+		entry="${inherited_path%%:*}"
+		if [[ "$inherited_path" == *:* ]]; then
+			inherited_path="${inherited_path#*:}"
+		else
+			inherited_path=""
+		fi
+		case "$entry" in
+			*/mise/shims | */mise/installs/* | "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/shims | "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/installs/*) continue ;;
+		esac
+		[[ -z "$entry" ]] || automation_path="${automation_path:+$automation_path:}$entry"
+	done
+	if command_exists nix; then
+		for entry in "$HOME/.nix-profile/bin" "/etc/profiles/per-user/$(id -un)/bin"; do
+			[[ ! -d "$entry" ]] || automation_path="$entry:$automation_path"
+		done
+	elif [[ "$(uname -s)" == "Darwin" ]] && command_exists brew; then
+		automation_path="$(brew --prefix)/bin:$automation_path"
 	fi
-
-	# NixOS and Ubuntu-WSL profiles already declare Neovim and all of its
-	# build-time helpers through Nix/Home Manager.
-	# Entering the repository's Mise environment here would install duplicate
-	# upstream runtimes just to refresh a lockfile.
+	export PATH="$automation_path"
 	nvim "$@"
-}
+)
 
 stage_repo() {
 	local destination="$1"
@@ -44,18 +39,10 @@ stage_repo() {
 		"$REPO_ROOT/" "$destination/"
 }
 
-neovim_lock_relative() {
-	if [[ "$(detect_profile)" == "macos-managed" ]]; then
-		printf 'nvim/lazy-lock.macos-managed.json\n'
-	else
-		printf 'nvim/lazy-lock.json\n'
-	fi
-}
-
 update_neovim_candidate() {
 	local candidate="$1"
 	local runtime="$2/nvim"
-	[[ -f "$candidate/$(neovim_lock_relative)" ]] || return 0
+	[[ -f "$candidate/nvim/lazy-lock.json" ]] || return 0
 	if ! command_exists nvim; then
 		printf 'Neovim is unavailable; leaving its lockfile unchanged.\n'
 		return 0
@@ -65,7 +52,7 @@ update_neovim_candidate() {
 	printf 'Refreshing Neovim plugin pins in an isolated runtime...\n'
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
 		DOTFILES_NVIM_PIN_UPDATE=1 \
-		DOTFILES_NVIM_LOCKFILE="$candidate/$(neovim_lock_relative)" \
+		DOTFILES_NVIM_LOCKFILE="$candidate/nvim/lazy-lock.json" \
 		XDG_CONFIG_HOME="$runtime/config" \
 		XDG_DATA_HOME="$runtime/data" \
 		XDG_STATE_HOME="$runtime/state" \
@@ -140,15 +127,17 @@ update_codex_candidate() {
 validate_update_candidate() {
 	local candidate="$1"
 	if command_exists nix; then
+		printf 'Running native Nix checks before accepting updated pins...\n'
+		nix flake check "path:$candidate" || return $?
 		printf 'Evaluating every supported Nix system before accepting updated pins...\n'
-		nix flake check --all-systems --no-build "path:$candidate"
+		nix flake check --all-systems --no-build "path:$candidate" || return $?
 	fi
 }
 
 accept_candidate_locks() {
 	local candidate="$1"
 	local path
-	for path in flake.lock "$(neovim_lock_relative)" pins/codex.json; do
+	for path in flake.nix flake.lock nvim/lazy-lock.json pins/codex.json pins/chatgpt-desktop.json pins/iloader-cargo.json; do
 		if [[ -f "$candidate/$path" ]]; then
 			cp "$candidate/$path" "$REPO_ROOT/$path"
 		fi
@@ -157,8 +146,8 @@ accept_candidate_locks() {
 
 accept_candidate_neovim_lock() {
 	local candidate="$1"
-	if [[ -f "$candidate/$(neovim_lock_relative)" ]]; then
-		cp "$candidate/$(neovim_lock_relative)" "$REPO_ROOT/$(neovim_lock_relative)"
+	if [[ -f "$candidate/nvim/lazy-lock.json" ]]; then
+		cp "$candidate/nvim/lazy-lock.json" "$REPO_ROOT/nvim/lazy-lock.json"
 	fi
 }
 
@@ -170,7 +159,7 @@ sync_live_neovim_runtime() (
 	ln -s "$REPO_ROOT/nvim" "$config_home/nvim"
 	printf 'Applying accepted Neovim pins to the active runtime...\n'
 	if ! DOTFILES_NVIM_AUTOMATION=1 \
-		DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/$(neovim_lock_relative)" \
+		DOTFILES_NVIM_LOCKFILE="$REPO_ROOT/nvim/lazy-lock.json" \
 		XDG_CONFIG_HOME="$config_home" \
 		GIT_CONFIG_COUNT=1 \
 		GIT_CONFIG_KEY_0=advice.detachedHead \
@@ -186,12 +175,18 @@ prepare_update_candidate() {
 	local candidate="$1"
 	local work="$2"
 	stage_repo "$candidate"
-	if [[ "$(detect_profile)" != "macos-managed" ]]; then
-		update_codex_candidate "$candidate" "$work"
+	require_command python3
+	if command_exists nix; then
+		python3 "$REPO_ROOT/scripts/updates/releases.py" "$candidate"
+	else
+		printf 'Nix is unavailable; leaving flake URLs and lockfile unchanged.\n'
+		python3 "$REPO_ROOT/scripts/updates/releases.py" "$candidate" --skip-flake
 	fi
+	update_codex_candidate "$candidate" "$work"
 	if command_exists nix; then
 		printf 'Refreshing flake inputs in a staging checkout...\n'
 		nix flake update --flake "path:$candidate"
+		python3 "$REPO_ROOT/scripts/updates/releases.py" "$candidate" --iloader-cargo
 	fi
 	update_neovim_candidate "$candidate" "$work"
 	validate_update_candidate "$candidate"
@@ -240,17 +235,21 @@ normalize_intent_to_add_entries() {
 
 fetch_and_rebase_upstream() {
 	local result_var="$1"
-	local remote remote_branch upstream
+	local remote remote_branch upstream ancestry_status
 	printf -v "$result_var" '0'
 	if ! upstream="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
 		return 0
 	fi
 	remote="${upstream%%/*}"
 	remote_branch="${upstream#*/}"
-	git -C "$REPO_ROOT" fetch "$remote" "$remote_branch"
-	if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
+	git -C "$REPO_ROOT" fetch "$remote" "$remote_branch" || return $?
+	if git -C "$REPO_ROOT" merge-base --is-ancestor "$upstream" HEAD; then
+		return 0
+	else
+		ancestry_status=$?
+		((ancestry_status == 1)) || return "$ancestry_status"
 		printf 'Rebasing onto the latest %s...\n' "$upstream"
-		git -C "$REPO_ROOT" rebase "$upstream"
+		git -C "$REPO_ROOT" rebase "$upstream" || return $?
 		printf -v "$result_var" '1'
 	fi
 }
@@ -282,7 +281,7 @@ sync_before_update() {
 	fi
 	if ! fetch_and_rebase_upstream rebased; then
 		if [[ -n "$stash_ref" ]]; then
-			if [[ ! -d "$(git -C "$REPO_ROOT" rev-parse --git-path rebase-merge)" && ! -d "$(git -C "$REPO_ROOT" rev-parse --git-path rebase-apply)" ]]; then
+			if [[ ! -d "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-path rebase-merge)" && ! -d "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-path rebase-apply)" ]]; then
 				restore_updoot_stash "$stash_ref" || true
 			else
 				printf 'Local changes remain saved in %s while the rebase is resolved.\n' "$stash_ref" >&2
@@ -327,8 +326,9 @@ push_updates() {
 cleanup_nix_after_updoot() {
 	local profile="$1"
 	local system_profile=/nix/var/nix/profiles/system
-	local generations current generation kept_generation kept_previous=0
-	local -a delete_generations=() keep_generations=()
+	local generations current generation kept_previous=0
+	local -a delete_generations=()
+	local -A keep_generations=()
 
 	command_exists nix-collect-garbage || return 0
 	case "$profile" in
@@ -342,22 +342,19 @@ cleanup_nix_after_updoot() {
 				return 1
 			}
 
-			keep_generations+=("$current")
+			keep_generations["$current"]=1
 			while IFS= read -r generation; do
 				[[ "$generation" =~ ^[0-9]+$ ]] || continue
 				[[ "$generation" == "$current" ]] && continue
 				if ((kept_previous < 2)); then
-					keep_generations+=("$generation")
+					keep_generations["$generation"]=1
 					((kept_previous += 1))
 				fi
 			done < <(awk '{ print $1 }' <<<"$generations" | sort -rn)
 
 			while IFS= read -r generation; do
 				[[ "$generation" =~ ^[0-9]+$ ]] || continue
-				for kept_generation in "${keep_generations[@]}"; do
-					[[ "$generation" == "$kept_generation" ]] && continue 2
-				done
-				delete_generations+=("$generation")
+				[[ -n "${keep_generations[$generation]:-}" ]] || delete_generations+=("$generation")
 			done < <(awk '{ print $1 }' <<<"$generations")
 
 			if ((${#delete_generations[@]})); then

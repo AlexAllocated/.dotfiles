@@ -377,17 +377,9 @@ def merge_windows_config(config_path: Path, source_config_path: Path, sqlite_hom
     source_parsed = tomllib.loads(source_config_path.read_text()) if source_config_path.is_file() else {}
 
     root_pattern = re.compile(r"(?m)^sqlite_home\s*=.*$")
-    assignment = f"sqlite_home = {toml_quote(str(sqlite_home))}"
     if root_pattern.search(text):
-        text = root_pattern.sub(assignment, text, count=1)
-    else:
-        table = re.search(r"(?m)^\[", text)
-        offset = table.start() if table else len(text)
-        before = text[:offset].rstrip()
-        after = text[offset:].lstrip()
-        text = f"{before}\n{assignment}\n"
-        if after:
-            text += f"{after}"
+        if tomllib.loads(text).get("sqlite_home") == str(sqlite_home):
+            text = root_pattern.sub("", text, count=1)
 
     parsed = tomllib.loads(text)
     windows_projects = dict(parsed.get("projects", {}))
@@ -788,6 +780,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.command == "migrate":
+        raise SystemExit("Shared Codex storage is retired. Windows Desktop owns its store; do not reconnect the Linux CLI.")
     for attribute in ("source_home", "windows_home", "sqlite_home", "state_dir"):
         setattr(args, attribute, getattr(args, attribute).expanduser().resolve())
     if args.command == "doctor":

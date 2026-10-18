@@ -131,7 +131,7 @@ whole list at once.
    disks physically disconnected.
 2. Update the MSI firmware from the SanDisk, then enable UEFI and AMD fTPM.
    Keep Secure Boot disabled initially.
-3. Install Windows 11 Pro first. Allocate `512000 MB`, create local user `alx`,
+3. Install Windows 11 Pro first. Allocate approximately 1.5 decimal TB, create local user `alx`,
    and link the Microsoft account afterward. Do not enable BitLocker yet.
 4. Install without a key and try the Activation Troubleshooter. The old
    Doghouse license may be non-transferable OEM licensing; use a legitimate

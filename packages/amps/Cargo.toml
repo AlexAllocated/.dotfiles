@@ -19,12 +19,13 @@ toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[dev-dependencies]
+crossbeam-queue = "0.3"
+
 [target.'cfg(windows)'.dependencies]
 cpal = "0.16"
 crossbeam-queue = "0.3"
-deep_filter = { git = "https://github.com/Rikorose/DeepFilterNet.git", rev = "d375b2d8309e0935d165700c91da9de862a99c31", default-features = false, features = ["tract", "default-model"] }
 libloading = "0.8"
-ndarray = "0.15"
 wasapi = "0.23"
 winreg = "0.55"
 windows = { version = "0.54", features = [
@@ -44,15 +45,6 @@ windows = { version = "0.54", features = [
   "Win32_System_Variant",
   "Win32_UI_Shell_PropertiesSystem",
 ] }
-# DeepFilterNet's current source is tested against tract 0.21.4. Its caret
-# requirements otherwise resolve to newer 0.21.x releases whose ndarray ABI is
-# incompatible with this model runtime. Keep the complete tract family unified
-# on the upstream-tested release until DeepFilterNet updates its dependency.
-tract-core = "=0.21.4"
-tract-hir = "=0.21.4"
-tract-onnx = "=0.21.4"
-tract-pulse = "=0.21.4"
-
 [profile.release]
 lto = "thin"
 codegen-units = 1

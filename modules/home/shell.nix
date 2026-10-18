@@ -34,11 +34,21 @@ in
         #!/usr/bin/env bash
         set -euo pipefail
 
-        if [[ -n "''${DOTFILES_ROOT:-}" && -x "''${DOTFILES_ROOT}/scripts/dotctl" && -f "''${DOTFILES_ROOT}/scripts/lib/common.sh" ]]; then
-          exec env DOTFILES_ROOT="''${DOTFILES_ROOT}" "''${DOTFILES_ROOT}/scripts/dotctl" "$@"
+        if [[ -n "''${DOTFILES_ROOT:-}" ]]; then
+          exec "''${DOTFILES_ROOT}/scripts/dotctl" "$@"
         fi
 
-        if [[ -x "$HOME/.dotfiles/scripts/dotctl" && -f "$HOME/.dotfiles/scripts/lib/common.sh" ]]; then
+        checkout="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+        if [[ -n "$checkout" && -f "$checkout/catalog/policy.json" && -x "$checkout/scripts/dotctl" ]]; then
+          exec env DOTFILES_ROOT="$checkout" "$checkout/scripts/dotctl" "$@"
+        fi
+
+        active="$(${pkgs.python3}/bin/python3 -c 'import json,os,pathlib; p=pathlib.Path(os.environ.get("DOTCTL_STATE_HOME", str(pathlib.Path(os.environ.get("XDG_STATE_HOME", str(pathlib.Path.home()/".local/state")))/"dotfiles")))/"active-source.json"; print(json.loads(p.read_text()).get("root", ""))' 2>/dev/null || true)"
+        if [[ -n "$active" && -x "$active/scripts/dotctl" && -f "$active/catalog/policy.json" ]]; then
+          exec env DOTFILES_ROOT="$active" "$active/scripts/dotctl" "$@"
+        fi
+
+        if [[ -x "$HOME/.dotfiles/scripts/dotctl" && -f "$HOME/.dotfiles/catalog/policy.json" ]]; then
           exec env DOTFILES_ROOT="$HOME/.dotfiles" "$HOME/.dotfiles/scripts/dotctl" "$@"
         fi
 
@@ -109,7 +119,7 @@ in
         help = "run-help";
         lg = "lazygit";
         ll = "eza --color=always --all --long --git --icons=always --no-time --no-permissions";
-        updoot = "dotctl apply --update";
+        updoot = "dotctl updoot";
       };
       initContent = lib.mkMerge [
         (lib.mkBefore ''
@@ -193,9 +203,6 @@ in
               export APPDATA="$WINHOME/AppData/Roaming"
               export DESKTOP="$WINHOME/Desktop"
               export DOWNLOADS="$WINHOME/Downloads"
-              if [[ -d "$WINHOME/.codex" ]]; then
-                export CODEX_HOME="$WINHOME/.codex"
-              fi
             fi
 
             if [[ -d "/mnt/g" ]]; then

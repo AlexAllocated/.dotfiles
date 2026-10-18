@@ -86,4 +86,4 @@ alias ll="eza --color=always --all --long --git --icons=always --no-time --no-pe
 alias nv="nvim"
 alias vi="nvim"
 alias vim="nvim"
-alias updoot="dotctl apply --update"
+alias updoot="dotctl updoot"

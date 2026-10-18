@@ -50,16 +50,10 @@ gain = 1.0
 [noise_suppression]
 enabled = true
 engine = "nvidia_afx"
-# Select "nvidia_afx" for NVIDIA RTX Audio Effects or "deepfilternet3" for
-# the embedded CPU model. Backend failures remain visible instead of silently
-# changing algorithms.
-# The interface presents this 20 dB DeepFilterNet3 default as 50% intensity on
-# a 0-40 dB scale and passes the same 50% ratio to NVIDIA AFX. UI choices live
-# in machine-local controls.toml and override this base.
+# NVIDIA AFX is the only suppression engine. The legacy 0-40 dB setting
+# maps to 0-100% NVIDIA intensity; 20 means 50%. UI choices in the
+# machine-local controls.toml override this base.
 attenuation_limit_db = 20.0
-# The post-filter adds extra suppression after inference and is unnecessary for
-# a communications mic where speech continuity matters more than total silence.
-post_filter_beta = 0.0
 
 [patchbay]
 # These unity-gain links behave like plugging cables into a small hardware

@@ -67,7 +67,7 @@ The Windows integration builds the private Rust `AMPS` utility, installs
 its tracked graph configuration into `%APPDATA%\AMPS`, and runs it at
 interactive logon. Game, Comms, and Music use VAC Lines 1-3; Game is the normal
 Windows output and Comms is its communications output. The selected physical
-Windows microphone is processed by DeepFilterNet3 and published as Clean Mic
+Windows microphone is processed by NVIDIA AFX and published as Clean Mic
 on Line 4, which is the normal and communications input. Selecting a physical
 input or output updates the machine-local hardware endpoint and AMPS then
 restores the virtual Windows defaults. Unassigned applications therefore land
@@ -238,46 +238,31 @@ The Ubuntu-WSL profile deploys the Windows-native Neovide config into Roaming
 AppData. That config enables Neovide's supported WSL transport, so launching
 Neovide from Windows runs the `nvim` managed by Ubuntu Home Manager.
 
-## Shared Codex conversations
+## Codex conversation ownership
 
-The Ubuntu-WSL profile uses one logical Codex home for the Windows Codex
-GUI and the WSL CLI:
+The Windows app owns its conversations. WSL is available for commands and
+repositories, with separate storage if the Linux CLI is explicitly used:
 
-- `CODEX_HOME=$WINHOME/.codex` keeps GUI settings, auth, plugins,
-  conversation rollouts, history, rules, and memories in the Windows home.
-- `CODEX_SQLITE_HOME=$HOME/.codex/sqlite` keeps the live SQLite indexes on
-  WSL ext4, where SQLite locking and WAL behavior are reliable.
-
-Do not symlink a live SQLite database across the WSL/Windows boundary. Also use
-one active writer at a time: finish or stop the CLI before opening the GUI for
-work, and close the GUI before starting a writing CLI session.
-
-When importing a pre-existing WSL Codex home, close the Codex GUI and every
-Codex CLI. From a plain WSL terminal, run:
-
-```sh
-~/.dotfiles/scripts/dotctl codex-share preflight
-~/.dotfiles/scripts/dotctl codex-share migrate
-```
-
-The migration refuses to start while either client is running. It preserves the
-Windows settings, imports the WSL conversation payloads and supporting history,
-memories, goals, and rules, rewrites the thread index to the shared Windows
-paths, and retains complete timestamped Windows and WSL rollback homes. Validate
-the shared layout afterward with:
-
-```sh
-dotctl codex-share doctor
-```
-
-The Windows GUI already launches its backend inside WSL when
-`desktop.runCodexInWindowsSubsystemForLinux` is enabled. The environment above
-also makes ordinary Ubuntu Codex CLI sessions use the same home and index.
-
-Rollback archives must remain in place until the shared layout has been used
-successfully from both clients and is explicitly approved for cleanup.
+- Codex Desktop and the native Windows CLI own the Windows conversation store.
+- The optional Linux CLI uses private `~/.codex` and `~/.codex/sqlite` storage.
+- Do not export `CODEX_HOME=$WINHOME/.codex`, synchronize transcripts, or recreate
+  conversation-directory junctions. The former `codex-share migrate` command is retired.
+- See [Codex storage ownership](codex-windows-wsl-history.md) for the current layout.
 
 ## 1Password model
+
+The Windows app and CLI are both declared in `platforms/windows/winget.json`
+(`AgileBits.1Password` and `AgileBits.1Password.CLI`). Native PowerShell and
+Codex Desktop use `op.exe`; a separate WSL CLI installation is not required
+for native Windows callers. Verify installation with `Get-Command op.exe`
+and `op.exe --version`.
+
+For vault access, unlock the Windows app and enable **Settings > Developer >
+Integrate with 1Password CLI**, then run `op.exe signin` and approve any
+Windows Hello prompt. Verify authentication with `op.exe whoami`. CLI
+integration is separate from the SSH agent setting below; having an installed
+CLI or a working SSH agent does not establish a vault session. Keep sign-in
+interactive rather than running it during shell startup or package reconciliation.
 
 The Windows 1Password app owns SSH authentication for WSL. In 1Password, turn on
 **Settings > Developer > Use the SSH Agent** and keep 1Password running in the

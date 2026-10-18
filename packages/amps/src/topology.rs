@@ -35,6 +35,7 @@ pub struct Edge {
 	pub kind: &'static str,
 	pub meter: Option<String>,
 	pub label: String,
+	pub route_destination: Option<String>,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Topology {
@@ -59,6 +60,7 @@ fn edge(source: &str, target: &str, kind: &'static str, meter: Option<&str>, lab
 		source_handle: "out".into(),
 		target_handle: "in".into(),
 		kind,
+		route_destination: None,
 		meter: meter.map(Into::into),
 		label: label.into(),
 	}
@@ -86,9 +88,9 @@ pub fn project(
 		),
 		(
 			"noise_filter",
-			"Noise Suppression",
+			"NVIDIA Noise Suppression",
 			"processor",
-			"Fixed microphone stage · select to adjust",
+			"RTX GPU · select to adjust intensity",
 			Some("processed-mic"),
 			true,
 			true,
@@ -114,7 +116,7 @@ pub fn project(
 			detail: detail.into(),
 			meter: meter.map(Into::into),
 			inputs: if input {
-				vec![port("in", "Signal in", "input", false)]
+				vec![port("in", "Signal in", "input", id == "main_output")]
 			} else {
 				vec![]
 			},
@@ -126,6 +128,16 @@ pub fn project(
 			effect: None,
 		});
 	}
+	nodes.push(Node {
+		id: "phone".into(),
+		title: "Phone Audio".into(),
+		kind: "device",
+		detail: "Phone receiver".into(),
+		meter: Some("phone".into()),
+		inputs: vec![],
+		outputs: vec![port("out", "Phone audio", "output", true)],
+		effect: None,
+	});
 	for (id, title, meter, detail, effect) in [
 		(
 			"game",
@@ -176,14 +188,24 @@ pub fn project(
 			"Outgoing voice mix · VAC 07",
 			None,
 		),
-		(
-			"monitor",
-			"Listening Mix",
-			"monitor",
-			"Master affects only physical output",
-			None,
-		),
 	] {
+		let detail = if graph.platform == "linux" {
+			format!(
+				"{} · PipeWire",
+				detail.split(" · ").next().unwrap_or(detail)
+			)
+		} else {
+			detail.into()
+		};
+		let effect = if graph.platform == "linux" {
+			if matches!(id, "game" | "music") {
+				Some("Binaural spatial audio · headphone output")
+			} else {
+				None
+			}
+		} else {
+			effect
+		};
 		let source = graph.patch_sources.iter().any(|p| p.id == id);
 		let target = graph.patch_destinations.iter().any(|p| p.id == id);
 		let mut inputs = if target {
@@ -197,18 +219,16 @@ pub fn project(
 		nodes.push(Node {
 			id: id.into(),
 			title: title.into(),
-			kind: if matches!(id, "chatgpt_in" | "comms_send" | "monitor") {
+			kind: if matches!(id, "chatgpt_in" | "comms_send") {
 				"mix"
 			} else {
 				"bus"
 			},
-			detail: detail.into(),
+			detail,
 			meter: Some(meter.into()),
 			inputs,
 			outputs: if source {
 				vec![port("out", "Signal out", "output", true)]
-			} else if id == "monitor" {
-				vec![port("out", "To device", "output", false)]
 			} else {
 				vec![]
 			},
@@ -223,11 +243,63 @@ pub fn project(
 			Some(&patch.source.replace('_', "-")),
 			"Unity gain",
 		);
+		e.route_destination = Some(patch.destination.clone());
+		if patch.destination == "monitor" {
+			e.target = "main_output".into();
+		}
 		e.meter = nodes
 			.iter()
 			.find(|n| n.id == patch.source)
 			.and_then(|n| n.meter.clone());
 		edges.push(e);
+	}
+	for device in runtime
+		.map(|r| r.devices.as_slice())
+		.unwrap_or(&graph.devices)
+	{
+		let input = device.direction == crate::devices::Direction::Input;
+		let available = if input {
+			&graph.input_devices
+		} else {
+			&graph.output_devices
+		};
+		let present = available
+			.iter()
+			.any(|e| e.id.eq_ignore_ascii_case(&device.endpoint_id));
+		nodes.push(Node {
+			id: device.id.clone(),
+			title: device.name.clone(),
+			kind: "device",
+			detail: format!(
+				"Pinned {} · {}",
+				if input { "input" } else { "output" },
+				if present {
+					"available"
+				} else {
+					"disconnected — routes waiting"
+				}
+			),
+			meter: input.then(|| device.id.clone()),
+			effect: None,
+			inputs: if input {
+				vec![]
+			} else {
+				vec![port("in", "Mix in", "input", true)]
+			},
+			outputs: if input {
+				vec![port("out", "Signal out", "output", true)]
+			} else {
+				vec![]
+			},
+		});
+	}
+	for e in &mut edges {
+		if e.kind == "patch" {
+			e.meter = nodes
+				.iter()
+				.find(|n| n.id == e.source)
+				.and_then(|n| n.meter.clone());
+		}
 	}
 	edges.push(edge(
 		"physical_mic",
@@ -245,13 +317,6 @@ pub fn project(
 	);
 	mic.target_handle = "fixed".into();
 	edges.push(mic);
-	edges.push(edge(
-		"monitor",
-		"main_output",
-		"fixed",
-		Some("monitor"),
-		"Master output",
-	));
 	if let Some(active) = runtime.filter(|r| r.online && r.applied_revision.is_some()) {
 		for node in &mut nodes {
 			if node.id == "physical_mic" {
@@ -271,7 +336,7 @@ mod tests {
 
 	#[test]
 	fn canvas_contains_only_owned_routes_devices_and_processing() {
-		let graph = GraphSnapshot {
+		let mut graph = GraphSnapshot {
 			platform: "test",
 			engine_online: false,
 			routing_ready: false,
@@ -285,6 +350,7 @@ mod tests {
 			main_output: None,
 			input_devices: vec![],
 			output_devices: vec![],
+			devices: vec![],
 			session_override: None,
 			session_input_override: None,
 			buses: vec![],
@@ -310,7 +376,7 @@ mod tests {
 			assert_eq!(node.meter.as_deref(), Some(meter));
 		}
 		assert!(topology.nodes.iter().all(|n| n.kind != "external"));
-		assert_eq!(topology.edges.len(), patches.len() + 3);
+		assert_eq!(topology.edges.len(), patches.len() + 2);
 		assert_eq!(
 			topology.edges.iter().filter(|e| e.kind == "patch").count(),
 			patches.len()
@@ -331,11 +397,40 @@ mod tests {
 			);
 			assert!(node.inputs.iter().any(|p| p.editable));
 		}
-		let monitor = topology.nodes.iter().find(|n| n.id == "monitor").unwrap();
-		assert!(monitor.inputs.iter().any(|p| p.editable));
-		assert!(topology
-			.edges
+		assert!(!topology.nodes.iter().any(|n| n.id == "monitor"));
+		let output = topology
+			.nodes
 			.iter()
-			.any(|e| e.source == "monitor" && e.target == "main_output"));
+			.find(|n| n.id == "main_output")
+			.unwrap();
+		assert!(output.inputs.iter().any(|p| p.editable));
+		for patch in patches.iter().filter(|p| p.destination == "monitor") {
+			let wire = topology
+				.edges
+				.iter()
+				.find(|e| e.id == format!("patch:{}:monitor", patch.source))
+				.unwrap();
+			assert_eq!(wire.target, "main_output");
+			assert_eq!(wire.route_destination.as_deref(), Some("monitor"));
+		}
+		graph.main_output = Some(crate::EndpointSummary {
+			id: "replacement-output".into(),
+			name: "Other headphones".into(),
+			selected: true,
+		});
+		let switched = project(&graph, &patches, None);
+		assert_eq!(
+			serde_json::to_value(&topology.edges).unwrap(),
+			serde_json::to_value(&switched.edges).unwrap()
+		);
+		assert_eq!(
+			switched
+				.nodes
+				.iter()
+				.find(|n| n.id == "main_output")
+				.unwrap()
+				.detail,
+			"Other headphones"
+		);
 	}
 }

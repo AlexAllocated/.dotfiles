@@ -1,0 +1,4741 @@
+{
+  ".gitconfig": {
+    "source": ".gitconfig",
+    "type": "source",
+    "owner": "git"
+  },
+  ".p10k.zsh": {
+    "source": ".p10k.zsh",
+    "type": "source",
+    "owner": "shell"
+  },
+  ".tool-versions": {
+    "source": ".tool-versions",
+    "type": "source",
+    "owner": "shell"
+  },
+  ".wezterm.lua": {
+    "source": ".wezterm.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  ".zprofile": {
+    "source": ".zprofile",
+    "type": "source",
+    "owner": "shell"
+  },
+  ".zshrc": {
+    "source": ".zshrc",
+    "type": "source",
+    "owner": "shell"
+  },
+  ".zshrc::alias cat=\"bat --paging=never\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias cat=\"bat --paging=never\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias ff=\"fastfetch\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias ff=\"fastfetch\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias help=\"run-help\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias help=\"run-help\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias lg=\"lazygit\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias lg=\"lazygit\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias ll=\"eza --color=always --all --long --git --icons=always --no-time --no-permissions\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias ll=\"eza --color=always --all --long --git --icons=always --no-time --no-permissions\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias nv=\"nvim\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias nv=\"nvim\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias vi=\"nvim\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias vi=\"nvim\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias vim=\"nvim\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias vim=\"nvim\"",
+    "owner": "shell"
+  },
+  ".zshrc::alias updoot=\"dotctl updoot\"": {
+    "source": ".zshrc",
+    "type": "entrypoint",
+    "anchor": "alias updoot=\"dotctl updoot\"",
+    "owner": "shell"
+  },
+  "bin/win32yank.exe": {
+    "source": "bin/win32yank.exe",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "bootstrap/ubuntu-wsl-root.sh": {
+    "source": "bootstrap/ubuntu-wsl-root.sh",
+    "type": "source",
+    "owner": "wsl-bootstrap"
+  },
+  "bootstrap/ubuntu-wsl-user.sh": {
+    "source": "bootstrap/ubuntu-wsl-user.sh",
+    "type": "source",
+    "owner": "wsl-bootstrap"
+  },
+  "bootstrap/ubuntu-wsl.ps1": {
+    "source": "bootstrap/ubuntu-wsl.ps1",
+    "type": "source",
+    "owner": "wsl-bootstrap"
+  },
+  "docker/linux.Dockerfile": {
+    "source": "docker/linux.Dockerfile",
+    "type": "source",
+    "owner": "container-images"
+  },
+  "docker/pocket-knife.Dockerfile": {
+    "source": "docker/pocket-knife.Dockerfile",
+    "type": "source",
+    "owner": "container-images"
+  },
+  "dot-bootstrap": {
+    "source": "dot-bootstrap",
+    "type": "source",
+    "owner": "wsl-bootstrap"
+  },
+  "flake.lock": {
+    "source": "flake.lock",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "flake.nix": {
+    "source": "flake.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "flake.nix::nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::nixpkgs-unstable.url = \"github:NixOS/nixpkgs/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "nixpkgs-unstable.url = \"github:NixOS/nixpkgs/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::migration-nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "migration-nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::nvidia-afx-nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "nvidia-afx-nixpkgs.url = \"github:NixOS/nixpkgs/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::url = \"github:nix-community/home-manager/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "url = \"github:nix-community/home-manager/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::url = \"github:nix-darwin/nix-darwin/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "url = \"github:nix-darwin/nix-darwin/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::url = \"github:nix-community/lanzaboote/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "url = \"github:nix-community/lanzaboote/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::url = \"github:mangowm/mango/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "url = \"github:mangowm/mango/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::url = \"github:noctalia-dev/noctalia-shell/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "url = \"github:noctalia-dev/noctalia-shell/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::iloader.url = \"github:nab138/iloader/<native ref>\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "iloader.url = \"github:nab138/iloader/<native ref>\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::dotctl = pkgs.writeShellApplication {": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "dotctl = pkgs.writeShellApplication {",
+    "owner": "native-manifests"
+  },
+  "flake.nix::name = \"dotctl\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotctl\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::tracer-rescue-media = pkgs.writeShellApplication {": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "tracer-rescue-media = pkgs.writeShellApplication {",
+    "owner": "native-manifests"
+  },
+  "flake.nix::name = \"prepare-tracer-rescue\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "name = \"prepare-tracer-rescue\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::tracer-rescue-media-refresh = pkgs.writeShellApplication {": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "tracer-rescue-media-refresh = pkgs.writeShellApplication {",
+    "owner": "native-manifests"
+  },
+  "flake.nix::name = \"refresh-tracer-rescue\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "name = \"refresh-tracer-rescue\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::pkgs.writeShellApplication {": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellApplication {",
+    "owner": "native-manifests"
+  },
+  "flake.nix::name = \"dotfiles-format\";": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-format\";",
+    "owner": "native-manifests"
+  },
+  "flake.nix::home.home.activation.vesktopAutostart.data": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "home.home.activation.vesktopAutostart.data",
+    "owner": "native-manifests"
+  },
+  "flake.nix::externalHandler = workstation.home-manager.users.alex.xdg.desktopEntries.firefox-focused.exec;": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "externalHandler = workstation.home-manager.users.alex.xdg.desktopEntries.firefox-focused.exec;",
+    "owner": "native-manifests"
+  },
+  "hosts/chev-desktop/default.nix": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "source",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/default.nix::systemd.services.sshd = {": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.sshd = {",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/default.nix::interface-name = \"br0\";": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "declaration",
+    "anchor": "interface-name = \"br0\";",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/default.nix::interface-name = \"eno1\";": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "declaration",
+    "anchor": "interface-name = \"eno1\";",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/default.nix::interface-name = \"enp4s0\";": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "declaration",
+    "anchor": "interface-name = \"enp4s0\";",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/default.nix::systemd.services.linux-data-games-nocow = {": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.linux-data-games-nocow = {",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/default.nix::systemd.services.docker = {": {
+    "source": "hosts/chev-desktop/default.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.docker = {",
+    "owner": "legacy-hosts"
+  },
+  "hosts/chev-desktop/hardware-generated.nix": {
+    "source": "hosts/chev-desktop/hardware-generated.nix",
+    "type": "source",
+    "owner": "legacy-hosts"
+  },
+  "hosts/tracer/default.nix": {
+    "source": "hosts/tracer/default.nix",
+    "type": "source",
+    "owner": "tracer-host"
+  },
+  "hosts/tracer/default.nix::version = \"<native value>\";": {
+    "source": "hosts/tracer/default.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "tracer-host"
+  },
+  "hosts/tracer/default.nix::name = \"TRACER\";": {
+    "source": "hosts/tracer/default.nix",
+    "type": "declaration",
+    "anchor": "name = \"TRACER\";",
+    "owner": "tracer-host"
+  },
+  "hosts/tracer/default.nix::systemd.services.tracer-prefer-linux-boot = {": {
+    "source": "hosts/tracer/default.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.tracer-prefer-linux-boot = {",
+    "owner": "tracer-host"
+  },
+  "hosts/tracer/default.nix::systemd.services.docker.serviceConfig = {": {
+    "source": "hosts/tracer/default.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.docker.serviceConfig = {",
+    "owner": "tracer-host"
+  },
+  "komorebi/komorebi.ahk": {
+    "source": "komorebi/komorebi.ahk",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "komorebi/komorebi.json": {
+    "source": "komorebi/komorebi.json",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "komorebi/whkdrc": {
+    "source": "komorebi/whkdrc",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "lib/mango-package.nix": {
+    "source": "lib/mango-package.nix",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "lib/mango-package.nix::scenefx = inputs.mango.inputs.scenefx.packages.${system}.default.overrideAttrs (old: {": {
+    "source": "lib/mango-package.nix",
+    "type": "declaration",
+    "anchor": "scenefx = inputs.mango.inputs.scenefx.packages.${system}.default.overrideAttrs (old: {",
+    "owner": "desktop-compositors"
+  },
+  "lib/mango-package.nix::mango = inputs.mango.packages.${system}.mango.override { inherit scenefx; };": {
+    "source": "lib/mango-package.nix",
+    "type": "declaration",
+    "anchor": "mango = inputs.mango.packages.${system}.mango.override { inherit scenefx; };",
+    "owner": "desktop-compositors"
+  },
+  "lib/mango-package.nix::mango.overrideAttrs (old: {": {
+    "source": "lib/mango-package.nix",
+    "type": "declaration",
+    "anchor": "mango.overrideAttrs (old: {",
+    "owner": "desktop-compositors"
+  },
+  "lib/toolsets.nix": {
+    "source": "lib/toolsets.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/darwin/default.nix": {
+    "source": "modules/darwin/default.nix",
+    "type": "source",
+    "owner": "legacy-hosts"
+  },
+  "modules/darwin/default.nix::name = \"wezterm@nightly\";": {
+    "source": "modules/darwin/default.nix",
+    "type": "declaration",
+    "anchor": "name = \"wezterm@nightly\";",
+    "owner": "legacy-hosts"
+  },
+  "modules/docker/images.nix": {
+    "source": "modules/docker/images.nix",
+    "type": "source",
+    "owner": "container-images"
+  },
+  "modules/docker/images.nix::name = \"${name}-root\";": {
+    "source": "modules/docker/images.nix",
+    "type": "declaration",
+    "anchor": "name = \"${name}-root\";",
+    "owner": "container-images"
+  },
+  "modules/docker/images.nix::name = \"ghcr.io/alexallocated/${name}\";": {
+    "source": "modules/docker/images.nix",
+    "type": "declaration",
+    "anchor": "name = \"ghcr.io/alexallocated/${name}\";",
+    "owner": "container-images"
+  },
+  "modules/docker/images.nix::tag = \"<native value>\";": {
+    "source": "modules/docker/images.nix",
+    "type": "declaration",
+    "anchor": "tag = \"<native value>\";",
+    "owner": "container-images"
+  },
+  "modules/docker/images.nix::name = \"dotfiles-linux\";": {
+    "source": "modules/docker/images.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-linux\";",
+    "owner": "container-images"
+  },
+  "modules/docker/images.nix::name = \"dotfiles-pocket-knife\";": {
+    "source": "modules/docker/images.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-pocket-knife\";",
+    "owner": "container-images"
+  },
+  "modules/home/appearance.nix": {
+    "source": "modules/home/appearance.nix",
+    "type": "source",
+    "owner": "desktop-appearance"
+  },
+  "modules/home/bumblebee-resume.nix": {
+    "source": "modules/home/bumblebee-resume.nix",
+    "type": "source",
+    "owner": "bumblebee-resume"
+  },
+  "modules/home/bumblebee-resume.nix::attribute:systemd.user.services.bumblebee-resume": {
+    "source": "modules/home/bumblebee-resume.nix",
+    "type": "entrypoint",
+    "anchor": "systemd.user.services.bumblebee-resume",
+    "owner": "bumblebee-resume"
+  },
+  "modules/home/bumblebee-resume.nix::attribute:systemd.user.services.bumblebee-resume-tunnel": {
+    "source": "modules/home/bumblebee-resume.nix",
+    "type": "entrypoint",
+    "anchor": "systemd.user.services.bumblebee-resume-tunnel",
+    "owner": "bumblebee-resume"
+  },
+  "modules/home/bumblebee.nix": {
+    "source": "modules/home/bumblebee.nix",
+    "type": "source",
+    "owner": "bumblebee-desktop"
+  },
+  "modules/home/capabilities/desktop.nix": {
+    "source": "modules/home/capabilities/desktop.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/capabilities/development.nix": {
+    "source": "modules/home/capabilities/development.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/capabilities/editor.nix": {
+    "source": "modules/home/capabilities/editor.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/capabilities/foundation.nix": {
+    "source": "modules/home/capabilities/foundation.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/capabilities/gaming.nix": {
+    "source": "modules/home/capabilities/gaming.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/cloud.nix": {
+    "source": "modules/home/cloud.nix",
+    "type": "source",
+    "owner": "development-tooling"
+  },
+  "modules/home/codex.nix": {
+    "source": "modules/home/codex.nix",
+    "type": "source",
+    "owner": "codex-tooling"
+  },
+  "modules/home/codex.nix::desktopCodex = pkgs.writeShellApplication {": {
+    "source": "modules/home/codex.nix",
+    "type": "declaration",
+    "anchor": "desktopCodex = pkgs.writeShellApplication {",
+    "owner": "codex-tooling"
+  },
+  "modules/home/codex.nix::name = \"codex\";": {
+    "source": "modules/home/codex.nix",
+    "type": "declaration",
+    "anchor": "name = \"codex\";",
+    "owner": "codex-tooling"
+  },
+  "modules/home/codex.nix::wslCodex = pkgs.writeShellScriptBin \"codex\" ''": {
+    "source": "modules/home/codex.nix",
+    "type": "declaration",
+    "anchor": "wslCodex = pkgs.writeShellScriptBin \"codex\" ''",
+    "owner": "codex-tooling"
+  },
+  "modules/home/compositors.nix": {
+    "source": "modules/home/compositors.nix",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::desktopShellProcess = pkgs.writeShellApplication {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "desktopShellProcess = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles-desktop-shell-process\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-desktop-shell-process\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::shellAction = pkgs.writeShellApplication {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "shellAction = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles-shell-action\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-shell-action\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::startDesktopShell = pkgs.writeShellApplication {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "startDesktopShell = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles-start-desktop-shell\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-start-desktop-shell\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::startPolkitAgent = pkgs.writeShellApplication {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "startPolkitAgent = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles-start-compositor-polkit\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-start-compositor-polkit\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::niriFollowPrimaryOutput = pkgs.writeShellApplication {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "niriFollowPrimaryOutput = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles-niri-follow-primary-output\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-niri-follow-primary-output\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::mangoCycleLayout = pkgs.writeShellApplication {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "mangoCycleLayout = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles-mango-cycle-layout\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-mango-cycle-layout\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::name = \"dotfiles\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::home.activation.dmsWorkstationDefaults = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "home.activation.dmsWorkstationDefaults = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::home.activation.flameshotPortalMigration = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "home.activation.flameshotPortalMigration = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::home.activation.vesktopAutostart = lib.hm.dag.entryAfter [ \"linkGeneration\" ] ''": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "home.activation.vesktopAutostart = lib.hm.dag.entryAfter [ \"linkGeneration\" ] ''",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::home.sessionVariables.NOCTALIA_PAM_SERVICE = \"login\";": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "home.sessionVariables.NOCTALIA_PAM_SERVICE = \"login\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::systemd.user.services.dotfiles-desktop-shell = {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-desktop-shell = {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::systemd.user.services.dotfiles-compositor-polkit = {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-compositor-polkit = {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::systemd.user.services.dotfiles-xembed-tray = {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-xembed-tray = {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::systemd.user.services.flameshot = {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.flameshot = {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/compositors.nix::systemd.user.services.dotfiles-niri-output-follow = {": {
+    "source": "modules/home/compositors.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-niri-output-follow = {",
+    "owner": "desktop-compositors"
+  },
+  "modules/home/core.nix": {
+    "source": "modules/home/core.nix",
+    "type": "source",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::url = \"https://github.com/MahdiMirzadeh/qbittorrent/releases/download/v0.6.6/gruvbox-dark.qbtheme\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://github.com/MahdiMirzadeh/qbittorrent/releases/download/v0.6.6/gruvbox-dark.qbtheme\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::rev = \"<native value>\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "rev = \"<native value>\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::scaledVlc = pkgs.writeShellApplication {": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "scaledVlc = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"dotfiles-vlc\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-vlc\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::scaledDavinciResolve = pkgs.writeShellApplication {": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "scaledDavinciResolve = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"dotfiles-davinci-resolve\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-davinci-resolve\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::firefoxExternalLinkHandler = pkgs.writeShellApplication {": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "firefoxExternalLinkHandler = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"dotfiles-open-firefox-link\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-open-firefox-link\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::chromeExternalLinkHandler = pkgs.writeShellApplication {": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "chromeExternalLinkHandler = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"dotfiles-open-chrome-link\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-open-chrome-link\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"qBittorrent/nova3/engines/${pluginName}.py\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"qBittorrent/nova3/engines/${pluginName}.py\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"Google Chrome\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"Google Chrome\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"Firefox external link handler\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"Firefox external link handler\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"VLC media player\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"VLC media player\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::name = \"DaVinci Resolve\";": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "name = \"DaVinci Resolve\";",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::home.activation.qbittorrentGruvboxTheme = lib.mkIf (profile == \"nixos-desktop\") (": {
+    "source": "modules/home/core.nix",
+    "type": "declaration",
+    "anchor": "home.activation.qbittorrentGruvboxTheme = lib.mkIf (profile == \"nixos-desktop\") (",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::attribute:desktopEntries.google-chrome": {
+    "source": "modules/home/core.nix",
+    "type": "entrypoint",
+    "anchor": "desktopEntries.google-chrome",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::attribute:desktopEntries.firefox-focused": {
+    "source": "modules/home/core.nix",
+    "type": "entrypoint",
+    "anchor": "desktopEntries.firefox-focused",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::attribute:desktopEntries.vlc": {
+    "source": "modules/home/core.nix",
+    "type": "entrypoint",
+    "anchor": "desktopEntries.vlc",
+    "owner": "desktop-integration"
+  },
+  "modules/home/core.nix::attribute:desktopEntries.davinci-resolve": {
+    "source": "modules/home/core.nix",
+    "type": "entrypoint",
+    "anchor": "desktopEntries.davinci-resolve",
+    "owner": "desktop-integration"
+  },
+  "modules/home/default.nix": {
+    "source": "modules/home/default.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/development.nix": {
+    "source": "modules/home/development.nix",
+    "type": "source",
+    "owner": "development-tooling"
+  },
+  "modules/home/foundation.nix": {
+    "source": "modules/home/foundation.nix",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "modules/home/gaming.nix": {
+    "source": "modules/home/gaming.nix",
+    "type": "source",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::battleNetDisplayWatcher = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "battleNetDisplayWatcher = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"battlenet-display-sync\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"battlenet-display-sync\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::gamingUmu = pkgs.umu-launcher.override {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "gamingUmu = pkgs.umu-launcher.override {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Gw2Setup-64.exe\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Gw2Setup-64.exe\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::url = \"https://cloudfront.guildwars2.com/client/branches/Gw2Setup-64.exe\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://cloudfront.guildwars2.com/client/branches/Gw2Setup-64.exe\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::guildWars2Launcher = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "guildWars2Launcher = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"guild-wars-2\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"guild-wars-2\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::wowDisplaySettings = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "wowDisplaySettings = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"wow-display-settings\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"wow-display-settings\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Battle.net-Setup.exe\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Battle.net-Setup.exe\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::url = \"https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://downloader.battle.net/download/getInstaller?os=win&installer=Battle.net-Setup.exe\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::battleNetLauncher = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "battleNetLauncher = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"battlenet\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"battlenet\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::battleNetDiagnostics = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "battleNetDiagnostics = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"battlenet-diagnostics\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"battlenet-diagnostics\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::battleNetUriHandler = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "battleNetUriHandler = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"battlenet-uri-handler\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"battlenet-uri-handler\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::haloSettings = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "haloSettings = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"halo-campaign-evolved-settings\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"halo-campaign-evolved-settings\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::haloLauncher = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "haloLauncher = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"halo-campaign-evolved\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"halo-campaign-evolved\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::steamUiHealthcheck = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "steamUiHealthcheck = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"steam-ui-healthcheck\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"steam-ui-healthcheck\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::steamVrDefaults = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "steamVrDefaults = pkgs.writeShellApplication {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"steamvr-workstation-defaults\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"steamvr-workstation-defaults\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::home.activation.fantasyGrounds = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "home.activation.fantasyGrounds = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.fantasy-grounds = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.fantasy-grounds = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Fantasy Grounds\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Fantasy Grounds\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.fantasy-grounds-updater = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.fantasy-grounds-updater = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Fantasy Grounds Updater\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Fantasy Grounds Updater\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.guild-wars-2 = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.guild-wars-2 = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Guild Wars 2\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Guild Wars 2\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::home.activation.haloCampaignEvolvedSettings = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "home.activation.haloCampaignEvolvedSettings = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.halo-campaign-evolved-optimized = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.halo-campaign-evolved-optimized = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Halo: Campaign Evolved (Optimized)\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Halo: Campaign Evolved (Optimized)\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::home.activation.steamVrDefaults = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "home.activation.steamVrDefaults = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::systemd.user.services.steam-autostart = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.steam-autostart = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::systemd.user.services.steam-ui-healthcheck = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.steam-ui-healthcheck = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::systemd.user.timers.steam-ui-healthcheck = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.timers.steam-ui-healthcheck = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.battlenet-proton-handler = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.battlenet-proton-handler = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Battle.net Proton URI Handler\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Battle.net Proton URI Handler\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::systemd.user.services.battlenet-display-sync = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.battlenet-display-sync = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::systemd.user.services.battlenet-display-sync-failed = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.battlenet-display-sync-failed = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::home.activation.wowDisplaySettings = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "home.activation.wowDisplaySettings = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.battlenet = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.battlenet = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Battle.net\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Battle.net\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::xdg.desktopEntries.heroes-of-the-storm = {": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.heroes-of-the-storm = {",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/gaming.nix::name = \"Heroes of the Storm\";": {
+    "source": "modules/home/gaming.nix",
+    "type": "declaration",
+    "anchor": "name = \"Heroes of the Storm\";",
+    "owner": "gaming-launchers"
+  },
+  "modules/home/git.nix": {
+    "source": "modules/home/git.nix",
+    "type": "source",
+    "owner": "git"
+  },
+  "modules/home/maintenance.nix": {
+    "source": "modules/home/maintenance.nix",
+    "type": "source",
+    "owner": "maintenance-schedules"
+  },
+  "modules/home/maintenance.nix::systemd.user.services.dotfiles-refresh = {": {
+    "source": "modules/home/maintenance.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-refresh = {",
+    "owner": "maintenance-schedules"
+  },
+  "modules/home/maintenance.nix::systemd.user.services.dotfiles-prepare = {": {
+    "source": "modules/home/maintenance.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-prepare = {",
+    "owner": "maintenance-schedules"
+  },
+  "modules/home/maintenance.nix::systemd.user.timers.dotfiles-refresh = {": {
+    "source": "modules/home/maintenance.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.timers.dotfiles-refresh = {",
+    "owner": "maintenance-schedules"
+  },
+  "modules/home/maintenance.nix::systemd.user.timers.dotfiles-prepare = {": {
+    "source": "modules/home/maintenance.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.timers.dotfiles-prepare = {",
+    "owner": "maintenance-schedules"
+  },
+  "modules/home/neovide.nix": {
+    "source": "modules/home/neovide.nix",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "modules/home/nvim.nix": {
+    "source": "modules/home/nvim.nix",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "modules/home/nvim.nix::attribute:programs.zsh.shellAliases.nv": {
+    "source": "modules/home/nvim.nix",
+    "type": "entrypoint",
+    "anchor": "programs.zsh.shellAliases.nv",
+    "owner": "neovim"
+  },
+  "modules/home/nvim.nix::attribute:programs.zsh.shellAliases.vi": {
+    "source": "modules/home/nvim.nix",
+    "type": "entrypoint",
+    "anchor": "programs.zsh.shellAliases.vi",
+    "owner": "neovim"
+  },
+  "modules/home/nvim.nix::attribute:programs.zsh.shellAliases.vim": {
+    "source": "modules/home/nvim.nix",
+    "type": "entrypoint",
+    "anchor": "programs.zsh.shellAliases.vim",
+    "owner": "neovim"
+  },
+  "modules/home/obs.nix": {
+    "source": "modules/home/obs.nix",
+    "type": "source",
+    "owner": "obs"
+  },
+  "modules/home/obs.nix::home.activation.obsProductionEncoding = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/obs.nix",
+    "type": "declaration",
+    "anchor": "home.activation.obsProductionEncoding = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "obs"
+  },
+  "modules/home/razer.nix": {
+    "source": "modules/home/razer.nix",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "modules/home/razer.nix::syncProfiles = pkgs.writeShellApplication {": {
+    "source": "modules/home/razer.nix",
+    "type": "declaration",
+    "anchor": "syncProfiles = pkgs.writeShellApplication {",
+    "owner": "razer-profiles"
+  },
+  "modules/home/razer.nix::name = \"razer-profile-sync\";": {
+    "source": "modules/home/razer.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-profile-sync\";",
+    "owner": "razer-profiles"
+  },
+  "modules/home/razer.nix::home.activation.installRazerProfiles = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''": {
+    "source": "modules/home/razer.nix",
+    "type": "declaration",
+    "anchor": "home.activation.installRazerProfiles = lib.hm.dag.entryAfter [ \"writeBoundary\" ] ''",
+    "owner": "razer-profiles"
+  },
+  "modules/home/shell.nix": {
+    "source": "modules/home/shell.nix",
+    "type": "source",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::rust = { version = \"<native value>\", components = [\"rust-analyzer\", \"rust-src\"] }": {
+    "source": "modules/home/shell.nix",
+    "type": "declaration",
+    "anchor": "rust = { version = \"<native value>\", components = [\"rust-analyzer\", \"rust-src\"] }",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::attribute:shellAliases.cat": {
+    "source": "modules/home/shell.nix",
+    "type": "entrypoint",
+    "anchor": "shellAliases.cat",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::attribute:shellAliases.ff": {
+    "source": "modules/home/shell.nix",
+    "type": "entrypoint",
+    "anchor": "shellAliases.ff",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::attribute:shellAliases.help": {
+    "source": "modules/home/shell.nix",
+    "type": "entrypoint",
+    "anchor": "shellAliases.help",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::attribute:shellAliases.lg": {
+    "source": "modules/home/shell.nix",
+    "type": "entrypoint",
+    "anchor": "shellAliases.lg",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::attribute:shellAliases.ll": {
+    "source": "modules/home/shell.nix",
+    "type": "entrypoint",
+    "anchor": "shellAliases.ll",
+    "owner": "shell"
+  },
+  "modules/home/shell.nix::attribute:shellAliases.updoot": {
+    "source": "modules/home/shell.nix",
+    "type": "entrypoint",
+    "anchor": "shellAliases.updoot",
+    "owner": "shell"
+  },
+  "modules/home/terminal.nix": {
+    "source": "modules/home/terminal.nix",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "modules/home/terminal.nix::durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {": {
+    "source": "modules/home/terminal.nix",
+    "type": "declaration",
+    "anchor": "durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {",
+    "owner": "terminal"
+  },
+  "modules/home/terminal.nix::canonicalTmuxClient = pkgs.writeShellApplication {": {
+    "source": "modules/home/terminal.nix",
+    "type": "declaration",
+    "anchor": "canonicalTmuxClient = pkgs.writeShellApplication {",
+    "owner": "terminal"
+  },
+  "modules/home/terminal.nix::name = \"tmux\";": {
+    "source": "modules/home/terminal.nix",
+    "type": "declaration",
+    "anchor": "name = \"tmux\";",
+    "owner": "terminal"
+  },
+  "modules/home/terminal.nix::home.activation.canonicalTmuxConfiguration = lib.mkIf workstation (": {
+    "source": "modules/home/terminal.nix",
+    "type": "declaration",
+    "anchor": "home.activation.canonicalTmuxConfiguration = lib.mkIf workstation (",
+    "owner": "terminal"
+  },
+  "modules/home/wallpaper.nix": {
+    "source": "modules/home/wallpaper.nix",
+    "type": "source",
+    "owner": "desktop-appearance"
+  },
+  "modules/home/wallpaper.nix::home.activation.installDesktopWallpaper = lib.hm.dag.entryAfter [ \"linkGeneration\" ] ''": {
+    "source": "modules/home/wallpaper.nix",
+    "type": "declaration",
+    "anchor": "home.activation.installDesktopWallpaper = lib.hm.dag.entryAfter [ \"linkGeneration\" ] ''",
+    "owner": "desktop-appearance"
+  },
+  "modules/home/windows.nix": {
+    "source": "modules/home/windows.nix",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "modules/nixos/amps.nix": {
+    "source": "modules/nixos/amps.nix",
+    "type": "source",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::name = \"amps-desktop\";": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "name = \"amps-desktop\";",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::nativeBuildInputs = [ pkgs.makeWrapper ];": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "nativeBuildInputs = [ pkgs.makeWrapper ];",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::wrapProgram \"$out/bin/amps-ui\" \\": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "wrapProgram \"$out/bin/amps-ui\" \\",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::(pkgs.makeDesktopItem {": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "(pkgs.makeDesktopItem {",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::name = \"amps\";": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "name = \"amps\";",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::name = \"amps/routing.lua\";": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "name = \"amps/routing.lua\";",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::systemd.services.amps = {": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.amps = {",
+    "owner": "amps"
+  },
+  "modules/nixos/amps.nix::systemd.user.services.amps-ui = {": {
+    "source": "modules/nixos/amps.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.amps-ui = {",
+    "owner": "amps"
+  },
+  "modules/nixos/audio-hardware.nix": {
+    "source": "modules/nixos/audio-hardware.nix",
+    "type": "source",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix": {
+    "source": "modules/nixos/audio.nix",
+    "type": "source",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"copy${channel}\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"copy${channel}\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"libpipewire-module-loopback\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-loopback\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"libpipewire-module-filter-chain\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-filter-chain\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spFL\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spFR\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spFC\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFC\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spLFE\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spLFE\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spRL\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spRL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spRR\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spRR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spSL\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spSL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spSR\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spSR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spatialL\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spatialR\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"dryL\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"dryL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"dryR\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"dryR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"selectL\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"selectR\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"libpipewire-module-filter-chain\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-filter-chain\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spFL\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spFR\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spatialL\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spatialR\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"selectL\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectL\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"selectR\";::occurrence-2": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectR\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::spatialAudioControl = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "spatialAudioControl = pkgs.writeShellApplication {",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"spatial-audio\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatial-audio\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"libpipewire-module-filter-chain\";::occurrence-3": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-filter-chain\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"rnnoise\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"rnnoise\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::recoverYetiHotplug = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "recoverYetiHotplug = pkgs.writeShellApplication {",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-recover-yeti-hotplug\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-recover-yeti-hotplug\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-clean-mic/route-capture\",": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-clean-mic/route-capture\",",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator/clean-mic-policy.lua\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator/clean-mic-policy.lua\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-spatial/apply-on-metadata-added\",": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-spatial/apply-on-metadata-added\",",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-spatial/apply-on-default-changed\",": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-spatial/apply-on-default-changed\",",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-spatial/set-mode\",": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-spatial/set-mode\",",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-spatial/apply-on-sink-changed\",": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-spatial/apply-on-sink-changed\",",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator-spatial/apply-on-filter-running\",": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator-spatial/apply-on-filter-running\",",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::name = \"creator/spatial-policy.lua\";": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "name = \"creator/spatial-policy.lua\";",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::systemd.user.paths.creator-yeti-hotplug-recovery = {": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.paths.creator-yeti-hotplug-recovery = {",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/audio.nix::systemd.user.services.creator-yeti-hotplug-recovery = {": {
+    "source": "modules/nixos/audio.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.creator-yeti-hotplug-recovery = {",
+    "owner": "audio-routing"
+  },
+  "modules/nixos/chatgpt-service.nix": {
+    "source": "modules/nixos/chatgpt-service.nix",
+    "type": "source",
+    "owner": "chatgpt-desktop"
+  },
+  "modules/nixos/chatgpt-service.nix::systemd.services.chatgpt-desktop = {": {
+    "source": "modules/nixos/chatgpt-service.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.chatgpt-desktop = {",
+    "owner": "chatgpt-desktop"
+  },
+  "modules/nixos/compositors.nix": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::niriPackage = pkgs.niri.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "niriPackage = pkgs.niri.overrideAttrs (oldAttrs: {",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::rev = \"<native value>\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "rev = \"<native value>\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::url = \"https://github.com/niri-wm/niri/commit/<native revision>.patch\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://github.com/niri-wm/niri/commit/<native revision>.patch\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::url = \"https://github.com/niri-wm/niri/compare/<native comparison>.diff\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://github.com/niri-wm/niri/compare/<native comparison>.diff\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::niriPortalReady = pkgs.writeShellScript \"dotfiles-niri-portal-ready\" ''": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "niriPortalReady = pkgs.writeShellScript \"dotfiles-niri-portal-ready\" ''",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::pkgs.writeShellScript \"start-${id}\" ''": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellScript \"start-${id}\" ''",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"${spec.id}-wayland-session\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"${spec.id}-wayland-session\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"Niri + DMS\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"Niri + DMS\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"Niri + Noctalia\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"Niri + Noctalia\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"Mango + Noctalia\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"Mango + Noctalia\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::desktopSessionDispatcher = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "desktopSessionDispatcher = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"dotfiles-desktop-session\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-desktop-session\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"dotfiles-desktop-wayland-session\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"dotfiles-desktop-wayland-session\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::desktopSwitch = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "desktopSwitch = pkgs.writeShellApplication {",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"desktop-switch\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"desktop-switch\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::systemd.user.services.dotfiles-niri-portal-ready = {": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.dotfiles-niri-portal-ready = {",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/compositors.nix::name = \"Limit Free Buffer Pool On Wayland Compositors\";": {
+    "source": "modules/nixos/compositors.nix",
+    "type": "declaration",
+    "anchor": "name = \"Limit Free Buffer Pool On Wayland Compositors\";",
+    "owner": "desktop-compositors"
+  },
+  "modules/nixos/desktop.nix": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "source",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::xwayland-satellite = prev.xwayland-satellite.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "xwayland-satellite = prev.xwayland-satellite.overrideAttrs (oldAttrs: {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ prev.makeWrapper ];": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ prev.makeWrapper ];",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::wrapProgram \"$out/bin/xwayland-satellite\" \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "wrapProgram \"$out/bin/xwayland-satellite\" \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::alvr = prev.alvr.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "alvr = prev.alvr.overrideAttrs (oldAttrs: {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "postPatch = (oldAttrs.postPatch or \"\") + ''",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::substituteInPlace alvr/adb/src/commands.rs \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "substituteInPlace alvr/adb/src/commands.rs \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::steam = prev.steam.override {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "steam = prev.steam.override {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::firefox = prev.firefox.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "firefox = prev.firefox.overrideAttrs (oldAttrs: {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::xdg-desktop-portal-wlr = prev.xdg-desktop-portal-wlr.override {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "xdg-desktop-portal-wlr = prev.xdg-desktop-portal-wlr.override {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::grim = prev.writeShellScriptBin \"grim\" ''": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "grim = prev.writeShellScriptBin \"grim\" ''",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::flameshot = prev.flameshot.overrideAttrs (_oldAttrs: {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "flameshot = prev.flameshot.overrideAttrs (_oldAttrs: {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::version = \"<native value>\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::tag = \"<native value>\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "tag = \"<native value>\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::questWifiRegulatoryReady = pkgs.writeShellScript \"tracer-quest-wifi-regulatory-ready\" ''": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "questWifiRegulatoryReady = pkgs.writeShellScript \"tracer-quest-wifi-regulatory-ready\" ''",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"obs-studio-nvidia-${pkgs.obs-studio.version}\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"obs-studio-nvidia-${pkgs.obs-studio.version}\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::nativeBuildInputs = [ pkgs.makeWrapper ];": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "nativeBuildInputs = [ pkgs.makeWrapper ];",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::wrapProgram $out/bin/obs \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "wrapProgram $out/bin/obs \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::wrapProgram $out/bin/obs-nvenc-test \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "wrapProgram $out/bin/obs-nvenc-test \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"discord-nvidia-${pkgs.discord.version}\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"discord-nvidia-${pkgs.discord.version}\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::nativeBuildInputs = [ pkgs.makeWrapper ];::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "nativeBuildInputs = [ pkgs.makeWrapper ];",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::wrapProgram $out/opt/Discord/Discord \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "wrapProgram $out/opt/Discord/Discord \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::vesktopWithDeepLinks = pkgs.vesktop.overrideAttrs (old: {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "vesktopWithDeepLinks = pkgs.vesktop.overrideAttrs (old: {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"vesktop-wayland-${pkgs.vesktop.version}\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"vesktop-wayland-${pkgs.vesktop.version}\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::nativeBuildInputs = [ pkgs.makeWrapper ];::occurrence-3": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "nativeBuildInputs = [ pkgs.makeWrapper ];",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::wrapProgram $out/bin/vesktop \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "wrapProgram $out/bin/vesktop \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::rev = \"<native value>\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "rev = \"<native value>\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::openRazerHealthCheck = pkgs.writeShellScript \"openrazer-health-check\" ''": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "openRazerHealthCheck = pkgs.writeShellScript \"openrazer-health-check\" ''",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::razerProfileDirect = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "razerProfileDirect = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"razer-profile-direct\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-profile-direct\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::razerHardwareProfile = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "razerHardwareProfile = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"razer-profile\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-profile\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::razerProfileSync = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "razerProfileSync = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"razer-profile-sync\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-profile-sync\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::razerKeybindEditor = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "razerKeybindEditor = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"razer-keybind-editor\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-keybind-editor\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::razerKeybindDesktop = pkgs.makeDesktopItem {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "razerKeybindDesktop = pkgs.makeDesktopItem {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"razer-keybind-editor\";::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-keybind-editor\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::razerProfileTray = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "razerProfileTray = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"razer-profile-tray\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"razer-profile-tray\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::lanMouseTray = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "lanMouseTray = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"lan-mouse-tray\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"lan-mouse-tray\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::migrateDockerDataRoot = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "migrateDockerDataRoot = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"migrate-docker-data-root\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"migrate-docker-data-root\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::finalizeDockerDataRoot = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "finalizeDockerDataRoot = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"finalize-docker-data-root\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"finalize-docker-data-root\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::lanMouse = pkgs.lan-mouse.overrideAttrs (_oldAttrs: rec {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "lanMouse = pkgs.lan-mouse.overrideAttrs (_oldAttrs: rec {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::version = \"<native value>\";::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::rev = \"<native value>\";::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "rev = \"<native value>\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::prePatch = \"\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "prePatch = \"\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::(pkgs.sunshine.override {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "(pkgs.sunshine.override {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::}).overrideAttrs": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "}).overrideAttrs",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::launcher = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "launcher = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::desktopItem = pkgs.makeDesktopItem {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "desktopItem = pkgs.makeDesktopItem {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"${name}-web-app\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"${name}-web-app\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"linear\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"linear\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::url = \"https://linear.app/\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://linear.app/\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"teams\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"teams\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::url = \"https://teams.microsoft.com/\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://teams.microsoft.com/\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"twitch\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"twitch\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::url = \"https://www.twitch.tv/\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://www.twitch.tv/\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"youtube\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"youtube\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::url = \"https://www.youtube.com/\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://www.youtube.com/\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "ipadEdidFirmware = pkgs.edid-generator.overrideAttrs (oldAttrs: {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::postPatch = (oldAttrs.postPatch or \"\") + ''::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "postPatch = (oldAttrs.postPatch or \"\") + ''",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::substituteInPlace edid.S \\": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "substituteInPlace edid.S \\",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::pkgs.writeShellApplication {::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::ipadDisplayEnsure = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "ipadDisplayEnsure = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"ipad-display-ensure\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"ipad-display-ensure\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::ipadDisplaySessionOn = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "ipadDisplaySessionOn = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"ipad-display-session-on\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"ipad-display-session-on\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::local name=\"$1\" value": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "local name=\"$1\" value",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::ipadDisplaySessionOff = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "ipadDisplaySessionOff = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"ipad-display-session-off\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"ipad-display-session-off\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::local name=\"$1\" value::occurrence-2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "local name=\"$1\" value",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::sunshineSessionRun = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "sunshineSessionRun = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"sunshine-session-run\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"sunshine-session-run\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::sunshineDisplayPolicy = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "sunshineDisplayPolicy = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"sunshine-display-policy\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"sunshine-display-policy\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::sunshineAdaptiveLauncher = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "sunshineAdaptiveLauncher = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"sunshine-adaptive-launch\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"sunshine-adaptive-launch\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::sunshineKmsLauncher = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "sunshineKmsLauncher = pkgs.writeShellApplication {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"sunshine-kms-launch\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"sunshine-kms-launch\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"Desktop\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"Desktop\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::name = \"Steam Big Picture\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "name = \"Steam Big Picture\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.input-remapper = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.input-remapper = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.hostapd = lib.mkIf cfg.questAccessPoint.enable {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.hostapd = lib.mkIf cfg.questAccessPoint.enable {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.mullvad-allow-lan = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.mullvad-allow-lan = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.razer-basilisk-linux-bindings = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.razer-basilisk-linux-bindings = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.razer-profile-tray = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.razer-profile-tray = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.lan-mouse-tray = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.lan-mouse-tray = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.sunshine.serviceConfig.ExecCondition = lib.mkIf (": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.sunshine.serviceConfig.ExecCondition = lib.mkIf (",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.sunshine.serviceConfig.ExecStart = lib.mkIf (!sunshinePersistent) (": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.sunshine.serviceConfig.ExecStart = lib.mkIf (!sunshinePersistent) (",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.sunshine.unitConfig =": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.sunshine.unitConfig =",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.sunshine = lib.mkIf sunshinePersistent {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.sunshine = lib.mkIf sunshinePersistent {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.lan-mouse = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.lan-mouse = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.openrazer-daemon.serviceConfig = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.openrazer-daemon.serviceConfig = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.user.services.polychromatic-tray = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.polychromatic-tray = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::install_url = \"https://addons.mozilla.org/firefox/downloads/latest/1password-x-password-manager/latest.xpi\";": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "install_url = \"https://addons.mozilla.org/firefox/downloads/latest/1password-x-password-manager/latest.xpi\";",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.steamvr-compositor-capability = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.steamvr-compositor-capability = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.paths.steamvr-compositor-capability = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.paths.steamvr-compositor-capability = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::systemd.services.\"user@\".serviceConfig = {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.\"user@\".serviceConfig = {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::(plex-desktop.override {": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "declaration",
+    "anchor": "(plex-desktop.override {",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.dnsmasq": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.dnsmasq",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.hostapd": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.hostapd",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.xserver": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.xserver",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.displayManager": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.displayManager",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.pipewire": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.pipewire",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.gvfs": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.gvfs",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.udisks2": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.udisks2",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.usbmuxd": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.usbmuxd",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.mullvad-vpn": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.mullvad-vpn",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.input-remapper": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.input-remapper",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.sunshine": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.sunshine",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/desktop.nix::attribute:services.wivrn": {
+    "source": "modules/nixos/desktop.nix",
+    "type": "entrypoint",
+    "anchor": "services.wivrn",
+    "owner": "desktop-integration"
+  },
+  "modules/nixos/durable-tmux.nix": {
+    "source": "modules/nixos/durable-tmux.nix",
+    "type": "source",
+    "owner": "durable-tmux"
+  },
+  "modules/nixos/durable-tmux.nix::durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/durable-tmux.nix",
+    "type": "declaration",
+    "anchor": "durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {",
+    "owner": "durable-tmux"
+  },
+  "modules/nixos/durable-tmux.nix::canonicalTmuxClient = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/durable-tmux.nix",
+    "type": "declaration",
+    "anchor": "canonicalTmuxClient = pkgs.writeShellApplication {",
+    "owner": "durable-tmux"
+  },
+  "modules/nixos/durable-tmux.nix::name = \"tmux\";": {
+    "source": "modules/nixos/durable-tmux.nix",
+    "type": "declaration",
+    "anchor": "name = \"tmux\";",
+    "owner": "durable-tmux"
+  },
+  "modules/nixos/durable-tmux.nix::systemd.services.dotfiles-durable-tmux = {": {
+    "source": "modules/nixos/durable-tmux.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.dotfiles-durable-tmux = {",
+    "owner": "durable-tmux"
+  },
+  "modules/nixos/durable-tmux.nix::ExecStart = pkgs.writeShellScript \"dotfiles-durable-tmux-start\" ''": {
+    "source": "modules/nixos/durable-tmux.nix",
+    "type": "declaration",
+    "anchor": "ExecStart = pkgs.writeShellScript \"dotfiles-durable-tmux-start\" ''",
+    "owner": "durable-tmux"
+  },
+  "modules/nixos/github-actions-runner.nix": {
+    "source": "modules/nixos/github-actions-runner.nix",
+    "type": "source",
+    "owner": "github-runner"
+  },
+  "modules/nixos/github-actions-runner.nix::configureToken = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/github-actions-runner.nix",
+    "type": "declaration",
+    "anchor": "configureToken = pkgs.writeShellApplication {",
+    "owner": "github-runner"
+  },
+  "modules/nixos/github-actions-runner.nix::name = \"configure-bumblebee-runner-token\";": {
+    "source": "modules/nixos/github-actions-runner.nix",
+    "type": "declaration",
+    "anchor": "name = \"configure-bumblebee-runner-token\";",
+    "owner": "github-runner"
+  },
+  "modules/nixos/github-actions-runner.nix::systemd.timers.bumblebee-runner-cache-gc = {": {
+    "source": "modules/nixos/github-actions-runner.nix",
+    "type": "declaration",
+    "anchor": "systemd.timers.bumblebee-runner-cache-gc = {",
+    "owner": "github-runner"
+  },
+  "modules/nixos/installer.nix": {
+    "source": "modules/nixos/installer.nix",
+    "type": "source",
+    "owner": "legacy-installer"
+  },
+  "modules/nixos/installer.nix::attribute:services.desktopManager": {
+    "source": "modules/nixos/installer.nix",
+    "type": "entrypoint",
+    "anchor": "services.desktopManager",
+    "owner": "legacy-installer"
+  },
+  "modules/nixos/installer.nix::attribute:services.displayManager": {
+    "source": "modules/nixos/installer.nix",
+    "type": "entrypoint",
+    "anchor": "services.displayManager",
+    "owner": "legacy-installer"
+  },
+  "modules/nixos/keyring-unlock.nix": {
+    "source": "modules/nixos/keyring-unlock.nix",
+    "type": "source",
+    "owner": "keyring-unlock"
+  },
+  "modules/nixos/keyring-unlock.nix::tool = pkgs.writeShellApplication {": {
+    "source": "modules/nixos/keyring-unlock.nix",
+    "type": "declaration",
+    "anchor": "tool = pkgs.writeShellApplication {",
+    "owner": "keyring-unlock"
+  },
+  "modules/nixos/keyring-unlock.nix::name = \"keyring-tpm-enroll\";": {
+    "source": "modules/nixos/keyring-unlock.nix",
+    "type": "declaration",
+    "anchor": "name = \"keyring-tpm-enroll\";",
+    "owner": "keyring-unlock"
+  },
+  "modules/nixos/keyring-unlock.nix::systemd.services.tracer-keyring-unlock = {": {
+    "source": "modules/nixos/keyring-unlock.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.tracer-keyring-unlock = {",
+    "owner": "keyring-unlock"
+  },
+  "modules/nixos/migration-tools.nix": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "durableTmuxPackage = pkgs.tmux.overrideAttrs (oldAttrs: {",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::pkgs.writeShellApplication {": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellApplication {",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"resume-migration\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"resume-migration\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"checkpoint-migration\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"checkpoint-migration\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"export-machine-manifest\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"export-machine-manifest\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"validate-machine-manifest\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"validate-machine-manifest\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"install-chev-desktop\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"install-chev-desktop\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"rescue-remote-on\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"rescue-remote-on\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"rescue-remote-off\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"rescue-remote-off\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"reboot-windows\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"reboot-windows\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::name = \"recover-windows-fallback\";": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"recover-windows-fallback\";",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::systemd.services.chev-recovery-sleep-inhibit =": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.chev-recovery-sleep-inhibit =",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::systemd.services.chev-ttyd-rescue = lib.mkIf cfg.rescue.enable {": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.chev-ttyd-rescue = lib.mkIf cfg.rescue.enable {",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::ExecStartPre = pkgs.writeShellScript \"chev-ttyd-rescue-index\" ''": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "ExecStartPre = pkgs.writeShellScript \"chev-ttyd-rescue-index\" ''",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::-e 's|<meta charset=\"UTF-8\">|<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"><style>CHEV_RECOVERY_STYLE</style>|' \\": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "-e 's|<meta charset=\"UTF-8\">|<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"><style>CHEV_RECOVERY_STYLE</style>|' \\",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/migration-tools.nix::ExecStart = \"${pkgs.writeShellScript \"chev-ttyd-rescue\" ''": {
+    "source": "modules/nixos/migration-tools.nix",
+    "type": "declaration",
+    "anchor": "ExecStart = \"${pkgs.writeShellScript \"chev-ttyd-rescue\" ''",
+    "owner": "migration-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::boot.initrd.systemd.services.tracer-media-ready = {": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "boot.initrd.systemd.services.tracer-media-ready = {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::name = \"Desktop\";": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "name = \"Desktop\";",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::systemd.user.services.sunshine.serviceConfig = {": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.sunshine.serviceConfig = {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::systemd.user.services.sunshine.unitConfig.StartLimitIntervalSec = lib.mkForce 0;": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.sunshine.unitConfig.StartLimitIntervalSec = lib.mkForce 0;",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::systemd.services.tracer-remote-seed = {": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.tracer-remote-seed = {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::systemd.services.tracer-boot-report = {": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.tracer-boot-report = {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-remote-rescue.nix::systemd.timers.tracer-boot-report = {": {
+    "source": "modules/nixos/tracer-remote-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.timers.tracer-boot-report = {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::systemd.services.sshd.unitConfig.RequiresMountsFor = [ \"/persist\" ];": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.sshd.unitConfig.RequiresMountsFor = [ \"/persist\" ];",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::systemd.user.services.plasma-powerdevil.enable = false;": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.user.services.plasma-powerdevil.enable = false;",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::systemd.services.tracer-rescue-awake = {": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "declaration",
+    "anchor": "systemd.services.tracer-rescue-awake = {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::attribute:services.desktopManager": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "entrypoint",
+    "anchor": "services.desktopManager",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::attribute:services.displayManager": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "entrypoint",
+    "anchor": "services.displayManager",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::attribute:services.openssh": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "entrypoint",
+    "anchor": "services.openssh",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::attribute:services.xserver": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "entrypoint",
+    "anchor": "services.xserver",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-rescue.nix::attribute:services.xe-guest-utilities": {
+    "source": "modules/nixos/tracer-rescue.nix",
+    "type": "entrypoint",
+    "anchor": "services.xe-guest-utilities",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-tools.nix": {
+    "source": "modules/nixos/tracer-tools.nix",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-tools.nix::pkgs.writeShellApplication {": {
+    "source": "modules/nixos/tracer-tools.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellApplication {",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-tools.nix::name = \"resume-tracer\";": {
+    "source": "modules/nixos/tracer-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"resume-tracer\";",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-tools.nix::name = \"tracer-diagnostics\";": {
+    "source": "modules/nixos/tracer-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"tracer-diagnostics\";",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-tools.nix::name = \"reboot-windows\";": {
+    "source": "modules/nixos/tracer-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"reboot-windows\";",
+    "owner": "tracer-recovery"
+  },
+  "modules/nixos/tracer-tools.nix::name = \"install-tracer\";": {
+    "source": "modules/nixos/tracer-tools.nix",
+    "type": "declaration",
+    "anchor": "name = \"install-tracer\";",
+    "owner": "tracer-recovery"
+  },
+  "neovide/config.toml": {
+    "source": "neovide/config.toml",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "neovide/windows-wsl.toml": {
+    "source": "neovide/windows-wsl.toml",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "noctalia/plugins/mullvad/plugin.toml": {
+    "source": "noctalia/plugins/mullvad/plugin.toml",
+    "type": "source",
+    "owner": "desktop-appearance"
+  },
+  "noctalia/plugins/mullvad/toggle.luau": {
+    "source": "noctalia/plugins/mullvad/toggle.luau",
+    "type": "source",
+    "owner": "desktop-appearance"
+  },
+  "nvim/.neoconf.json": {
+    "source": "nvim/.neoconf.json",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/LICENSE": {
+    "source": "nvim/LICENSE",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/README.md": {
+    "source": "nvim/README.md",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/init.lua": {
+    "source": "nvim/init.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lazy-lock.json": {
+    "source": "nvim/lazy-lock.json",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lazy-lock.macos-managed.json": {
+    "source": "nvim/lazy-lock.macos-managed.json",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lazyvim.json": {
+    "source": "nvim/lazyvim.json",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/autocmds.lua": {
+    "source": "nvim/lua/config/autocmds.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/bootstrap.lua": {
+    "source": "nvim/lua/config/bootstrap.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/extras.lua": {
+    "source": "nvim/lua/config/extras.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/keymaps.lua": {
+    "source": "nvim/lua/config/keymaps.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/lazy.lua": {
+    "source": "nvim/lua/config/lazy.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/options.lua": {
+    "source": "nvim/lua/config/options.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/config/profile.lua": {
+    "source": "nvim/lua/config/profile.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/blink-cmp.lua": {
+    "source": "nvim/lua/plugins/blink-cmp.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/cloak.lua": {
+    "source": "nvim/lua/plugins/cloak.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/dashboard.lua": {
+    "source": "nvim/lua/plugins/dashboard.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/fzf-lua.lua": {
+    "source": "nvim/lua/plugins/fzf-lua.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/lazydev.lua": {
+    "source": "nvim/lua/plugins/lazydev.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/lspconfig.lua": {
+    "source": "nvim/lua/plugins/lspconfig.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/lualine.lua": {
+    "source": "nvim/lua/plugins/lualine.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/markdown.lua": {
+    "source": "nvim/lua/plugins/markdown.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/mason.lua": {
+    "source": "nvim/lua/plugins/mason.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/mini-hipatterns.lua": {
+    "source": "nvim/lua/plugins/mini-hipatterns.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/multi-cursors.lua": {
+    "source": "nvim/lua/plugins/multi-cursors.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/neotest.lua": {
+    "source": "nvim/lua/plugins/neotest.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/noice.lua": {
+    "source": "nvim/lua/plugins/noice.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/nvim-autopairs.lua": {
+    "source": "nvim/lua/plugins/nvim-autopairs.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/oil.lua": {
+    "source": "nvim/lua/plugins/oil.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/playtime.lua": {
+    "source": "nvim/lua/plugins/playtime.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/rainbow_csv.lua": {
+    "source": "nvim/lua/plugins/rainbow_csv.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/screenkey.lua": {
+    "source": "nvim/lua/plugins/screenkey.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/scrollbar.lua": {
+    "source": "nvim/lua/plugins/scrollbar.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/theme.lua": {
+    "source": "nvim/lua/plugins/theme.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/tiny-devicons-auto-colors.lua": {
+    "source": "nvim/lua/plugins/tiny-devicons-auto-colors.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/treesitter.lua": {
+    "source": "nvim/lua/plugins/treesitter.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/treesj.lua": {
+    "source": "nvim/lua/plugins/treesj.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/unicode.lua": {
+    "source": "nvim/lua/plugins/unicode.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/lua/plugins/window-picker.lua": {
+    "source": "nvim/lua/plugins/window-picker.lua",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/mason-lock.json": {
+    "source": "nvim/mason-lock.json",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/mason-lock.macos-managed.json": {
+    "source": "nvim/mason-lock.macos-managed.json",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/spell/en.utf-8.add": {
+    "source": "nvim/spell/en.utf-8.add",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "nvim/spell/en.utf-8.add.spl": {
+    "source": "nvim/spell/en.utf-8.add.spl",
+    "type": "source",
+    "owner": "neovim"
+  },
+  "packages/amps/.gitignore": {
+    "source": "packages/amps/.gitignore",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/Cargo.lock": {
+    "source": "packages/amps/Cargo.lock",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/Cargo.toml": {
+    "source": "packages/amps/Cargo.toml",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/README.md": {
+    "source": "packages/amps/README.md",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/config.example.toml": {
+    "source": "packages/amps/config.example.toml",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/default.nix": {
+    "source": "packages/amps/default.nix",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/default.nix::version = \"<native value>\";": {
+    "source": "packages/amps/default.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "amps"
+  },
+  "packages/amps/default.nix::version = \"<native value>\";::occurrence-2": {
+    "source": "packages/amps/default.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "amps"
+  },
+  "packages/amps/default.nix::version = \"<native value>\";::occurrence-3": {
+    "source": "packages/amps/default.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "amps"
+  },
+  "packages/amps/nvidia-linux.nix": {
+    "source": "packages/amps/nvidia-linux.nix",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/nvidia-linux.nix::version = \"<native value>\";": {
+    "source": "packages/amps/nvidia-linux.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "amps"
+  },
+  "packages/amps/nvidia-linux.nix::url = \"https://arzvak.com/downloads/linux-broadcast/v0.2.0/linux-broadcast_0.2.0_rtx50_amd64.deb\";": {
+    "source": "packages/amps/nvidia-linux.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://arzvak.com/downloads/linux-broadcast/v0.2.0/linux-broadcast_0.2.0_rtx50_amd64.deb\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-routing.lua": {
+    "source": "packages/amps/pipewire-routing.lua",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"copy${channel}\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"copy${channel}\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"libpipewire-module-loopback\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-loopback\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"libpipewire-module-filter-chain\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-filter-chain\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spFL\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spFR\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spFC\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFC\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spLFE\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spLFE\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spRL\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spRL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spRR\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spRR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spSL\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spSL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spSR\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spSR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spatialL\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spatialR\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"dryL\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"dryL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"dryR\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"dryR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"selectL\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"selectR\";": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"libpipewire-module-filter-chain\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"libpipewire-module-filter-chain\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spFL\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spFR\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spFR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spatialL\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"spatialR\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"spatialR\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"selectL\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectL\";",
+    "owner": "amps"
+  },
+  "packages/amps/pipewire-spatial.nix::name = \"selectR\";::occurrence-2": {
+    "source": "packages/amps/pipewire-spatial.nix",
+    "type": "declaration",
+    "anchor": "name = \"selectR\";",
+    "owner": "amps"
+  },
+  "packages/amps/src/app_routing.rs": {
+    "source": "packages/amps/src/app_routing.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/control.rs": {
+    "source": "packages/amps/src/control.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/devices.rs": {
+    "source": "packages/amps/src/devices.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/lib.rs": {
+    "source": "packages/amps/src/lib.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/linux_audio.rs": {
+    "source": "packages/amps/src/linux_audio.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/main.rs": {
+    "source": "packages/amps/src/main.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/master_volume.rs": {
+    "source": "packages/amps/src/master_volume.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/nvidia_afx.rs": {
+    "source": "packages/amps/src/nvidia_afx.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone/buffer.rs": {
+    "source": "packages/amps/src/phone/buffer.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone/hub.rs": {
+    "source": "packages/amps/src/phone/hub.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone/ipc.rs": {
+    "source": "packages/amps/src/phone/ipc.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone/recovery.rs": {
+    "source": "packages/amps/src/phone/recovery.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone/relay.rs": {
+    "source": "packages/amps/src/phone/relay.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone/windows.rs": {
+    "source": "packages/amps/src/phone/windows.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/phone.rs": {
+    "source": "packages/amps/src/phone.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/topology.rs": {
+    "source": "packages/amps/src/topology.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/src/windows_audio.rs": {
+    "source": "packages/amps/src/windows_audio.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/test-linux-integration.py": {
+    "source": "packages/amps/test-linux-integration.py",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/test-nvidia-linux.py": {
+    "source": "packages/amps/test-nvidia-linux.py",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/.gitignore": {
+    "source": "packages/amps/ui/.gitignore",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/index.html": {
+    "source": "packages/amps/ui/index.html",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/package-lock.json": {
+    "source": "packages/amps/ui/package-lock.json",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/package.json": {
+    "source": "packages/amps/ui/package.json",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/audio/README.md": {
+    "source": "packages/amps/ui/public/audio/README.md",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/audio/confirm.mp3": {
+    "source": "packages/amps/ui/public/audio/confirm.mp3",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/audio/denied.mp3": {
+    "source": "packages/amps/ui/public/audio/denied.mp3",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/audio/intrepid-key.mp3": {
+    "source": "packages/amps/ui/public/audio/intrepid-key.mp3",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/audio/key-02.mp3": {
+    "source": "packages/amps/ui/public/audio/key-02.mp3",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/audio/search.mp3": {
+    "source": "packages/amps/ui/public/audio/search.mp3",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/fonts/Antonio-Bold.woff2": {
+    "source": "packages/amps/ui/public/fonts/Antonio-Bold.woff2",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/public/fonts/Antonio-Regular.woff2": {
+    "source": "packages/amps/ui/public/fonts/Antonio-Regular.woff2",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/device-selection.mjs": {
+    "source": "packages/amps/ui/src/device-selection.mjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/feedback.mjs": {
+    "source": "packages/amps/ui/src/feedback.mjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/graph.mjs": {
+    "source": "packages/amps/ui/src/graph.mjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/main.tsx": {
+    "source": "packages/amps/ui/src/main.tsx",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/model.ts": {
+    "source": "packages/amps/ui/src/model.ts",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/style.css": {
+    "source": "packages/amps/ui/src/style.css",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src/vite-env.d.ts": {
+    "source": "packages/amps/ui/src/vite-env.d.ts",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/Cargo.lock": {
+    "source": "packages/amps/ui/src-tauri/Cargo.lock",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/Cargo.toml": {
+    "source": "packages/amps/ui/src-tauri/Cargo.toml",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/build.rs": {
+    "source": "packages/amps/ui/src-tauri/build.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/capabilities/default.json": {
+    "source": "packages/amps/ui/src-tauri/capabilities/default.json",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/icons/amps.svg": {
+    "source": "packages/amps/ui/src-tauri/icons/amps.svg",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/icons/icon.ico": {
+    "source": "packages/amps/ui/src-tauri/icons/icon.ico",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/src/linux.rs": {
+    "source": "packages/amps/ui/src-tauri/src/linux.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/src/main.rs": {
+    "source": "packages/amps/ui/src-tauri/src/main.rs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/src-tauri/tauri.conf.json": {
+    "source": "packages/amps/ui/src-tauri/tauri.conf.json",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/tests/browser.cjs": {
+    "source": "packages/amps/ui/tests/browser.cjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/tests/device-selection.test.mjs": {
+    "source": "packages/amps/ui/tests/device-selection.test.mjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/tests/feedback.test.mjs": {
+    "source": "packages/amps/ui/tests/feedback.test.mjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/tests/graph.test.mjs": {
+    "source": "packages/amps/ui/tests/graph.test.mjs",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/tsconfig.json": {
+    "source": "packages/amps/ui/tsconfig.json",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/amps/ui/vite.config.js": {
+    "source": "packages/amps/ui/vite.config.js",
+    "type": "source",
+    "owner": "amps"
+  },
+  "packages/battlenet-force-close.nix": {
+    "source": "packages/battlenet-force-close.nix",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "packages/battlenet-force-close.nix::writeShellScriptBin,": {
+    "source": "packages/battlenet-force-close.nix",
+    "type": "declaration",
+    "anchor": "writeShellScriptBin,",
+    "owner": "battlenet"
+  },
+  "packages/battlenet-force-close.nix::writeShellScriptBin \"battlenet-force-close\" ''": {
+    "source": "packages/battlenet-force-close.nix",
+    "type": "declaration",
+    "anchor": "writeShellScriptBin \"battlenet-force-close\" ''",
+    "owner": "battlenet"
+  },
+  "packages/battlenet-proton.nix": {
+    "source": "packages/battlenet-proton.nix",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "packages/bumblebee-desktop.nix": {
+    "source": "packages/bumblebee-desktop.nix",
+    "type": "source",
+    "owner": "bumblebee-desktop"
+  },
+  "packages/bumblebee-desktop.nix::version = \"<native value>\";": {
+    "source": "packages/bumblebee-desktop.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "bumblebee-desktop"
+  },
+  "packages/bumblebee-desktop.nix::url = \"https://github.com/AlexAllocated/bumblebee-desktop/releases/download/v${version}/Bumblebee_0.1.2_amd64.AppImage\";": {
+    "source": "packages/bumblebee-desktop.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://github.com/AlexAllocated/bumblebee-desktop/releases/download/v${version}/Bumblebee_0.1.2_amd64.AppImage\";",
+    "owner": "bumblebee-desktop"
+  },
+  "packages/chatgpt-desktop/bundled-copy.cjs": {
+    "source": "packages/chatgpt-desktop/bundled-copy.cjs",
+    "type": "source",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop/patch-bundled-copy.py": {
+    "source": "packages/chatgpt-desktop/patch-bundled-copy.py",
+    "type": "source",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop.nix": {
+    "source": "packages/chatgpt-desktop.nix",
+    "type": "source",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop.nix::makeWrapper": {
+    "source": "packages/chatgpt-desktop.nix",
+    "type": "declaration",
+    "anchor": "makeWrapper",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop.nix::postPatch = ''": {
+    "source": "packages/chatgpt-desktop.nix",
+    "type": "declaration",
+    "anchor": "postPatch = ''",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop.nix::substituteInPlace app-source/node_modules/@parcel/watcher/node_modules/detect-libc/lib/filesystem.js \\": {
+    "source": "packages/chatgpt-desktop.nix",
+    "type": "declaration",
+    "anchor": "substituteInPlace app-source/node_modules/@parcel/watcher/node_modules/detect-libc/lib/filesystem.js \\",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop.nix::substituteInPlace \"$out/share/applications/chatgpt.desktop\" \\": {
+    "source": "packages/chatgpt-desktop.nix",
+    "type": "declaration",
+    "anchor": "substituteInPlace \"$out/share/applications/chatgpt.desktop\" \\",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/chatgpt-desktop.nix::makeWrapper \"$out/lib/chatgpt/ChatGPT\" \"$out/bin/chatgpt\" \\": {
+    "source": "packages/chatgpt-desktop.nix",
+    "type": "declaration",
+    "anchor": "makeWrapper \"$out/lib/chatgpt/ChatGPT\" \"$out/bin/chatgpt\" \\",
+    "owner": "chatgpt-desktop"
+  },
+  "packages/codex.nix": {
+    "source": "packages/codex.nix",
+    "type": "source",
+    "owner": "codex-tooling"
+  },
+  "packages/curseforge.nix": {
+    "source": "packages/curseforge.nix",
+    "type": "source",
+    "owner": "curseforge"
+  },
+  "packages/curseforge.nix::version = \"<native value>\";": {
+    "source": "packages/curseforge.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "curseforge"
+  },
+  "packages/curseforge.nix::name = \"CurseForge-${version}.AppImage\";": {
+    "source": "packages/curseforge.nix",
+    "type": "declaration",
+    "anchor": "name = \"CurseForge-${version}.AppImage\";",
+    "owner": "curseforge"
+  },
+  "packages/curseforge.nix::url = \"https://curseforge.overwolf.com/downloads/curseforge-latest-linux.AppImage\";": {
+    "source": "packages/curseforge.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://curseforge.overwolf.com/downloads/curseforge-latest-linux.AppImage\";",
+    "owner": "curseforge"
+  },
+  "packages/curseforge.nix::substituteInPlace $out/share/applications/curseforge.desktop \\": {
+    "source": "packages/curseforge.nix",
+    "type": "declaration",
+    "anchor": "substituteInPlace $out/share/applications/curseforge.desktop \\",
+    "owner": "curseforge"
+  },
+  "packages/davinci-resolve.nix": {
+    "source": "packages/davinci-resolve.nix",
+    "type": "source",
+    "owner": "davinci-resolve"
+  },
+  "packages/davinci-resolve.nix::davinci-resolve.override {": {
+    "source": "packages/davinci-resolve.nix",
+    "type": "declaration",
+    "anchor": "davinci-resolve.override {",
+    "owner": "davinci-resolve"
+  },
+  "packages/davinci-resolve.nix::(stdenv.mkDerivation args).overrideAttrs (old: {": {
+    "source": "packages/davinci-resolve.nix",
+    "type": "declaration",
+    "anchor": "(stdenv.mkDerivation args).overrideAttrs (old: {",
+    "owner": "davinci-resolve"
+  },
+  "packages/fantasy-grounds.nix": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "source",
+    "owner": "fantasy-grounds"
+  },
+  "packages/fantasy-grounds.nix::name = \"FGUWebInstall-2025-11-11.bin\";": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "declaration",
+    "anchor": "name = \"FGUWebInstall-2025-11-11.bin\";",
+    "owner": "fantasy-grounds"
+  },
+  "packages/fantasy-grounds.nix::url = \"https://www.fantasygrounds.com/filelibrary/FGUWebInstall.bin\";": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://www.fantasygrounds.com/filelibrary/FGUWebInstall.bin\";",
+    "owner": "fantasy-grounds"
+  },
+  "packages/fantasy-grounds.nix::version = \"<native value>\";": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "fantasy-grounds"
+  },
+  "packages/fantasy-grounds.nix::launcher = pkgs.writeShellApplication {": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "declaration",
+    "anchor": "launcher = pkgs.writeShellApplication {",
+    "owner": "fantasy-grounds"
+  },
+  "packages/fantasy-grounds.nix::name = \"fantasy-grounds-launch\";": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "declaration",
+    "anchor": "name = \"fantasy-grounds-launch\";",
+    "owner": "fantasy-grounds"
+  },
+  "packages/fantasy-grounds.nix::version = \"<native value>\";::occurrence-2": {
+    "source": "packages/fantasy-grounds.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "fantasy-grounds"
+  },
+  "packages/iloader.nix": {
+    "source": "packages/iloader.nix",
+    "type": "source",
+    "owner": "iloader"
+  },
+  "packages/iloader.nix::iloader.overrideAttrs (old: {": {
+    "source": "packages/iloader.nix",
+    "type": "declaration",
+    "anchor": "iloader.overrideAttrs (old: {",
+    "owner": "iloader"
+  },
+  "packages/libxrandr-hotplug.nix": {
+    "source": "packages/libxrandr-hotplug.nix",
+    "type": "source",
+    "owner": "wine-display-sync"
+  },
+  "packages/libxrandr-hotplug.nix::libxrandr.overrideAttrs (old: {": {
+    "source": "packages/libxrandr-hotplug.nix",
+    "type": "declaration",
+    "anchor": "libxrandr.overrideAttrs (old: {",
+    "owner": "wine-display-sync"
+  },
+  "packages/obs-branch-output/default.nix": {
+    "source": "packages/obs-branch-output/default.nix",
+    "type": "source",
+    "owner": "obs"
+  },
+  "packages/obs-branch-output/default.nix::version = \"<native value>\";": {
+    "source": "packages/obs-branch-output/default.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "obs"
+  },
+  "packages/obs-branch-output/default.nix::rev = \"<native value>\";": {
+    "source": "packages/obs-branch-output/default.nix",
+    "type": "declaration",
+    "anchor": "rev = \"<native value>\";",
+    "owner": "obs"
+  },
+  "packages/wine-display-sync.nix": {
+    "source": "packages/wine-display-sync.nix",
+    "type": "source",
+    "owner": "wine-display-sync"
+  },
+  "packages/wine-display-sync.nix::version = \"<native value>\";": {
+    "source": "packages/wine-display-sync.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "wine-display-sync"
+  },
+  "packages/wine-sni-bridge.nix": {
+    "source": "packages/wine-sni-bridge.nix",
+    "type": "source",
+    "owner": "wine-tray"
+  },
+  "packages/wine-sni-bridge.nix::makeWrapper,": {
+    "source": "packages/wine-sni-bridge.nix",
+    "type": "declaration",
+    "anchor": "makeWrapper,",
+    "owner": "wine-tray"
+  },
+  "packages/wine-sni-bridge.nix::version = \"<native value>\";": {
+    "source": "packages/wine-sni-bridge.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "wine-tray"
+  },
+  "packages/wine-sni-bridge.nix::rev = \"<native value>\";": {
+    "source": "packages/wine-sni-bridge.nix",
+    "type": "declaration",
+    "anchor": "rev = \"<native value>\";",
+    "owner": "wine-tray"
+  },
+  "packages/wine-sni-bridge.nix::makeWrapper": {
+    "source": "packages/wine-sni-bridge.nix",
+    "type": "declaration",
+    "anchor": "makeWrapper",
+    "owner": "wine-tray"
+  },
+  "packages/wine-sni-bridge.nix::makeWrapper ${python}/bin/python3 \"$out/bin/wine-sni-bridge\" \\": {
+    "source": "packages/wine-sni-bridge.nix",
+    "type": "declaration",
+    "anchor": "makeWrapper ${python}/bin/python3 \"$out/bin/wine-sni-bridge\" \\",
+    "owner": "wine-tray"
+  },
+  "patches/alvr-linux-stripped-compositor-pose-scan.patch": {
+    "source": "patches/alvr-linux-stripped-compositor-pose-scan.patch",
+    "type": "source",
+    "owner": "vr-integration"
+  },
+  "patches/alvr-linux-zero-pose-fallback.patch": {
+    "source": "patches/alvr-linux-zero-pose-fallback.patch",
+    "type": "source",
+    "owner": "vr-integration"
+  },
+  "patches/alvr-steamvr-2.16-compositor-name.patch": {
+    "source": "patches/alvr-steamvr-2.16-compositor-name.patch",
+    "type": "source",
+    "owner": "vr-integration"
+  },
+  "patches/flameshot-v14-nix-dependencies.patch": {
+    "source": "patches/flameshot-v14-nix-dependencies.patch",
+    "type": "source",
+    "owner": "flameshot"
+  },
+  "patches/flameshot-v14-nonzero-origin.patch": {
+    "source": "patches/flameshot-v14-nonzero-origin.patch",
+    "type": "source",
+    "owner": "flameshot"
+  },
+  "patches/flameshot-v14-wayland-app-id.patch": {
+    "source": "patches/flameshot-v14-wayland-app-id.patch",
+    "type": "source",
+    "owner": "flameshot"
+  },
+  "patches/flameshot-v14-wayland-overlay.patch": {
+    "source": "patches/flameshot-v14-wayland-overlay.patch",
+    "type": "source",
+    "owner": "flameshot"
+  },
+  "patches/libxrandr-hotplug-output-query.patch": {
+    "source": "patches/libxrandr-hotplug-output-query.patch",
+    "type": "source",
+    "owner": "wine-display-sync"
+  },
+  "patches/mango-subsurface-window-capture.patch": {
+    "source": "patches/mango-subsurface-window-capture.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/mango-window-capture-repaint.patch": {
+    "source": "patches/mango-window-capture-repaint.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/niri-floating-above-fullscreen.patch": {
+    "source": "patches/niri-floating-above-fullscreen.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/niri-virtual-presentation-feedback.patch": {
+    "source": "patches/niri-virtual-presentation-feedback.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/niri-window-rule-open-animation.patch": {
+    "source": "patches/niri-window-rule-open-animation.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/noctalia-focus-existing-windows.patch": {
+    "source": "patches/noctalia-focus-existing-windows.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/noctalia-hidden-audio-nodes.patch": {
+    "source": "patches/noctalia-hidden-audio-nodes.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/noctalia-nixos-nvml.patch": {
+    "source": "patches/noctalia-nixos-nvml.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/noctalia-wezterm-notifications.patch": {
+    "source": "patches/noctalia-wezterm-notifications.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/scenefx-xrgb8888-screencopy.patch": {
+    "source": "patches/scenefx-xrgb8888-screencopy.patch",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "patches/sunshine-linux-kms-connector-and-stream-hook.patch": {
+    "source": "patches/sunshine-linux-kms-connector-and-stream-hook.patch",
+    "type": "source",
+    "owner": "sunshine"
+  },
+  "patches/vesktop-discord-deep-links.patch": {
+    "source": "patches/vesktop-discord-deep-links.patch",
+    "type": "source",
+    "owner": "desktop-integration"
+  },
+  "patches/wine-sni-bridge-niri.patch": {
+    "source": "patches/wine-sni-bridge-niri.patch",
+    "type": "source",
+    "owner": "wine-tray"
+  },
+  "patches/wine-sni-bridge-recovery-menu.patch": {
+    "source": "patches/wine-sni-bridge-recovery-menu.patch",
+    "type": "source",
+    "owner": "wine-tray"
+  },
+  "patches/xwayland-satellite-fixed-dpi.patch": {
+    "source": "patches/xwayland-satellite-fixed-dpi.patch",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "patches/xwayland-satellite-fractional-size.patch": {
+    "source": "patches/xwayland-satellite-fractional-size.patch",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "patches/xwayland-satellite-output-dpi.patch": {
+    "source": "patches/xwayland-satellite-output-dpi.patch",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "patches/xwayland-satellite-pointer-scale.patch": {
+    "source": "patches/xwayland-satellite-pointer-scale.patch",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "patches/xwayland-satellite-stable-primary.patch": {
+    "source": "patches/xwayland-satellite-stable-primary.patch",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "pins/battlenet-proton.json": {
+    "source": "pins/battlenet-proton.json",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "pins/chatgpt-desktop.json": {
+    "source": "pins/chatgpt-desktop.json",
+    "type": "source",
+    "owner": "chatgpt-desktop"
+  },
+  "pins/codex.json": {
+    "source": "pins/codex.json",
+    "type": "source",
+    "owner": "codex-tooling"
+  },
+  "pins/davinci-resolve.json": {
+    "source": "pins/davinci-resolve.json",
+    "type": "source",
+    "owner": "davinci-resolve"
+  },
+  "pins/iloader-cargo.json": {
+    "source": "pins/iloader-cargo.json",
+    "type": "source",
+    "owner": "iloader"
+  },
+  "platforms/macos/Brewfile": {
+    "source": "platforms/macos/Brewfile",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "platforms/macos-managed/Brewfile": {
+    "source": "platforms/macos-managed/Brewfile",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "platforms/macos-personal/Brewfile": {
+    "source": "platforms/macos-personal/Brewfile",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "platforms/windows/codex-desktop.toml": {
+    "source": "platforms/windows/codex-desktop.toml",
+    "type": "source",
+    "owner": "codex-tooling"
+  },
+  "platforms/windows/sunshine-fork.json": {
+    "source": "platforms/windows/sunshine-fork.json",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "platforms/windows/vdd_settings.xml": {
+    "source": "platforms/windows/vdd_settings.xml",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "platforms/windows/winget.json": {
+    "source": "platforms/windows/winget.json",
+    "type": "source",
+    "owner": "native-manifests"
+  },
+  "razer/input-remapper-2/config.json": {
+    "source": "razer/input-remapper-2/config.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Arc Raiders.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Arc Raiders.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/BG3.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/BG3.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/CHEV-DESKTOP-Default.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/CHEV-DESKTOP-Default.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/DEFAULT (1).json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/DEFAULT (1).json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/DEFAULT.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/DEFAULT.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/EVE.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/EVE.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Factorio.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Factorio.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/No Man's Sky.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/No Man's Sky.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Overwatch.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Overwatch.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Rust.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Rust.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Satisfactory.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Satisfactory.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Valheim.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/Valheim.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/WoW.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Basilisk V3 Pro 35K/WoW.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Huntsman V2 Analog/CHEV-DESKTOP-Default.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Huntsman V2 Analog/CHEV-DESKTOP-Default.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Arc Raiders.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Arc Raiders.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/DEFAULT.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/DEFAULT.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Factorio.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Factorio.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Overwatch.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Overwatch.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Rust.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Rust.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Satisfactory.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Satisfactory.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Valheim.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/Valheim.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/WoW.json": {
+    "source": "razer/input-remapper-2/presets/Razer Razer Tartarus Pro/WoW.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/input-remapper-2/xmodmap.json": {
+    "source": "razer/input-remapper-2/xmodmap.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/migration-report.json": {
+    "source": "razer/migration-report.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "razer/synapse-profiles.json": {
+    "source": "razer/synapse-profiles.json",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/codex/archive.py": {
+    "source": "scripts/codex/archive.py",
+    "type": "source",
+    "owner": "codex-history-archive"
+  },
+  "scripts/codex/canonicalize-home.py": {
+    "source": "scripts/codex/canonicalize-home.py",
+    "type": "source",
+    "owner": "codex-history-tools"
+  },
+  "scripts/codex/share.py": {
+    "source": "scripts/codex/share.py",
+    "type": "source",
+    "owner": "codex-history-tools"
+  },
+  "scripts/commands/apply.sh": {
+    "source": "scripts/commands/apply.sh",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/commands/doctor.sh": {
+    "source": "scripts/commands/doctor.sh",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/commands/update.sh": {
+    "source": "scripts/commands/update.sh",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotctl": {
+    "source": "scripts/dotctl",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/adapters.py": {
+    "source": "scripts/dotfiles/adapters.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/catalog.py": {
+    "source": "scripts/dotfiles/catalog.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/cli.py": {
+    "source": "scripts/dotfiles/cli.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/core.py": {
+    "source": "scripts/dotfiles/core.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/maintenance.py": {
+    "source": "scripts/dotfiles/maintenance.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/scheduling.py": {
+    "source": "scripts/dotfiles/scheduling.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/status.py": {
+    "source": "scripts/dotfiles/status.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/dotfiles/storage.py": {
+    "source": "scripts/dotfiles/storage.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/gaming/battlenet-force-close.py": {
+    "source": "scripts/gaming/battlenet-force-close.py",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "scripts/gaming/battlenet-settings.py": {
+    "source": "scripts/gaming/battlenet-settings.py",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "scripts/gaming/halo-campaign-evolved-settings.py": {
+    "source": "scripts/gaming/halo-campaign-evolved-settings.py",
+    "type": "source",
+    "owner": "halo-settings"
+  },
+  "scripts/gaming/stage-battlenet-proton.py": {
+    "source": "scripts/gaming/stage-battlenet-proton.py",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "scripts/gaming/wine-display-probe.c": {
+    "source": "scripts/gaming/wine-display-probe.c",
+    "type": "source",
+    "owner": "wine-display-sync"
+  },
+  "scripts/gaming/wine-display-sync.c": {
+    "source": "scripts/gaming/wine-display-sync.c",
+    "type": "source",
+    "owner": "wine-display-sync"
+  },
+  "scripts/gaming/wine-display-topology.py": {
+    "source": "scripts/gaming/wine-display-topology.py",
+    "type": "source",
+    "owner": "wine-display-sync"
+  },
+  "scripts/gaming/wine-session.py": {
+    "source": "scripts/gaming/wine-session.py",
+    "type": "source",
+    "owner": "battlenet"
+  },
+  "scripts/gaming/wine-tray-menu.py": {
+    "source": "scripts/gaming/wine-tray-menu.py",
+    "type": "source",
+    "owner": "wine-tray"
+  },
+  "scripts/gaming/wow-display-settings.py": {
+    "source": "scripts/gaming/wow-display-settings.py",
+    "type": "source",
+    "owner": "wow-settings"
+  },
+  "scripts/lib/common.sh": {
+    "source": "scripts/lib/common.sh",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/maintenance-adapter.sh": {
+    "source": "scripts/maintenance-adapter.sh",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/nixos/chatgpt-supervisor.py": {
+    "source": "scripts/nixos/chatgpt-supervisor.py",
+    "type": "source",
+    "owner": "chatgpt-desktop"
+  },
+  "scripts/nixos/checkpoint-migration.sh": {
+    "source": "scripts/nixos/checkpoint-migration.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/export-codex-handoff.py": {
+    "source": "scripts/nixos/export-codex-handoff.py",
+    "type": "source",
+    "owner": "codex-handoff"
+  },
+  "scripts/nixos/finalize-docker-data-root.sh": {
+    "source": "scripts/nixos/finalize-docker-data-root.sh",
+    "type": "source",
+    "owner": "docker-storage-migration"
+  },
+  "scripts/nixos/install-chev-desktop.sh": {
+    "source": "scripts/nixos/install-chev-desktop.sh",
+    "type": "source",
+    "owner": "legacy-installer"
+  },
+  "scripts/nixos/install-tracer.sh": {
+    "source": "scripts/nixos/install-tracer.sh",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "scripts/nixos/ipad-display-off.sh": {
+    "source": "scripts/nixos/ipad-display-off.sh",
+    "type": "source",
+    "owner": "ipad-display"
+  },
+  "scripts/nixos/ipad-display-on.sh": {
+    "source": "scripts/nixos/ipad-display-on.sh",
+    "type": "source",
+    "owner": "ipad-display"
+  },
+  "scripts/nixos/ipad-display-prepare.sh": {
+    "source": "scripts/nixos/ipad-display-prepare.sh",
+    "type": "source",
+    "owner": "ipad-display"
+  },
+  "scripts/nixos/keyring-unlock.py": {
+    "source": "scripts/nixos/keyring-unlock.py",
+    "type": "source",
+    "owner": "keyring-unlock"
+  },
+  "scripts/nixos/lan-mouse-tray.py": {
+    "source": "scripts/nixos/lan-mouse-tray.py",
+    "type": "source",
+    "owner": "lan-mouse"
+  },
+  "scripts/nixos/machine-manifest.sh": {
+    "source": "scripts/nixos/machine-manifest.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/migrate-docker-data-root.sh": {
+    "source": "scripts/nixos/migrate-docker-data-root.sh",
+    "type": "source",
+    "owner": "docker-storage-migration"
+  },
+  "scripts/nixos/migrate-obs-windows.py": {
+    "source": "scripts/nixos/migrate-obs-windows.py",
+    "type": "source",
+    "owner": "obs"
+  },
+  "scripts/nixos/prepare-tracer-rescue.sh": {
+    "source": "scripts/nixos/prepare-tracer-rescue.sh",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "scripts/nixos/razer-editor-model.py": {
+    "source": "scripts/nixos/razer-editor-model.py",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/razer-import-profiles.py": {
+    "source": "scripts/nixos/razer-import-profiles.py",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/razer-keybind-editor.py": {
+    "source": "scripts/nixos/razer-keybind-editor.py",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/razer-onboard.py": {
+    "source": "scripts/nixos/razer-onboard.py",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/razer-profile-sync.sh": {
+    "source": "scripts/nixos/razer-profile-sync.sh",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/razer-profile-tray.py": {
+    "source": "scripts/nixos/razer-profile-tray.py",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/razer-profile.py": {
+    "source": "scripts/nixos/razer-profile.py",
+    "type": "source",
+    "owner": "razer-profiles"
+  },
+  "scripts/nixos/reboot-windows.sh": {
+    "source": "scripts/nixos/reboot-windows.sh",
+    "type": "source",
+    "owner": "reboot-windows"
+  },
+  "scripts/nixos/recover-windows-fallback.sh": {
+    "source": "scripts/nixos/recover-windows-fallback.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/recovery-migration.sh": {
+    "source": "scripts/nixos/recovery-migration.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/refresh-tracer-rescue.sh": {
+    "source": "scripts/nixos/refresh-tracer-rescue.sh",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "scripts/nixos/rescue-remote-off.sh": {
+    "source": "scripts/nixos/rescue-remote-off.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/rescue-remote-on.sh": {
+    "source": "scripts/nixos/rescue-remote-on.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/resume-migration.sh": {
+    "source": "scripts/nixos/resume-migration.sh",
+    "type": "source",
+    "owner": "migration-recovery"
+  },
+  "scripts/nixos/resume-tracer.sh": {
+    "source": "scripts/nixos/resume-tracer.sh",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "scripts/nixos/seed-tracer-codex.py": {
+    "source": "scripts/nixos/seed-tracer-codex.py",
+    "type": "source",
+    "owner": "codex-handoff"
+  },
+  "scripts/nixos/sunshine-display-policy.py": {
+    "source": "scripts/nixos/sunshine-display-policy.py",
+    "type": "source",
+    "owner": "sunshine"
+  },
+  "scripts/nixos/tracer-diagnostics.sh": {
+    "source": "scripts/nixos/tracer-diagnostics.sh",
+    "type": "source",
+    "owner": "tracer-recovery"
+  },
+  "scripts/nixos/wine-display-dpi.py": {
+    "source": "scripts/nixos/wine-display-dpi.py",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "scripts/nixos/x11-primary.sh": {
+    "source": "scripts/nixos/x11-primary.sh",
+    "type": "source",
+    "owner": "xwayland-display"
+  },
+  "scripts/profiles/macos-managed.sh": {
+    "source": "scripts/profiles/macos-managed.sh",
+    "type": "source",
+    "owner": "mac-managed"
+  },
+  "scripts/profiles/macos-managed.sh::if ! launchctl bootstrap \"$service_target\" /System/Library/LaunchAgents/com.openssh.ssh-agent.plist >/dev/null 2>&1; then": {
+    "source": "scripts/profiles/macos-managed.sh",
+    "type": "entrypoint",
+    "anchor": "if ! launchctl bootstrap \"$service_target\" /System/Library/LaunchAgents/com.openssh.ssh-agent.plist >/dev/null 2>&1; then",
+    "owner": "mac-managed"
+  },
+  "scripts/updates/releases.py": {
+    "source": "scripts/updates/releases.py",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/updoot": {
+    "source": "scripts/updoot",
+    "type": "source",
+    "owner": "maintenance"
+  },
+  "scripts/windows/NvimWSL.cs": {
+    "source": "scripts/windows/NvimWSL.cs",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "scripts/windows/PowerWashLauncher.cs": {
+    "source": "scripts/windows/PowerWashLauncher.cs",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/amps-launch-context.ps1": {
+    "source": "scripts/windows/amps-launch-context.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/amps-launch-context.ps1::Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Settings $settings | Out-Null": {
+    "source": "scripts/windows/amps-launch-context.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Settings $settings | Out-Null",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/amps-migration.ps1": {
+    "source": "scripts/windows/amps-migration.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/amps-migration.ps1::Register-ScheduledTask -TaskName $name -Xml (Get-Content -LiteralPath $xmlPath -Raw) -Force | Out-Null": {
+    "source": "scripts/windows/amps-migration.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask -TaskName $name -Xml (Get-Content -LiteralPath $xmlPath -Raw) -Force | Out-Null",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/apply-packages.ps1": {
+    "source": "scripts/windows/apply-packages.ps1",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/apply-packages.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/apply-packages.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/apply-wsl-links.ps1": {
+    "source": "scripts/windows/apply-wsl-links.ps1",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/apply-wsl-ssh-forward.ps1": {
+    "source": "scripts/windows/apply-wsl-ssh-forward.ps1",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/apply-wsl-ssh-forward.ps1::$TaskName = \"Dotfiles WSL SSH Forward\"": {
+    "source": "scripts/windows/apply-wsl-ssh-forward.ps1",
+    "type": "entrypoint",
+    "anchor": "$TaskName = \"Dotfiles WSL SSH Forward\"",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/apply-wsl-ssh-forward.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/apply-wsl-ssh-forward.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/configure-always-on.ps1": {
+    "source": "scripts/windows/configure-always-on.ps1",
+    "type": "source",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-always-on.ps1::$TaskName = \"Dotfiles Always-On Policy\"": {
+    "source": "scripts/windows/configure-always-on.ps1",
+    "type": "entrypoint",
+    "anchor": "$TaskName = \"Dotfiles Always-On Policy\"",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-always-on.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/configure-always-on.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-amps-endpoints.ps1": {
+    "source": "scripts/windows/configure-amps-endpoints.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/configure-amps.ps1": {
+    "source": "scripts/windows/configure-amps.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/configure-amps.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/configure-amps.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/configure-codex.py": {
+    "source": "scripts/windows/configure-codex.py",
+    "type": "source",
+    "owner": "codex-tooling"
+  },
+  "scripts/windows/configure-docker-desktop.ps1": {
+    "source": "scripts/windows/configure-docker-desktop.ps1",
+    "type": "source",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-flat2vr-mods.ps1": {
+    "source": "scripts/windows/configure-flat2vr-mods.ps1",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-lg-display.ps1": {
+    "source": "scripts/windows/configure-lg-display.ps1",
+    "type": "source",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-minecraft-desktop.ps1": {
+    "source": "scripts/windows/configure-minecraft-desktop.ps1",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-minecraft-vr.ps1": {
+    "source": "scripts/windows/configure-minecraft-vr.ps1",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-nvidia-audio-effects.ps1": {
+    "source": "scripts/windows/configure-nvidia-audio-effects.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/configure-nvidia-video-effects.ps1": {
+    "source": "scripts/windows/configure-nvidia-video-effects.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/configure-obs.ps1": {
+    "source": "scripts/windows/configure-obs.ps1",
+    "type": "source",
+    "owner": "windows-obs"
+  },
+  "scripts/windows/configure-powerwash-simulator-2.ps1": {
+    "source": "scripts/windows/configure-powerwash-simulator-2.ps1",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-quest-hotspot.ps1": {
+    "source": "scripts/windows/configure-quest-hotspot.ps1",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-quest-hotspot.ps1::$TaskName = \"Dotfiles Quest VR Hotspot\"": {
+    "source": "scripts/windows/configure-quest-hotspot.ps1",
+    "type": "entrypoint",
+    "anchor": "$TaskName = \"Dotfiles Quest VR Hotspot\"",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-quest-hotspot.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/configure-quest-hotspot.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/configure-sunshine-virtual-display.ps1": {
+    "source": "scripts/windows/configure-sunshine-virtual-display.ps1",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "scripts/windows/configure-system-restore.ps1": {
+    "source": "scripts/windows/configure-system-restore.ps1",
+    "type": "source",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-wallpapers.ps1": {
+    "source": "scripts/windows/configure-wallpapers.ps1",
+    "type": "source",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-wallpapers.ps1::$TaskName = \"Dotfiles Per-Monitor Wallpapers\"": {
+    "source": "scripts/windows/configure-wallpapers.ps1",
+    "type": "entrypoint",
+    "anchor": "$TaskName = \"Dotfiles Per-Monitor Wallpapers\"",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/configure-wallpapers.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/configure-wallpapers.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "windows-desktop-settings"
+  },
+  "scripts/windows/fetch-sunshine-fork.sh": {
+    "source": "scripts/windows/fetch-sunshine-fork.sh",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "scripts/windows/install-sunshine-fork.ps1": {
+    "source": "scripts/windows/install-sunshine-fork.ps1",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "scripts/windows/install-user-fonts.ps1": {
+    "source": "scripts/windows/install-user-fonts.ps1",
+    "type": "source",
+    "owner": "windows-integration"
+  },
+  "scripts/windows/install-virtual-display.ps1": {
+    "source": "scripts/windows/install-virtual-display.ps1",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "scripts/windows/keep-slack-active-hidden.vbs": {
+    "source": "scripts/windows/keep-slack-active-hidden.vbs",
+    "type": "source",
+    "owner": "slack-presence"
+  },
+  "scripts/windows/keep-slack-active.ps1": {
+    "source": "scripts/windows/keep-slack-active.ps1",
+    "type": "source",
+    "owner": "slack-presence"
+  },
+  "scripts/windows/keep-slack-active.ps1::$TaskName = \"Dotfiles Slack Presence Pulse\"": {
+    "source": "scripts/windows/keep-slack-active.ps1",
+    "type": "entrypoint",
+    "anchor": "$TaskName = \"Dotfiles Slack Presence Pulse\"",
+    "owner": "slack-presence"
+  },
+  "scripts/windows/keep-slack-active.ps1::Register-ScheduledTask `": {
+    "source": "scripts/windows/keep-slack-active.ps1",
+    "type": "entrypoint",
+    "anchor": "Register-ScheduledTask `",
+    "owner": "slack-presence"
+  },
+  "scripts/windows/minecraft-graphics-assets.ps1": {
+    "source": "scripts/windows/minecraft-graphics-assets.ps1",
+    "type": "source",
+    "owner": "windows-games-vr"
+  },
+  "scripts/windows/new-nixos-handoff.ps1": {
+    "source": "scripts/windows/new-nixos-handoff.ps1",
+    "type": "source",
+    "owner": "windows-handoff"
+  },
+  "scripts/windows/obs-production-frame-limit.vbs": {
+    "source": "scripts/windows/obs-production-frame-limit.vbs",
+    "type": "source",
+    "owner": "windows-obs"
+  },
+  "scripts/windows/obs-production-mode.lua": {
+    "source": "scripts/windows/obs-production-mode.lua",
+    "type": "source",
+    "owner": "windows-obs"
+  },
+  "scripts/windows/open-in-neovide.ps1": {
+    "source": "scripts/windows/open-in-neovide.ps1",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "scripts/windows/open-in-nvim.ps1": {
+    "source": "scripts/windows/open-in-nvim.ps1",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "scripts/windows/open-in-nvim.sh": {
+    "source": "scripts/windows/open-in-nvim.sh",
+    "type": "source",
+    "owner": "neovide"
+  },
+  "scripts/windows/restore-sunshine-identity.ps1": {
+    "source": "scripts/windows/restore-sunshine-identity.ps1",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "scripts/windows/set-amps-sunshine-session.ps1": {
+    "source": "scripts/windows/set-amps-sunshine-session.ps1",
+    "type": "source",
+    "owner": "windows-amps"
+  },
+  "scripts/windows/set-nvidia-frame-limit.ps1": {
+    "source": "scripts/windows/set-nvidia-frame-limit.ps1",
+    "type": "source",
+    "owner": "windows-obs"
+  },
+  "scripts/windows/set-sunshine-display-session.ps1": {
+    "source": "scripts/windows/set-sunshine-display-session.ps1",
+    "type": "source",
+    "owner": "windows-sunshine"
+  },
+  "scripts/windows/tests/amps-migration.tests.ps1": {
+    "source": "scripts/windows/tests/amps-migration.tests.ps1",
+    "type": "source",
+    "owner": "windows-validation"
+  },
+  "scripts/windows/tests/amps-migration.tests.ps1::function Register-ScheduledTask($TaskName, $Xml, [switch]$Force) { $script:tasks[$TaskName] = $Xml | ConvertFrom-Json }": {
+    "source": "scripts/windows/tests/amps-migration.tests.ps1",
+    "type": "entrypoint",
+    "anchor": "function Register-ScheduledTask($TaskName, $Xml, [switch]$Force) { $script:tasks[$TaskName] = $Xml | ConvertFrom-Json }",
+    "owner": "windows-validation"
+  },
+  "scripts/windows/tests/amps-obs.tests.ps1": {
+    "source": "scripts/windows/tests/amps-obs.tests.ps1",
+    "type": "source",
+    "owner": "windows-validation"
+  },
+  "scripts/windows/tests/test-fetch-sunshine-fork.sh": {
+    "source": "scripts/windows/tests/test-fetch-sunshine-fork.sh",
+    "type": "source",
+    "owner": "windows-validation"
+  },
+  "scripts/windows/tests/test-sunshine-display-policy.ps1": {
+    "source": "scripts/windows/tests/test-sunshine-display-policy.ps1",
+    "type": "source",
+    "owner": "windows-validation"
+  },
+  "scripts/windows/tests/test-sunshine-fork-guard.ps1": {
+    "source": "scripts/windows/tests/test-sunshine-fork-guard.ps1",
+    "type": "source",
+    "owner": "windows-validation"
+  },
+  "scripts/windows/tests/test-sunshine-sign-in.ps1": {
+    "source": "scripts/windows/tests/test-sunshine-sign-in.ps1",
+    "type": "source",
+    "owner": "windows-validation"
+  },
+  "tmux/tmux.conf": {
+    "source": "tmux/tmux.conf",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wayland/niri.kdl": {
+    "source": "wayland/niri.kdl",
+    "type": "source",
+    "owner": "desktop-compositors"
+  },
+  "wezterm/color_schemes/catppuccin_pink_mocha.lua": {
+    "source": "wezterm/color_schemes/catppuccin_pink_mocha.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/color_schemes/init.lua": {
+    "source": "wezterm/color_schemes/init.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/config.lua": {
+    "source": "wezterm/config.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/events/format-tab-title.lua": {
+    "source": "wezterm/events/format-tab-title.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/events/init.lua": {
+    "source": "wezterm/events/init.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/events/update-right-status.lua": {
+    "source": "wezterm/events/update-right-status.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/events/user-var-changed.lua": {
+    "source": "wezterm/events/user-var-changed.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/keymaps.lua": {
+    "source": "wezterm/keymaps.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm/mousemaps.lua": {
+    "source": "wezterm/mousemaps.lua",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "wezterm-shell-integration.sh": {
+    "source": "wezterm-shell-integration.sh",
+    "type": "source",
+    "owner": "terminal"
+  },
+  "flake.nix::ap = workstation.systemd.services.hostapd;": {
+    "source": "flake.nix",
+    "type": "declaration",
+    "anchor": "ap = workstation.systemd.services.hostapd;",
+    "owner": "native-manifests"
+  },
+  "nvim/lua/config/plugin_pins.lua": {
+    "source": "nvim/lua/config/plugin_pins.lua",
+    "type": "source",
+    "owner": "neovim"
+  }
+}

@@ -206,6 +206,44 @@ in
     AllowHybridSleep = "no";
     AllowSuspendThenHibernate = "no";
   };
+  systemd.targets =
+    lib.genAttrs
+      [
+        "sleep"
+        "suspend"
+        "hibernate"
+        "hybrid-sleep"
+        "suspend-then-hibernate"
+      ]
+      (_: {
+        enable = false;
+      });
+  services.logind.settings.Login = {
+    IdleAction = "ignore";
+    HandleLidSwitch = "ignore";
+    HandleLidSwitchExternalPower = "ignore";
+    HandleLidSwitchDocked = "ignore";
+    HandleSuspendKey = "ignore";
+    HandleHibernateKey = "ignore";
+  };
+  environment.etc."xdg/kscreenlockerrc".text = ''
+    [Daemon][$i]
+    Autolock=false
+    LockOnResume=false
+    Timeout=0
+  '';
+  systemd.user.services.plasma-powerdevil.enable = false;
+  systemd.services.tracer-rescue-awake = {
+    description = "Keep the rescue desktop awake during disk operations";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "display-manager.service" ];
+    after = [ "systemd-logind.service" ];
+    requires = [ "systemd-logind.service" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.systemd}/bin/systemd-inhibit --what=idle:sleep --who=Tracer-rescue --why=Protect-disk-operations --mode=block ${pkgs.coreutils}/bin/sleep infinity";
+      Restart = "always";
+    };
+  };
   zramSwap = {
     enable = true;
     memoryPercent = 50;

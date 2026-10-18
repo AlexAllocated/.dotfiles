@@ -36,11 +36,9 @@
 
 [safe]
 	directory = /neovim
-
 [credential "https://github.com"]
-	helper = 
-	helper = !/opt/homebrew/bin/gh auth git-credential
-
+	helper =
+	helper = "!f() { if command -v gh >/dev/null 2>&1; then gh auth git-credential \"$@\"; else /opt/homebrew/bin/gh auth git-credential \"$@\"; fi; }; f"
 [credential "https://gist.github.com"]
-	helper = 
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper =
+	helper = "!f() { if command -v gh >/dev/null 2>&1; then gh auth git-credential \"$@\"; else /opt/homebrew/bin/gh auth git-credential \"$@\"; fi; }; f"

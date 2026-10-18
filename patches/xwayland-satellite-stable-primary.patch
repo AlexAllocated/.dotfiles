@@ -1,0 +1,98 @@
+--- a/src/xstate/mod.rs
++++ b/src/xstate/mod.rs
+@@ -1272,11 +1272,22 @@
+     Cancel,
+ }
+ 
++fn select_primary_output(
++    outputs: &HashMap<String, xcb::randr::Output>,
++    preferred: &str,
++    current: xcb::randr::Output,
++) -> Option<xcb::randr::Output> {
++    outputs.get(preferred).copied()
++        .or_else(|| outputs.values().copied().find(|output| *output == current))
++        .or_else(|| outputs.iter().min_by_key(|(name, _)| *name).map(|(_, output)| *output))
++}
++
+ pub struct RealConnection {
+     atoms: Atoms,
+     connection: Rc<xcb::Connection>,
+     outputs: HashMap<String, xcb::randr::Output>,
+     primary_output: xcb::randr::Output,
++    primary_output_preference: Option<String>,
+ }
+ 
+ impl RealConnection {
+@@ -1286,6 +1297,8 @@
+             connection,
+             outputs: Default::default(),
+             primary_output: Xid::none(),
++            primary_output_preference: std::env::var("XWAYLAND_SATELLITE_PRIMARY_OUTPUT")
++                .ok().filter(|name| !name.is_empty()),
+         }
+     }
+ 
+@@ -1311,7 +1324,9 @@
+             let name = std::str::from_utf8(reply.name())
+                 .unwrap_or_else(|_| panic!("couldn't parse output name: {:?}", reply.name()));
+ 
+-            self.outputs.insert(name.to_string(), output);
++            if self.primary_output_preference.is_none() || reply.crtc() != Xid::none() {
++                self.outputs.insert(name.to_string(), output);
++            }
+         }
+ 
+         self.primary_output = self
+@@ -1323,6 +1338,19 @@
+             .expect("Couldn't get primary output")
+             .output();
+ 
++        if let Some(preferred) = &self.primary_output_preference {
++            if let Some(output) = select_primary_output(&self.outputs, preferred, self.primary_output) {
++                if output != self.primary_output {
++                    if let Err(error) = self.connection.send_and_check_request(
++                        &xcb::randr::SetOutputPrimary { window: root, output },
++                    ) {
++                        warn!("Couldn't set stable primary output: {error:?}");
++                    } else {
++                        self.primary_output = output;
++                    }
++                }
++            }
++        }
+         debug!(
+             "new outputs: {:?} | primary: {:?}",
+             self.outputs, self.primary_output
+@@ -1407,6 +1435,11 @@
+             debug!("ChangeProperty failed ({window:?}: {e:?})");
+         }
+ 
++        // Keyboard and pointer focus must not change Wine's monitor ordinals.
++        // The configured primary is updated only when active outputs change.
++        if self.primary_output_preference.is_some() {
++            return;
++        }
+         if let Some(name) = output_name {
+             let Some(output) = self.outputs.get(&name).copied() else {
+                 warn!("Couldn't find output {name}, primary output will be wrong");
+--- a/src/xstate/tests.rs
++++ b/src/xstate/tests.rs
+@@ -531,3 +531,18 @@
+         assert_eq!(win.guess_window_role(&win_types), WindowRole::Splash);
+     }
+ }
++
++#[test]
++fn stable_primary_output_tracks_hotplug_not_focus() {
++    let desktop = xcb::randr::Output::new(1);
++    let tablet = xcb::randr::Output::new(2);
++    let mut outputs = HashMap::from([("DP-4".into(), desktop), ("Moonlight".into(), tablet)]);
++    assert_eq!(select_primary_output(&outputs, "DP-4", tablet), Some(desktop));
++    outputs.remove("DP-4");
++    assert_eq!(select_primary_output(&outputs, "DP-4", desktop), Some(tablet));
++    assert_eq!(select_primary_output(&outputs, "DP-4", tablet), Some(tablet));
++    outputs.insert("DP-4".into(), desktop);
++    assert_eq!(select_primary_output(&outputs, "DP-4", tablet), Some(desktop));
++    outputs.clear();
++    assert_eq!(select_primary_output(&outputs, "DP-4", desktop), None);
++}

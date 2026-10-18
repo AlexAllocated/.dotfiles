@@ -15,6 +15,22 @@ end
 
 return {
 	{
+		"mfussenegger/nvim-lint",
+		opts = function(_, opts)
+			local lint = require("lint")
+			opts.linters = opts.linters or {}
+			-- Prose can wrap visually; keep all other project Markdown diagnostics.
+			opts.linters["markdownlint-cli2"] = require("lint.util").wrap(
+				lint.linters["markdownlint-cli2"],
+				function(diagnostic)
+					if not diagnostic.message:find("MD013/line-length", 1, true) then
+						return diagnostic
+					end
+				end
+			)
+		end,
+	},
+	{
 		"iamcco/markdown-preview.nvim",
 		build = function(plugin)
 			local app_dir = plugin.dir .. "/app"

@@ -30,72 +30,104 @@ No Windows reboot, new audio driver, or Linux backend is part of this rename.
 
 ## Audio routing
 
-### Private phone playback (Windows)
+### Physical graph devices
 
-Select **Phone Audio** in the graph (or clear the selection), choose a paired
-phone, and click **Connect phone**. **Reconnect when AMPS starts** remembers
-the choice. Pair/unpair discovery is event-driven; no Store receiver app or
-additional audio driver is required. The receiver belongs to the AMPS tray:
-closing the window keeps it running, Restart AMPS reconnects it, and Exit AMPS
-closes it.
+Use **Add physical input/output** in the inspector to add independently pinned
+hardware nodes. Adding a microphone does not start capture until it is wired.
+Each output can receive its own mix; pinning a device does not change the Main
+roles, Windows defaults, filter, or device history. **Use as Main input/output**
+uses the same selection path as the existing Main dropdowns.
 
-Phone playback follows the engine's **applied Main Output**, including physical
-device history and Quest session overrides. Changing the output in AMPS or the
-Windows default-device picker changes the phone destination too (normally within
-two seconds). If the applied destination cannot be uniquely resolved or is
-unavailable, reception closes rather than falling back to the Windows default
-VAC cable. It does not enter Media, Game, voice sends, or OBS's isolated buses.
-Capturing the physical output directly in another app would still capture what
-you hear there. The existing Main Output meter represents the AMPS listening mix;
-the separate phone meter/wire measures phone PCM after buffering.
+Pinned nodes retain their exact Windows endpoint ID. Missing devices keep their
+desired wires and retry only affected routes. They never silently fall back to
+another endpoint. Main Input/Output remain role-following conveniences with the
+existing history and Quest/Moonlight overrides. Wiring both a pinned output and
+Main Output to the same hardware can double the audio.
 
-**Phone buffer** is adjustable from 50–500 ms (initially 200 ms). It is a phone-only
-timing cushion, in addition to Bluetooth and output-device latency. Changes save
-immediately and refill only the phone queue without reconnecting Bluetooth or
-restarting the main array. A bounded queue, gentle clock-drift correction, and
-short fades reduce timing-related pops; buffering cannot reconstruct samples
-already lost in the radio/codec. Short notification tails still play even when
-they are too short to fill the configured buffer.
+Remove a connected device only after confirming its affected wires; undo
+restores the binding and wires together. Controls schema 2 stores these local
+bindings. Version-1 controls gain the formerly fixed private phone wire in
+memory; the next successful graph edit saves the migrated graph. Deleting that
+wire is respected on every subsequent launch. Unknown future schemas are never
+overwritten. Existing bus IDs and all VAC endpoint IDs stay unchanged.
 
-Windows decodes the Bluetooth A2DP stream. AMPS opens its hidden capture endpoint
-and owns a buffered WASAPI path to the explicit physical output. The temporary
-Windows Listen route is pinned to that output before opening Bluetooth, then
-disabled as soon as our capture stream takes over to avoid doubled playback.
-It stays disabled on exit. The audio pump is separate from slow discovery and
-control work, uses Windows's Audio scheduling class, and performs no disk I/O.
-It never restores a default-output route. The hidden capture endpoint is resolved
-by exact Bluetooth device-instance identity, not friendly-name matching, and is
-not made visible in Windows Sound settings. Meter samples remain in memory;
-AMPS does not record phone audio. Audio notifications, silent mode, calls, and
-playback after a disconnect remain subject to the phone's own routing rules;
-this is not a telephony or notification-mirroring service.
+### Phone audio (Windows)
 
-`%APPDATA%\AMPS\phone.toml` stores the machine-local phone selection, buffer size,
-and startup preference. `phone-status.json` reports connection/privacy status.
-`phone-buffer-status.json` reports aggregate queue depth, reservoir underruns and
-overruns, final WASAPI render-queue starvation, maximum pump scheduling gap, and
-capture-position discontinuities while running. Its timestamp distinguishes
-current from stale results. Capture-position gaps alone do not prove lost audio:
-driver timestamps and format conversion can affect them. The phone's final
-WASAPI render queue has its own 100 ms cushion in addition to the adjustable
-reservoir. No game or microphone buffer changes with it.
-The first change retains a `phone-listen-backup-*.json` record of the original
-Windows Listen properties. These files contain device identifiers and must not
-be committed. Existing unknown settings schemas are rejected without overwrite.
-The Windows Bluetooth adapter driver remains a host/OEM prerequisite: receiver
-quality can depend on it, particularly with simultaneous phone reception and
-Bluetooth headphone playback. Linux uses the same status contract but does not
-yet implement phone reception.
+Select **Phone Audio**, choose a paired phone, and click **Enable receiver**.
+**Enable receiver when AMPS starts** preserves availability. Pair/unpair discovery is
+event-driven. No extra Store receiver or virtual driver is needed.
 
-The proposed multi-device graph and native iPhone call controls are described in
-the [device-graph plan](../../docs/amps-device-graph-plan.md). They are not part of
-the current receive-only implementation.
+The engine owns reception, capture, and every phone route; the window is only a
+controller. Closing the window keeps the array running, Restart AMPS registers
+the receiver, and full Exit closes reception and disables native Listen.
+Commands are bounded, expire, and belong to the current engine session so an
+old request cannot reconnect the phone after a restart. Live waveform summaries
+travel over loopback in memory, never through PCM recordings or disk files.
+
+An opened Bluetooth control connection alone does not mean audio is ready.
+AMPS waits for the hidden capture endpoint to become active and the capture
+client to start before reporting **connected**. An inactive endpoint is ambiguous:
+it can mean idle/not selected on the phone, not necessarily a broken connection.
+AMPS therefore keeps Bluetooth reception registered while waiting for playback,
+with fresh readiness diagnostics instead of a timeout/disconnect loop. Reception
+is passive: AMPS registers availability with `StartAsync` but never calls `Open`
+or `OpenAsync`. Select the PC from the phone to initiate playback. Capture starts
+when Windows reports an incoming open connection; no receiver-button click is
+needed during normal use. Actual capture API failures restart only the capture
+pump, with bounded backoff. **Enable receiver** advertises availability;
+**Disable receiver** withdraws it. **Restart receiver** repairs a stuck local
+registration without initiating a phone connection. The startup checkbox enables
+passive reception only (the legacy `autoConnect` storage key is retained).
+Other buses and saved wires are untouched.
+
+The default **Phone Audio → Main Output** wire is private. It follows the
+engine's applied output, including device-history and VR overrides, normally
+within two seconds. This path uses Windows's native Listen playback pinned to
+that physical endpoint. It does not use an adjustable AMPS reservoir. The former
+buffer selector and setting have been removed; legacy `bufferMs` is ignored.
+
+Phone Audio now has an editable output port. Connect it to other physical
+outputs, Media, Game, Comms Mic, or AI Mic as desired. Connections apply
+immediately, just like other sources: these wires can expose notifications or
+media to OBS, Discord, and other consumers. Clean Mic remains a pure filtered
+microphone source and cannot accept arbitrary audio. Recording the physical
+output in another app can still capture whatever you hear there.
+
+Additional phone wires use independent WASAPI render clocks with automatic,
+bounded queues and drift correction (currently a 100 ms target). This is internal
+clock synchronization, not a user-configurable playback-delay feature. A slow
+consumer cannot stall the receiver or another output. No game or microphone
+timing settings change. Removing a phone wire closes only that route.
+
+The hidden A2DP capture endpoint is resolved by exact Bluetooth device-instance
+identity and remains hidden in Windows Sound settings. Its native Listen route
+is always explicitly physical, never Windows default/VAC. If Main Output cannot
+be safely resolved, reception waits rather than leaking phone audio to a bus.
+Notifications, silent mode, and iOS auto-pausing on disconnection remain subject
+to the phone's routing rules. Occasional radio/codec pops can still occur; adding
+delay did not eliminate them in the AirPods tests.
+
+Machine-local `%APPDATA%\AMPS\phone.toml` holds the phone and startup preference.
+`phone-status.json` reports reception status. The legacy-named
+`phone-buffer-status.json` now contains aggregate capture health and timestamps,
+including `captureReady`, native `endpointState`, and a waiting/failure reason,
+not a configurable buffer. `phone-listen-backup-*.json` retains original Listen
+properties for recovery. These files contain endpoint identifiers and must not
+be committed.
+
+**Calls are not implemented yet.** The isolated packaged prototype obtained
+Allowed access, but Windows returned success from `RegisterApp` while
+`IsRegistered` stayed false, including after waiting and creating a fresh
+transport object. It was unregistered and removed without connecting a call.
+No answer/hang-up buttons or microphone-to-iPhone port are exposed without a
+working native call backend. See the [implementation and call-gate notes](../../docs/amps-device-graph-plan.md).
+Linux implements the shared graph through PipeWire. The Windows phone reception
+and call-control integration is not implemented on Linux.
 
 ### Bus routing
 
-AMPS is Alex's private cross-platform streaming-audio graph. Its Windows
-engine is paired with a Tauri operations console; a future Linux engine will
-implement the same Rust status/control contract beneath the identical UI. The
+AMPS is Alex's private cross-platform streaming-audio graph. Its Windows and
+Linux engines share the Rust status/control contract and Tauri operations console. The
 seven buses stay intentionally boring and can be plugged together like a small
 hardware patch panel:
 
@@ -212,13 +244,11 @@ captures the remembered physical input, runs it through the explicitly selected
 noise processor, and writes the isolated Clean Mic source into its VAC render
 endpoint. OBS consumes it directly; the two conversation mixes consume it through
 their independent patch routes.
-The console offers NVIDIA Audio Effects on the RTX GPU and the embedded CPU
-DeepFilterNet3 model without silently switching between them. NVIDIA AFX is
-downloaded from NVIDIA and verified by version, SHA-256, and
-Authenticode signer; its proprietary runtime is not committed here. The tracked
-50% default is passed directly as the NVIDIA intensity ratio. On the
-DeepFilterNet3 processor it maps to a 20 dB attenuation limit with the optional
-post-filter disabled so quiet syllables are less likely to be erased.
+The console uses NVIDIA Audio Effects on the RTX GPU for microphone noise
+suppression. On Windows, NVIDIA AFX is downloaded from NVIDIA and verified by
+version, SHA-256, and Authenticode signer; its proprietary runtime is not
+committed here. The tracked 50% default is passed directly as the NVIDIA
+intensity ratio. Suppression can be bypassed without changing the audio routes.
 
 ## Signal graph
 
@@ -240,7 +270,7 @@ flowchart LR
    voiceAi[ChatGPT / Codex playback] --> chatgptRender[AMPS AI Audio<br/>VAC render]
    chatgptRender --> chatgptCapture[AMPS AI Audio<br/>VAC capture]
 
-   mic[Selected physical microphone] --> denoise[AMPS<br/>NVIDIA AFX or DeepFilterNet3]
+   mic[Selected physical microphone] --> denoise[AMPS<br/>NVIDIA AFX]
    denoise --> micRender[AMPS Clean Mic<br/>VAC render]
    micRender --> micCapture[AMPS Clean Mic<br/>VAC capture]
    micCapture --> commsSend[AMPS Comms Mic]
@@ -291,9 +321,31 @@ The former static SVG and separate patch matrix are removed. It provides:
 - connect, reconnect, disconnect, and engine-acknowledged Undo/Redo;
 - keyboard/touch port menus, visible focus, reduced motion, and optional interface sounds;
 - live meters, main device selectors, and temporary Quest/Moonlight override indicators;
-- NVIDIA RTX or DeepFilterNet3 selection, intensity, bypass, and temporary Clean Mic monitoring.
+- NVIDIA RTX noise suppression, intensity, bypass, and temporary Clean Mic monitoring.
+
+All control families share the locally bundled Trek interaction sounds: button
+and keyboard activation, selectors, toggles, sliders, node/wire selection and
+dragging, pan/zoom, and tray/window commands. Success and rejection have distinct
+cues. Scrolling/dragging uses the original Refresh computer-scanning sound at
+low volume: one continuous voice, never a button beep per movement. It fades out
+when the gesture ends, with a short idle grace period for scrolling and sliders.
+At most two discrete clips plus the single gesture voice play concurrently,
+and automatic layout/telemetry stay silent. **Sounds off** stops current clips
+and mutes later acknowledgements too; the existing saved sound preference is
+preserved. There is no background hum. Native exit feedback is best-effort and
+never delays shutting down the audio array.
 
 The canvas shows only AMPS's actual buses, devices, processing, and routes.
+Main Output includes the configured Moonlight and Quest endpoints, even though
+they are deliberately excluded from permanent physical-device history. Explicit
+physical-output choices bind AMPS directly instead of changing Windows defaults;
+during a Moonlight session this avoids Sunshine resetting its capture device.
+Selecting the session endpoint restores automatic routing. A manual listening
+choice survives AMPS restarts within that session and expires when the session
+device changes/disconnects. Windows physical-default selections still update the
+usual history. The UI confirms the engine's actual binding, with a bounded timeout
+instead of reporting success as soon as a preference is saved.
+
 OBS, ChatGPT/Codex capture, and voice-app placeholder nodes and illustrative wires
 are deliberately excluded: those programs independently capture the VAC endpoints.
 Their existing audio configuration is not changed by what the canvas draws.
@@ -372,15 +424,15 @@ buses and Clean Mic endpoints. When the Quest session ends, AMPS restores
 the most recent available physical input and output from its machine-local
 history.
 
-The operations console can select NVIDIA AFX, DeepFilterNet3, or bypass
-suppression entirely. Intensity is a 0–100% NVIDIA ratio; on
-DeepFilterNet3 it maps to a 0–40 dB maximum attenuation range, so the tracked
-20 dB default appears as 50%. Changes are hot-reloaded by the supervised Clean
-Mic processor while the Game, Comms, and Media streams remain live.
-Intensity changes update DeepFilterNet3 in place. NVIDIA AFX is recreated so
-the newly requested ratio is guaranteed to reach its loaded model; this rebuild
-is isolated to the Clean Mic worker and does not interrupt playback buses.
-Backend and bypass changes are likewise isolated to that worker. The choice is stored in
+The operations console controls NVIDIA AFX noise suppression and can bypass it
+entirely. Intensity is a 0–100% NVIDIA ratio. The legacy `attenuation_limit_db`
+configuration field remains a 0–40 scale for compatibility with existing saved
+settings, so the tracked value of 20 appears as 50%.
+Changes are hot-reloaded by the supervised Clean Mic processor while the Game,
+Comms, and Media streams remain live. On Windows, NVIDIA AFX is recreated so the
+newly requested ratio reaches its loaded model; this rebuild is isolated to the
+Clean Mic worker and does not interrupt playback buses. Bypass changes are
+likewise isolated to that worker. The choice is stored in
 `%APPDATA%\AMPS\controls.toml`, separate from the declarative base graph,
 so a later dotfiles reconciliation does not erase it.
 
@@ -465,5 +517,14 @@ request.json` accepts a typed request containing `id`, `session`,
 An acknowledgement timeout is an **unknown outcome**: refresh status before
 retrying, rather than assuming the edit failed. Live device/hotplug, Bluetooth,
 Quest/Moonlight, and game/stream soak tests remain distinct from the isolated
-browser checks. Linux audio execution and freely insertable DSP are future
-backend work; the canvas/model themselves are platform-neutral.
+browser checks. Linux provides native PipeWire routing, metering, spatial
+processing, NVIDIA AFX filtering, and temporary microphone
+monitoring. Freely insertable DSP remains future work.
+
+On NixOS, `dotfiles.amps` runs the engine as a system service under the configured
+desktop user, using that user's PipeWire session. The user-session UI controls
+the service through narrowly scoped Polkit authorization. Closing its window
+keeps the graph running; tray Restart restarts the engine, and tray Exit stops
+both the engine and UI. Run `amps doctor` to check the live graph. NVIDIA AFX
+currently packages the RTX 50-series native runtime; other GPU generations
+require matching models and runtime packaging.

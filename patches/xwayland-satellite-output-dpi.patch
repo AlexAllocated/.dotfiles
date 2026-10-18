@@ -1,0 +1,218 @@
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -104,14 +104,8 @@
+ 
+                     entity.get::<&mut SurfaceScaleFactor>().unwrap().0 = factor;
+ 
+-                    if let Some(OnOutput(output)) = entity.get::<&OnOutput>().as_deref().copied() {
+-                        if update_output_scale(
+-                            state.world.query_one(output).unwrap(),
+-                            OutputScaleFactor::Fractional(factor),
+-                        ) {
+-                            state.updated_outputs.push(output);
+-                        }
+-                    }
++                    // A surface's preferred scale can arrive before output enter/leave,
++                    // and may differ from the output scale. Never publish it as global DPI.
+                     if entity.has::<WindowData>() {
+                         update_surface_viewport(
+                             &state.world,
+@@ -237,14 +231,6 @@
+                             &state.world,
+                             state.world.query_one(target).unwrap(),
+                         );
+-                    } else {
+-                        let scale = data.get::<&SurfaceScaleFactor>().unwrap();
+-                        if update_output_scale(
+-                            state.world.query_one(on_output.0).unwrap(),
+-                            OutputScaleFactor::Fractional(scale.0),
+-                        ) {
+-                            state.updated_outputs.push(on_output.0);
+-                        }
+                     }
+                 }
+                 cmd.insert_one(target, on_output);
+@@ -1066,6 +1052,7 @@
+     pub width: i32,
+     pub height: i32,
+     rotated_90: bool,
++    logical_size: Option<(i32, i32)>,
+ }
+ 
+ impl Default for OutputDimensions {
+@@ -1084,7 +1071,32 @@
+             width: 0,
+             height: 0,
+             rotated_90: false,
+-        }
++            logical_size: None,
++        }
++    }
++}
++
++fn refresh_output_scale(output: Entity, state: &mut ServerState<impl XConnection>) {
++    let factor = {
++        let Ok(dimensions) = state.world.get::<&OutputDimensions>(output) else { return; };
++        let Some((logical_width, logical_height)) = dimensions.logical_size else { return; };
++        if dimensions.width <= 0 || dimensions.height <= 0 || logical_width <= 0 || logical_height <= 0 {
++            return;
++        }
++        let (width, height) = if dimensions.rotated_90 {
++            (dimensions.height, dimensions.width)
++        } else {
++            (dimensions.width, dimensions.height)
++        };
++        // Logical dimensions are rounded to whole pixels. Recover the protocol's
++        // 1/120 scale granularity rather than manufacturing a slightly different DPI.
++        ((width as f64 / logical_width as f64 + height as f64 / logical_height as f64)
++            * 60.0).round() / 120.0
++    };
++    if (0.5..=8.0).contains(&factor) && update_output_scale(
++        state.world.query_one(output).unwrap(), OutputScaleFactor::Fractional(factor),
++    ) {
++        state.updated_outputs.push(output);
+     }
+ }
+ 
+@@ -1335,6 +1347,7 @@
+                     debug!("{} dimensions: {width}x{height}", output.id());
+                 }
+                 output.mode(convert_wenum(flags), width, height, refresh);
++                refresh_output_scale(target, state);
+             }
+             Event::Scale { factor } => {
+                 debug!(
+@@ -1390,18 +1403,20 @@
+                         );
+                 }
+             }
+-            Event::LogicalSize { .. } => {
++            Event::LogicalSize { width, height } => {
+                 let Ok((xdg, dimensions)) = state
+                     .world
+-                    .query_one_mut::<(&XdgOutputServer, &OutputDimensions)>(target)
++                    .query_one_mut::<(&XdgOutputServer, &mut OutputDimensions)>(target)
+                 else {
+                     return;
+                 };
++                dimensions.logical_size = Some((width, height));
+                 if dimensions.rotated_90 {
+                     xdg.logical_size(dimensions.height, dimensions.width);
+                 } else {
+                     xdg.logical_size(dimensions.width, dimensions.height);
+                 }
++                refresh_output_scale(target, state);
+             }
+             _ => simple_event_shunt! {
+                 state.world.get::<&XdgOutputServer>(target).unwrap(),
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -3024,60 +3024,60 @@
+ }
+ 
+ #[test]
+-fn disconnected_output_rescaling() {
++fn output_dpi_survives_window_moves_and_hotplug() {
+     let mut f = TestFixture::new_pre_connect(|testwl| {
+         testwl.enable_fractional_scale();
+     });
+     let comp = f.compositor();
+-    let (_, output_main) = f.new_output(0, 0);
+-    let (_, output_ext) = f.new_output(1000, 0);
+-
++    let (desktop_client, desktop) = f.new_output(0, 0);
++    let (tablet_client, tablet) = f.new_output(3440, 270);
++    let manager = f.enable_xdg_output();
++    f.create_xdg_output(&manager, desktop_client.obj.clone());
++    f.create_xdg_output(&manager, tablet_client.obj.clone());
++    f.run();
++    f.run();
++    for (output, physical, logical, scale) in [
++        (&desktop, (3440, 1440), (3440, 1440), 1),
++        (&tablet, (2732, 2048), (1561, 1170), 2),
++    ] {
++        output.mode(s_proto::wl_output::Mode::Current, physical.0, physical.1, 60000);
++        output.scale(scale);
++        output.done();
++        let xdg = f.testwl.get_xdg_output(output).unwrap();
++        xdg.logical_size(logical.0, logical.1);
++        xdg.done();
++    }
++    f.run();
++    f.run();
++    assert_eq!(f.satellite.inner.current_scale, 1.0);
+     let window = Window::new(1);
+     let (_, id) = f.create_toplevel(&comp, window);
+-
+-    let surface_data = f.testwl.get_surface_data(id).expect("No surface data");
+-    let fractional = surface_data
+-        .fractional
+-        .as_ref()
+-        .expect("No fractional scale for surface");
+-    fractional.preferred_scale(240); // 2.0 scale
+-    f.testwl.move_surface_to_output(id, &output_main);
+-    f.run();
+-
+-    let surface_data = f.testwl.get_surface_data(id).expect("No surface data");
+-    let fractional = surface_data
+-        .fractional
+-        .as_ref()
+-        .expect("No fractional scale for surface");
+-    fractional.preferred_scale(180); // 1.5 scale
+-    f.testwl.move_surface_to_output(id, &output_ext);
+-    f.run();
+-    // Multiple monitors with different scaling will select the lowest scale across monitors
+-    assert_eq!(f.satellite.inner.new_scale, Some(1.5));
+-
+-    f.remove_output(output_ext);
+-    let surface_data = f.testwl.get_surface_data(id).expect("No surface data");
+-    let fractional = surface_data
+-        .fractional
+-        .as_ref()
+-        .expect("No fractional scale for surface");
+-    fractional.preferred_scale(120); // 1.0 scale
+-    f.run();
+-    f.run();
+-    // An fractional scale change done while the surface is on a removed output is ignored
+-    assert_eq!(f.satellite.inner.new_scale, Some(1.5));
+-
+-    f.testwl.move_surface_to_output(id, &output_main);
+-    let surface_data = f.testwl.get_surface_data(id).expect("No surface data");
+-    let fractional = surface_data
+-        .fractional
+-        .as_ref()
+-        .expect("No fractional scale for surface");
+-    fractional.preferred_scale(240); // 2.0 scale
+-    f.run();
+-    f.run();
+-    // After the output is disconnected, only the 2x scale output remains, so use that scale
+-    assert_eq!(f.satellite.inner.new_scale, Some(2.0));
++    let fractional = f.testwl.get_surface_data(id).unwrap().fractional.clone().unwrap();
++    // Both event orders occur when moving windows or changing keyboard focus.
++    // A tablet window must not change the desktop's scale, or vice versa.
++    for _ in 0..3 {
++        f.testwl.move_surface_to_output(id, &desktop);
++        fractional.preferred_scale(120);
++        f.run();
++        fractional.preferred_scale(210);
++        f.run(); // preferred scale arrives while OnOutput still names the desktop
++        assert_eq!(f.satellite.inner.current_scale, 1.0);
++        f.testwl.move_surface_to_output(id, &tablet);
++        f.run();
++        fractional.preferred_scale(120);
++        f.run(); // converse event ordering while OnOutput still names the tablet
++        assert_eq!(f.satellite.inner.current_scale, 1.0);
++    }
++    f.remove_output(desktop);
++    f.run();
++    assert_eq!(f.satellite.inner.current_scale, 1.75);
++    // A real output scale change must still update global DPI.
++    let xdg = f.testwl.get_xdg_output(&tablet).unwrap();
++    xdg.logical_size(1366, 1024);
++    xdg.done();
++    f.run();
++    f.run();
++    assert_eq!(f.satellite.inner.current_scale, 2.0);
+ }
+ 
+ #[track_caller]
