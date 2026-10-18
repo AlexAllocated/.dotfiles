@@ -131,7 +131,7 @@ let
           [ "disable:1" ]
       );
     in
-    "monitorrule=${lib.concatStringsSep "," arguments}";
+    "monitor_rule=${lib.concatStringsSep "," arguments}";
 
   niriOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderNiriOutput cfg.outputs);
   mangoOutputs = lib.concatStringsSep "\n" (lib.mapAttrsToList renderMangoOutput cfg.outputs);
@@ -567,7 +567,7 @@ let
     # the initial 80x24 size inside a correctly sized tile. Advertising a
     # fake-maximized state makes WezTerm honor the compositor's dimensions
     # without changing Mango's layout.
-    windowrule=force_fakemaximize:1,appid:org.wezfurlong.wezterm
+    window_rule=force_fake_maximize:1,app_id:org.wezfurlong.wezterm
 
     # Familiar aliases layered over Mango's complete upstream starter config.
     bind=SUPER,Return,spawn,wezterm start
@@ -614,19 +614,20 @@ let
     bind=NONE,XF86AudioLowerVolume,spawn,dotfiles-shell-action volume-down
     bind=NONE,XF86AudioMute,spawn,dotfiles-shell-action volume-mute
     bind=NONE,XF86AudioMicMute,spawn,dotfiles-shell-action mic-mute
-    bind=NONE,XF86AudioPlay,spawn,playerctl play-pause
-    bind=NONE,XF86AudioPause,spawn,playerctl play-pause
+    # Match media symbols directly: Play and Pause can share a physical keycode.
+    binds=NONE,XF86AudioPlay,spawn,playerctl play-pause
+    binds=NONE,XF86AudioPause,spawn,playerctl play-pause
     bind=NONE,XF86AudioPrev,spawn,playerctl previous
     bind=NONE,XF86AudioNext,spawn,playerctl next
 
     # Gruvbox Dark accents.
-    rootcolor=0x1d2021ff
-    bordercolor=0x504945ff
-    focuscolor=0xd79921ff
-    urgentcolor=0xcc241dff
-    scratchpadcolor=0x458588ff
-    globalcolor=0xb16286ff
-    overlaycolor=0x689d6aff
+    root_color=0x1d2021ff
+    border_color=0x504945ff
+    focus_color=0xd79921ff
+    urgent_color=0xcc241dff
+    scratchpad_color=0x458588ff
+    global_color=0xb16286ff
+    overlay_color=0x689d6aff
     border_radius=10
   '';
 in

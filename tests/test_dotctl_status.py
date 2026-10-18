@@ -214,6 +214,64 @@ class StatusTests(unittest.TestCase):
         self.assertIsNone(result['running_version'])
         self.assertEqual(result['deployment'], 'different')
 
+    def test_editor_receipt_versions_follow_resolved_purls_and_preserve_source_evidence(self):
+        cases = {
+            'cmakelang': ('0.6.13', 'pkg:pypi/cmakelang@0.6.13?extra=YAML', '0.6.13'),
+            'delve': ('v1.27.2', 'pkg:golang/github.com/go-delve/delve@v1.27.2#cmd/dlv', 'v1.27.2'),
+            'nil': ('2025-06-13', 'pkg:cargo/nil@2025-06-13?repository_url=https://github.com/oxalica/nil', '2025-06-13'),
+            'query-at': ('1.2.3', 'pkg:cargo/tool@1.2.3?repository_url=https://git@example.com/repo#bin/tool', '1.2.3'),
+            'encoded': ('v1.2.3+build#meta?variant', 'pkg:npm/%40scope/tool@v1.2.3%2Bbuild%23meta%3Fvariant?channel=stable', 'v1.2.3+build#meta?variant'),
+            'scoped': ('2.4.0', 'pkg:npm/@scope/tool@2.4.0', '2.4.0'),
+            'scoped-unversioned': ('1', 'pkg:npm/@scope/tool', None),
+            'unversioned-query-at': ('1', 'pkg:npm/tool?repository_url=https://git@example.com/repo', None),
+            'empty-version': ('1', 'pkg:npm/tool@', None),
+            'invalid': ('1', 'not-a-purl@1', None),
+            'real-drift': ('2.0.0', 'pkg:npm/tool@1.0.0?channel=stable', '1.0.0'),
+        }
+        (self.root / 'nvim').mkdir()
+        (self.root / 'nvim/mason-lock.json').write_text(json.dumps({
+            'packages': {name: desired for name, (desired, _, _) in cases.items()}}))
+        data = self.root.parent / 'data'
+        for name, (desired, purl, _) in cases.items():
+            package = data / 'nvim/mason/packages' / name
+            package.mkdir(parents=True)
+            (package / 'mason-receipt.json').write_text(json.dumps({
+                'schema_version': '2.0', 'source': {'id': purl},
+                # Even an exact request is not evidence of the resolved result.
+                'install_options': {'version': desired if name == 'real-drift' else 'latest'}}))
+        with patch.object(status.platform, 'system', return_value='Linux'), \
+             patch.dict(status.os.environ, {'XDG_DATA_HOME': str(data)}), \
+             patch.object(status, 'run', side_effect=AssertionError('editor was launched')):
+            results = {item['name']: item for item in status.editor_local(self.ctx)['mason']}
+        for name, (desired, purl, installed) in cases.items():
+            with self.subTest(package=name):
+                self.assertEqual(results[name]['installed_version'], installed)
+                self.assertEqual(results[name]['source_purl'], purl)
+                self.assertIsNone(results[name]['running_version'])
+                expected = 'unverified' if installed is None else 'matches' if installed == desired else 'different'
+                self.assertEqual(results[name]['deployment'], expected)
+
+    def test_editor_receipts_ignore_requested_version_without_a_resolved_source(self):
+        (self.root / 'nvim').mkdir()
+        (self.root / 'nvim/mason-lock.json').write_text('{"packages":{"missing":"1","legacy":"2"}}')
+        data = self.root.parent / 'data'
+        for name, receipt in {
+            'missing': {'install_options': {'version': '1'}},
+            'legacy': {'schema_version': '1.1', 'primary_source': {'id': 'pkg:npm/tool@2?channel=stable'},
+                       'source': {'id': 'pkg:npm/tool@incorrect'}, 'install_options': {'version': '1'}},
+        }.items():
+            package = data / 'nvim/mason/packages' / name
+            package.mkdir(parents=True)
+            (package / 'mason-receipt.json').write_text(json.dumps(receipt))
+        with patch.object(status.platform, 'system', return_value='Linux'), \
+             patch.dict(status.os.environ, {'XDG_DATA_HOME': str(data)}):
+            results = {item['name']: item for item in status.editor_local(self.ctx)['mason']}
+        self.assertIsNone(results['missing']['installed_version'])
+        self.assertEqual(results['missing']['deployment'], 'unverified')
+        self.assertEqual(results['legacy']['installed_version'], '2')
+        self.assertEqual(results['legacy']['source_purl'], 'pkg:npm/tool@2?channel=stable')
+        self.assertEqual(results['legacy']['deployment'], 'matches')
+
     def test_mac_editor_status_selects_managed_locks(self):
         (self.root / 'nvim').mkdir()
         (self.root / 'nvim/mason-lock.json').write_text('{"packages":{"personal-tool":"1"}}')

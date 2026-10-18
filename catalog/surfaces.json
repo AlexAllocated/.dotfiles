@@ -3531,10 +3531,10 @@
     "anchor": "name = \"CurseForge-${version}.AppImage\";",
     "owner": "curseforge"
   },
-  "packages/curseforge.nix::url = \"https://curseforge.overwolf.com/downloads/curseforge-latest-linux.AppImage\";": {
+  "packages/curseforge.nix::url = \"https://curseforge.overwolf.com/electron/linux/CurseForge-${version}.AppImage\";": {
     "source": "packages/curseforge.nix",
     "type": "declaration",
-    "anchor": "url = \"https://curseforge.overwolf.com/downloads/curseforge-latest-linux.AppImage\";",
+    "anchor": "url = \"https://curseforge.overwolf.com/electron/linux/CurseForge-${version}.AppImage\";",
     "owner": "curseforge"
   },
   "packages/curseforge.nix::substituteInPlace $out/share/applications/curseforge.desktop \\": {

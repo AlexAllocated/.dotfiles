@@ -166,16 +166,16 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1791038044,
-        "narHash": "sha256-B/JTZALQ4sw0h9c252bGKMpnJgxQB6k+u3nGt0HjQWw=",
+        "lastModified": 1792289259,
+        "narHash": "sha256-/EdansvwPZN9a49I/NuVROfnGwRtpa/XBnSUGF8b95g=",
         "owner": "nab138",
         "repo": "iloader",
-        "rev": "26558bc43ca08970c21bed79bee843636961cf43",
+        "rev": "18907b1a801ed1d5aed3304c5477696c5d3ca411",
         "type": "github"
       },
       "original": {
         "owner": "nab138",
-        "ref": "v2.3.5",
+        "ref": "v2.3.10",
         "repo": "iloader",
         "type": "github"
       }
@@ -212,16 +212,16 @@
         "scenefx": "scenefx"
       },
       "locked": {
-        "lastModified": 1790898883,
-        "narHash": "sha256-azXPZ57eVc5ZpUTjc4ZZwDRb5ZnZ4DQsPmzUS3YHXtk=",
+        "lastModified": 1792288609,
+        "narHash": "sha256-n/VaBi0yVOggB+ERQFCRNzYEfYpDSqbYkG066WCendQ=",
         "owner": "mangowm",
         "repo": "mango",
-        "rev": "cd84cc2822024f22e3c39ea8952d4b7e238c62b6",
+        "rev": "8ab8dd6da49de0c26b8355806ed3d3684c261aca",
         "type": "github"
       },
       "original": {
         "owner": "mangowm",
-        "ref": "0.17.5",
+        "ref": "0.18.2",
         "repo": "mango",
         "type": "github"
       }
@@ -333,16 +333,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1790905070,
-        "narHash": "sha256-ukT5U54WQSpq6sktl5QJOZ8S4ZF3LLmP8CAFel1XJf0=",
+        "lastModified": 1792070304,
+        "narHash": "sha256-gCF1P9r0UzPah0fqBTg2nVuxuuNnRxnYYHklvq8VKZI=",
         "owner": "noctalia-dev",
         "repo": "noctalia-shell",
-        "rev": "6ef43e2bf2f3d5b4205ec72a72e34a2ab76ce3b4",
+        "rev": "a33122c4208a385e19c9a252e65e2751b2c44fbb",
         "type": "github"
       },
       "original": {
         "owner": "noctalia-dev",
-        "ref": "v5.2.1",
+        "ref": "v5.3.0",
         "repo": "noctalia-shell",
         "type": "github"
       }
