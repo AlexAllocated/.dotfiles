@@ -16,7 +16,7 @@ import re
 import shutil
 from urllib.parse import unquote
 
-from core import atomic, digest, envelope, now, read, run
+from core import atomic, digest, envelope, nix_source, now, read, run
 
 GROUPS = ('system', 'os-release', 'drivers', 'desktop', 'editor', 'mac')
 SYSTEM_INPUTS = ('nixpkgs', 'nixpkgs-unstable', 'home-manager', 'nix-darwin', 'lanzaboote')
@@ -72,7 +72,7 @@ def _release_module(candidate):
 def _nix_update(candidate, inputs):
     _require('nix')
     # Explicit roots preserve recovery/AFX pins and isolate desktop inputs.
-    run(['nix', 'flake', 'update', *inputs, '--flake', f'path:{candidate}'], timeout=1800)
+    run(['nix', 'flake', 'update', *inputs, '--flake', nix_source(candidate)], timeout=1800)
 
 
 def _source_digest(candidate):
@@ -85,7 +85,8 @@ def _source_digest(candidate):
         if path.is_symlink():
             hasher.update(b'link\0' + os.readlink(path).encode())
         elif path.is_file():
-            hasher.update(str(path.stat().st_mode & 0o777).encode() + b'\0')
+            # Git/Nix preserve executability, not checkout-local read/write modes.
+            hasher.update(b'100755\0' if path.stat().st_mode & 0o100 else b'100644\0')
             hasher.update(digest(path).encode())
         elif not path.exists():
             hasher.update(b'deleted')
@@ -172,16 +173,22 @@ def check(ctx, group, candidate, work, profile=None):
         evidence['validation'] = 'Homebrew package versions and recipes re-resolved on this Mac; no packages installed'
     elif group in ('system', 'os-release', 'drivers', 'desktop'):
         _require('nix')
+        untracked = run(['git', '-C', candidate, 'ls-files', '--others', '--exclude-standard']).stdout.splitlines()
+        if untracked:
+            raise AdapterHold('Nix validation refuses untracked source files: ' + ', '.join(untracked[:10]) +
+                              '. Review and stage intended files in an owned candidate before checking; '
+                              'the developer index was not changed.')
         if platform.system() != 'Linux' or not Path('/etc/NIXOS').exists():
             raise AdapterHold('Full NixOS host validation must run on the supported NixOS machine')
         profile = profile or 'tracer'
         if profile not in ('tracer', 'chev-desktop'):
             raise AdapterHold(f'{profile} is a legacy target; explicitly use its compatibility apply path')
-        run(['nix', 'flake', 'check', f'path:{candidate}'], timeout=7200)
+        source = nix_source(candidate)
+        run(['nix', 'flake', 'check', source], timeout=7200)
         evidence['stages'].append({'name': 'native-flake-check', 'status': 'passed', 'at': now()})
-        run(['nix', 'flake', 'check', '--all-systems', '--no-build', f'path:{candidate}'], timeout=1800)
+        run(['nix', 'flake', 'check', '--all-systems', '--no-build', source], timeout=1800)
         evidence['stages'].append({'name': 'cross-platform-evaluation', 'status': 'passed', 'at': now()})
-        output = run(['nix', 'build', f'path:{candidate}#nixosConfigurations.{profile}.config.system.build.toplevel',
+        output = run(['nix', 'build', f'{source}#nixosConfigurations.{profile}.config.system.build.toplevel',
                       '--out-link', work / 'system', '--print-out-paths'], timeout=14400)
         paths = [line for line in output.stdout.splitlines() if line.startswith('/nix/store/')]
         if len(paths) != 1 or not (Path(paths[0]) / 'bin/switch-to-configuration').exists():

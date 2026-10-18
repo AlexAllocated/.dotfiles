@@ -195,6 +195,40 @@ class Fixture(unittest.TestCase):
         self.assertEqual(self.git('diff', '--cached'), before)
         self.assertEqual(m.scope_guard(worktree, self.base, 'system'), ['flake.lock'])
 
+    def test_verification_stages_reviewed_new_files_only_in_owned_candidate(self):
+        # Preserve both staged and unstaged developer changes while adding a
+        # new allowed Nix source to the separate candidate's Git source view.
+        (self.root / 'flake.lock').write_text('developer staged')
+        self.git('add', 'flake.lock')
+        (self.root / 'flake.lock').write_text('developer unstaged')
+        original_index = self.git('diff', '--cached')
+        candidate = self.candidate()
+        candidate['group'] = 'desktop'
+        worktree = self.state / 'candidates' / candidate['id'] / 'repo'
+        worktree.parent.mkdir(parents=True)
+        self.git('worktree', 'add', '--detach', str(worktree), self.base)
+        candidate['checkout'] = str(worktree)
+        (worktree / 'modules').mkdir()
+        (worktree / 'modules/reviewed.nix').write_text('{}')
+        def check(*args, **kwargs):
+            tracked = subprocess.check_output(['git', '-C', worktree, 'ls-files'], text=True)
+            self.assertIn('modules/reviewed.nix', tracked)
+            return {'status': 'passed'}
+        with patch.object(m.catalog, 'validate', return_value={'ok': True}), patch.object(m.adapters, 'check', side_effect=check):
+            m.verify(self.ctx, candidate)
+        self.assertEqual(self.git('diff', '--cached'), original_index)
+        self.assertEqual((self.root / 'flake.lock').read_text(), 'developer unstaged')
+
+    def test_verification_refuses_to_stage_developer_checkout(self):
+        candidate = self.candidate()
+        candidate['group'] = 'desktop'
+        (self.root / 'modules').mkdir()
+        (self.root / 'modules/reviewed.nix').write_text('{}')
+        with patch.object(m.catalog, 'validate', return_value={'ok': True}):
+            with self.assertRaisesRegex(RuntimeError, 'only in the owned candidate'):
+                m.verify(self.ctx, candidate)
+        self.assertNotIn('modules/reviewed.nix', self.git('ls-files'))
+
 
 if __name__ == '__main__':
     unittest.main()

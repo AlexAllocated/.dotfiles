@@ -61,6 +61,11 @@ def digest(path):
     return h.hexdigest()
 
 
+def nix_source(root):
+    """Local Git source includes tracked working changes, excluding ignored runtime files."""
+    return 'git+' + Path(root).resolve().as_uri()
+
+
 class Context:
     def __init__(self, root, state=None):
         self.root = Path(root).resolve()

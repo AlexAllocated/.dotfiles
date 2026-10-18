@@ -13,7 +13,7 @@ import subprocess
 import urllib.parse
 import urllib.request
 
-from core import age, digest, envelope, now, read, run
+from core import age, digest, envelope, nix_source, now, read, run
 from catalog import applies_here, is_background, records, runtime
 
 
@@ -226,7 +226,7 @@ def nix_inventory(ctx, host='tracer', *, persist=True):
         user_services = builtins.attrNames c.home-manager.users.alx.systemd.user.services;
       }'''
     result = json.loads(run(['nix', 'eval', '--impure', '--no-write-lock-file', '--json', '--expr', expr],
-                           cwd=ctx.root, env={**os.environ, 'DOTCTL_FLAKE': 'path:' + str(ctx.root),
+                           cwd=ctx.root, env={**os.environ, 'DOTCTL_FLAKE': nix_source(ctx.root),
                                              'DOTCTL_NIX_HOST': host}, timeout=240).stdout)
     # A package can be selected at multiple versions; store paths distinguish those records.
     result['packages'] = sorted({p['store_path']: p for p in result['packages']}.values(),

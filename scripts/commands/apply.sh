@@ -59,7 +59,7 @@ apply_profile() {
 				home-manager switch -b hm-backup --flake "$flake_ref"
 			else
 				local activation
-				activation="$(nix build "path:$source_root#homeConfigurations.ubuntu-wsl.activationPackage" --no-link --print-out-paths)"
+				activation="$(nix build "${flake_ref%#*}#homeConfigurations.ubuntu-wsl.activationPackage" --no-link --print-out-paths)"
 				"$activation/activate"
 			fi
 			apply_windows_packages "$source_root"

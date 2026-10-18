@@ -314,15 +314,17 @@ detect_profile() {
 flake_ref_for_profile() {
 	local profile="$1"
 	local source_root="${2:-$REPO_ROOT}"
+	local source_ref
+	source_ref="$(python3 -c 'from pathlib import Path; import sys; print("git+" + Path(sys.argv[1]).resolve().as_uri())' "$source_root")" || return $?
 	case "$profile" in
-		ubuntu-wsl) printf 'path:%s#ubuntu-wsl\n' "$source_root" ;;
-		tracer) printf 'path:%s#tracer\n' "$source_root" ;;
+		ubuntu-wsl) printf '%s#ubuntu-wsl\n' "$source_ref" ;;
+		tracer) printf '%s#tracer\n' "$source_ref" ;;
 		# The native target includes a machine-generated, gitignored ESP PARTUUID.
 		# path: semantics deliberately include it in every rebuild.
 		chev-desktop) printf 'path:%s#chev-desktop\n' "$source_root" ;;
-		linux) printf 'path:%s#linux\n' "$source_root" ;;
-		macos) printf 'path:%s#macos-arm64\n' "$source_root" ;;
-		darwin-macos) printf 'path:%s#macos-arm64\n' "$source_root" ;;
+		linux) printf '%s#linux\n' "$source_ref" ;;
+		macos) printf '%s#macos-arm64\n' "$source_ref" ;;
+		darwin-macos) printf '%s#macos-arm64\n' "$source_ref" ;;
 		*)
 			printf 'Profile does not have a Nix flake output: %s\n' "$profile" >&2
 			return 2

@@ -20,15 +20,15 @@ assert_equal() {
 	}
 }
 
-assert_equal "path:$repo_root#linux" "$(flake_ref_for_profile linux)"
-assert_equal "path:$repo_root#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
+assert_equal "git+file://$repo_root#linux" "$(flake_ref_for_profile linux)"
+assert_equal "git+file://$repo_root#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl)"
 assert_equal "path:$repo_root#chev-desktop" "$(flake_ref_for_profile chev-desktop)"
-assert_equal "path:$repo_root#tracer" "$(flake_ref_for_profile tracer)"
-assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
-assert_equal "path:$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
-assert_equal "path:/tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
+assert_equal "git+file://$repo_root#tracer" "$(flake_ref_for_profile tracer)"
+assert_equal "git+file://$repo_root#macos-arm64" "$(flake_ref_for_profile macos)"
+assert_equal "git+file://$repo_root#macos-arm64" "$(flake_ref_for_profile darwin-macos)"
+assert_equal "git+file:///tmp/staged-dotfiles#ubuntu-wsl" "$(flake_ref_for_profile ubuntu-wsl /tmp/staged-dotfiles)"
 assert_equal "path:/tmp/staged-dotfiles#chev-desktop" "$(flake_ref_for_profile chev-desktop /tmp/staged-dotfiles)"
-assert_equal "path:/tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
+assert_equal "git+file:///tmp/staged-dotfiles#tracer" "$(flake_ref_for_profile tracer /tmp/staged-dotfiles)"
 
 detected_tracer="$({
 	WSL_DISTRO_NAME=""

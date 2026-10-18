@@ -41,7 +41,7 @@ class Adapters(unittest.TestCase):
         with patch.object(adapters, '_require'), patch.object(adapters, '_release_module'), patch.object(adapters, '_shell'), patch.object(adapters, 'run') as run:
             adapters.prepare(self.ctx, 'system', self.root, self.work)
         command = run.call_args.args[0]
-        self.assertEqual(command[-1], 'path:' + str(self.root))
+        self.assertEqual(command[-1], adapters.nix_source(self.root))
         self.assertEqual(tuple(command[3:-2]), adapters.SYSTEM_INPUTS)
         self.assertNotIn('mango', command)
         self.assertNotIn('migration-nixpkgs', command)
@@ -149,6 +149,14 @@ class Adapters(unittest.TestCase):
     def test_runtime_under_source_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'outside'):
             adapters.prepare(self.ctx, 'editor', self.root, self.root / 'temp')
+
+    def test_nix_check_rejects_untracked_source_without_staging_developer_index(self):
+        (self.root / 'new-module.nix').write_text('{}')
+        before = subprocess.check_output(['git', '-C', self.root, 'diff', '--cached'])
+        with patch.object(adapters, '_require'):
+            with self.assertRaisesRegex(adapters.AdapterHold, 'refuses untracked source files'):
+                adapters.check(self.ctx, 'system', self.root, self.work)
+        self.assertEqual(subprocess.check_output(['git', '-C', self.root, 'diff', '--cached']), before)
 
     @unittest.skipUnless(shutil.which('nvim'), 'native Neovim is needed to exercise reviewed plugin pins')
     def test_plugin_bootstrap_and_restore_keep_older_reviewed_commits(self):

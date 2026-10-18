@@ -13,7 +13,7 @@ import sys
 import uuid
 
 import adapters
-from core import Context, atomic, envelope, now, read, run
+from core import Context, atomic, envelope, nix_source, now, read, run
 import catalog
 import storage
 
@@ -222,7 +222,14 @@ def verify(ctx, candidate):
     report = catalog.validate(Context(root, state=ctx.state))
     if not report['ok']:
         raise RuntimeError('Catalog validation failed: ' + '; '.join(report['errors'][:10]))
-    scope_guard(root, candidate['base'], candidate['group'])
+    paths = scope_guard(root, candidate['base'], candidate['group'])
+    if paths:
+        owned = ctx.state / 'candidates' / candidate['id'] / 'repo'
+        if root.resolve() != owned.resolve() or root.resolve() == ctx.root.resolve():
+            raise RuntimeError('Validation may stage reviewed paths only in the owned candidate checkout')
+        # Git flakes include new reviewed files once they are in this isolated
+        # index. Never stage, stash or alter the developer checkout's index.
+        git(root, 'add', '--', *paths)
     return adapters.check(ctx, candidate['group'], root, Path(candidate['work']), profile=candidate['profile'])
 
 
@@ -599,9 +606,10 @@ def apply_revision(ctx, profile=None, group=None):
         selected = work / 'repo'
         ctx.git('worktree', 'add', '--detach', str(selected), revision)
         if legacy:
-            run(['nix', 'flake', 'check', '--all-systems', '--no-build', 'path:' + str(selected)], timeout=1800)
+            source = nix_source(selected)
+            run(['nix', 'flake', 'check', '--all-systems', '--no-build', source], timeout=1800)
             target = 'darwinConfigurations.macos-arm64.system' if profile == 'darwin-macos' else 'homeConfigurations.' + ('macos-arm64' if profile == 'macos' else profile) + '.activationPackage'
-            built = run(['nix', 'build', 'path:' + str(selected) + '#' + target, '--out-link', str(work / 'profile'), '--print-out-paths'], timeout=7200)
+            built = run(['nix', 'build', source + '#' + target, '--out-link', str(work / 'profile'), '--print-out-paths'], timeout=7200)
             result = {'build_path': built.stdout.strip(), 'source_digest': adapters._source_digest(selected)}
         else:
             result = adapters.check(ctx, group, selected, work, profile=profile)
