@@ -1511,6 +1511,9 @@ in
         };
         systemd-boot = {
           enable = true;
+          # Windows owns the removable-media fallback. Update our systemd EFI
+          # binary without treating that foreign loader's unchanged bytes as an error.
+          graceful = true;
           # Keep the active generation plus two known-good rollback entries.
           configurationLimit = 3;
           xbootldrMountPoint = "/boot";

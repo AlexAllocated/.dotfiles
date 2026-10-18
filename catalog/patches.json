@@ -1891,5 +1891,34 @@
     "last_reviewed": null,
     "evidence": "Added after isolated restore rewrote accepted locks and the Lazy bootstrap lacked its reviewed commit. Removal or replacement by upstream behavior has not been validated.",
     "review_surfaces": []
+  },
+  {
+    "id": "systemd-boot-windows-fallback",
+    "owner": "desktop-integration",
+    "kind": "inline",
+    "source": "modules/nixos/desktop.nix",
+    "source_paths": [
+      "modules/nixos/desktop.nix",
+      "flake.nix",
+      "tests/systemd-boot-fallback.py"
+    ],
+    "reason": "Use the supported graceful update mode so a Windows-owned removable-media fallback does not abort systemd-boot updates. Keep the existing installer-recorded fallback restoration policy.",
+    "upstream": {
+      "url": "https://www.freedesktop.org/software/systemd/man/latest/bootctl.html",
+      "tracking": "manual",
+      "issue": null
+    },
+    "removal": {
+      "target": "An upstream bootctl/NixOS update path that preserves the Windows fallback without graceful mode.",
+      "regression": "Run the systemd-boot-windows-fallback flake check against the selected real bootctl, then verify generation entry/default updates and unchanged Windows, fallback-backup and recovery loader hashes during an approved activation. A reboot needs separate approval.",
+      "requires_live": true
+    },
+    "classification": "supported",
+    "review_state": "required",
+    "enabled": "declared for shared NixOS desktop systemd-boot; inactive when the optional Lanzaboote path is selected",
+    "last_reviewed": "2026-10-18",
+    "evidence": "Actual systemd 260.4 and 260.5 have identical ownership-check code. The selected 260.5 binary reproduces the ordinary foreign-fallback failure in temporary ESP/XBOOTLDR directories; graceful update preserves foreign bytes, succeeds on retry, and still rejects malformed version metadata and a managed-path I/O error. Live activation and boot remain separate evidence.",
+    "review_surfaces": [],
+    "anchor": "graceful = true;"
   }
 ]
