@@ -5,12 +5,12 @@
 }:
 let
   pname = "curseforge";
-  version = "1.321.1-39714";
+  version = "1.324.0-41180";
   src = fetchurl {
-    # Upstream exposes a rolling URL; the hash pins the reviewed release.
+    # Keep the reviewed release fetchable after upstream advances latest-linux.yml.
     name = "CurseForge-${version}.AppImage";
-    url = "https://curseforge.overwolf.com/downloads/curseforge-latest-linux.AppImage";
-    hash = "sha256-4DQZNlrJGY1gGAyqB74+vhhI9lCDPAEQrayhSX5G0Uc=";
+    url = "https://curseforge.overwolf.com/electron/linux/CurseForge-${version}.AppImage";
+    hash = "sha256-co4Exw7Nm57m9m1oyFQ9hypnulZVFHfO6iopp3pWPD8=";
   };
   contents = appimageTools.extractType2 { inherit pname version src; };
 in

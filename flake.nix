@@ -29,16 +29,16 @@
     # stable workstation base. Mango's modern socket protocol is shared by
     # both shell experiments below.
     mango = {
-      url = "github:mangowm/mango/0.17.5";
+      url = "github:mangowm/mango/0.18.2";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     noctalia = {
-      url = "github:noctalia-dev/noctalia-shell/v5.2.1";
+      url = "github:noctalia-dev/noctalia-shell/v5.3.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    iloader.url = "github:nab138/iloader/v2.3.5";
+    iloader.url = "github:nab138/iloader/v2.3.10";
   };
 
   outputs =
