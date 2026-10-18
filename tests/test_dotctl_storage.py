@@ -233,6 +233,34 @@ class StorageTests(unittest.TestCase):
                                   check=True, text=True, capture_output=True).stdout
         self.assertNotIn(candidate['checkout'], worktrees)
 
+    def test_unknown_candidate_siblings_survive_cleanup_after_retention(self):
+        directory, _ = self.candidate()
+        notes = directory / 'manual-recovery.txt'
+        notes.write_text('Recovery instructions outside the owned checkout')
+        backup = directory / 'manual-backup'
+        backup.mkdir()
+        (backup / 'important.txt').write_text('Unclassified user data')
+        self.age_tree(directory)
+        inventory = storage.scan(self.ctx)
+        item = next(item for item in inventory['items'] if item['path'] == str(directory))
+        self.assertTrue(item['protected'])
+        self.assertIn('Unclassified candidate siblings', item['protection_reason'])
+        self.assertEqual(storage.cleanup(self.ctx)['removed'], [])
+        self.assertEqual(notes.read_text(), 'Recovery instructions outside the owned checkout')
+        self.assertEqual((backup / 'important.txt').read_text(), 'Unclassified user data')
+
+    def test_declared_candidate_workspace_is_owned_but_unlisted_workspace_is_not(self):
+        directory, candidate = self.candidate()
+        work = directory / 'work'
+        work.mkdir()
+        (work / 'adapter-check.json').write_text('{"status":"passed"}')
+        self.age_tree(directory)
+        self.assertEqual(storage.plan(self.ctx)['items'], [])
+        candidate['work'] = str(work)
+        self.ctx.save('candidates/resolved/candidate.json', candidate)
+        self.age_tree(directory)
+        self.assertEqual([item['path'] for item in storage.plan(self.ctx)['items']], [str(directory)])
+
     def test_dirty_and_ignored_candidate_worktrees_are_protected(self):
         directory, candidate = self.candidate()
         (Path(candidate['checkout']) / 'untracked').write_text('valuable')
@@ -283,6 +311,20 @@ class StorageTests(unittest.TestCase):
                                             'revision': candidate['head'], 'candidate': candidate['id']})
         self.assertEqual(storage.plan(self.ctx)['items'], [])
         self.assertTrue(directory.exists())
+
+    def test_pending_system_application_protects_previous_source_and_generation(self):
+        directory, candidate = self.candidate()
+        target = '/nix/store/' + 'd' * 32 + '-nixos-system-recovery'
+        candidate['validation'] = {'build_path': target}
+        self.ctx.save('candidates/resolved/candidate.json', candidate)
+        self.age_tree(directory)
+        for pending in ({'previous_active_source': {'present': True, 'value': {'root': candidate['checkout']}}},
+                        {'previous_system': target}):
+            self.ctx.save('pending-system-application.json', pending)
+            self.assertEqual(storage.plan(self.ctx)['items'], [])
+            self.assertTrue(directory.exists())
+        (self.ctx.state / 'pending-system-application.json').unlink()
+        self.assertEqual([item['path'] for item in storage.plan(self.ctx)['items']], [str(directory)])
 
     def test_live_managed_symlink_protects_candidate_without_recent_receipt(self):
         directory, candidate = self.candidate()

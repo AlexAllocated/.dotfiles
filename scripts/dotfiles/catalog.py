@@ -323,12 +323,18 @@ def native_manifests(ctx):
     return tools
 
 
+def is_background(item):
+    """Declared background behavior exists even when no runtime probe is available."""
+    mode = item.get('runtime', {}).get('mode')
+    return mode in {'service', 'services', 'scheduled-task'} or (mode == 'unknown' and bool(item.get('startup')))
+
+
 def search(ctx, query='', scope=None):
     items = records(ctx)
     if scope == 'managed':
         items = native_manifests(ctx)
     elif scope == 'background':
-        items = [i for i in items if i.get('runtime', {}).get('mode') in {'service', 'services', 'scheduled-task'}]
+        items = [i for i in items if is_background(i)]
     elif scope == 'legacy':
         legacy = set(ctx.policy.get('machines', {}).get('legacy', {}).get('platforms', ['windows', 'wsl', 'darwin', 'linux-generic']))
         items = [i for i in items if i['classification'] in {'legacy', 'retired'} or set(i.get('platforms', [])) <= legacy]
@@ -361,10 +367,15 @@ def _service(spec):
         return {'state': 'unknown', 'error': str(exc)}
 
 
+def applies_here(item):
+    platforms = item.get('runtime', {}).get('platforms', item.get('platforms', []))
+    return not platforms or bool(set(platforms) & _platforms())
+
+
 def runtime(item):
     spec = item.get('runtime', {})
     platforms = spec.get('platforms', item.get('platforms', []))
-    if platforms and not set(platforms) & _platforms():
+    if not applies_here(item):
         return {'state': 'not-applicable', 'evidence': 'This component targets ' + ', '.join(platforms) + '; remote runtime has not been observed.'}
     if spec.get('mode') == 'manual':
         return {'state': 'on-demand', 'evidence': 'No persistent process expected; this does not prove the tool is installed.'}

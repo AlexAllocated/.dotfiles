@@ -1,4 +1,5 @@
 import datetime as dt
+from contextlib import ExitStack
 import plistlib
 from pathlib import Path
 import sys
@@ -126,6 +127,61 @@ class Schedules(unittest.TestCase):
         with patch.object(s.status, 'refresh') as refresh:
             self.assertEqual(s.run_job(self.ctx, 'daily')['status'], 'disabled')
             refresh.assert_not_called()
+
+    def weekly_fixture(self):
+        self.ctx.save('schedules.json', {'enabled': True})
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        for target, name, value in ((s, 'accepted', {}), (s.catalog, 'validate', {'ok': True}),
+                (s.status, 'patches', {}), (s.maintenance, 'review_inventory', {}),
+                (s.maintenance, 'local_profile', 'tracer'), (s.storage, 'cleanup', {})):
+            stack.enter_context(patch.object(target, name, return_value=value))
+        return {name: stack.enter_context(patch.object(s.maintenance, name))
+                for name in ('prepare', 'retry', 'candidates')}
+
+    def test_weekly_total_failure_remains_retryable(self):
+        mocks = self.weekly_fixture()
+        mocks['candidates'].return_value = []
+        mocks['prepare'].side_effect = RuntimeError('network unavailable')
+        first = s.run_job(self.ctx, 'weekly')
+        second = s.run_job(self.ctx, 'weekly')
+        self.assertEqual(first['status'], 'failed')
+        self.assertEqual(second['status'], 'failed')
+        self.assertEqual(mocks['prepare'].call_count, 10)
+
+    def test_weekly_retry_reuses_successes_and_retries_failed_candidate_but_keeps_manual_hold(self):
+        mocks = self.weekly_fixture()
+        mocks['candidates'].return_value = [
+            {'id': 'release-failed', 'group': 'os-release', 'status': 'failed', 'error': 'network unavailable'},
+            {'id': 'driver-held', 'group': 'drivers', 'status': 'failed', 'error': 'manual driver review'}]
+        def prepare(ctx, group):
+            if group == 'os-release':
+                raise RuntimeError('network unavailable')
+            if group == 'drivers':
+                raise s.adapters.AdapterHold('manual driver review')
+            return {'id': group + '-ready', 'status': 'ready'}
+        mocks['prepare'].side_effect = prepare
+        mocks['retry'].return_value = {'id': 'release-failed', 'status': 'ready'}
+        first = s.run_job(self.ctx, 'weekly')
+        self.assertEqual(first['status'], 'partial')
+        second = s.run_job(self.ctx, 'weekly')
+        self.assertEqual(second['status'], 'completed')
+        mocks['retry'].assert_called_once_with(self.ctx, 'release-failed')
+        self.assertEqual(mocks['prepare'].call_count, 5)
+        held = next(item for item in second['results'] if item.get('group') == 'drivers')
+        self.assertEqual(held['status'], 'held')
+        self.assertEqual(s.run_job(self.ctx, 'weekly')['status'], 'already-ran')
+
+    def test_weekly_unpublished_candidate_is_retryable(self):
+        mocks = self.weekly_fixture()
+        mocks['candidates'].return_value = [{'id': 'system-pending', 'group': 'system', 'status': 'publication-pending'}]
+        mocks['prepare'].side_effect = lambda ctx, group: {'id': group + '-pending',
+            'status': 'publication-pending' if group == 'system' else 'no-change', 'error': 'GitHub unavailable' if group == 'system' else None}
+        self.assertEqual(s.run_job(self.ctx, 'weekly')['status'], 'partial')
+        mocks['retry'].return_value = {'id': 'system-pending', 'status': 'ready'}
+        self.assertEqual(s.run_job(self.ctx, 'weekly')['status'], 'completed')
+        mocks['retry'].assert_called_once_with(self.ctx, 'system-pending')
+        self.assertEqual(mocks['prepare'].call_count, 5)
 
 
 if __name__ == '__main__':

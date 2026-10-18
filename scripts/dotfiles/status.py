@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 
 from core import age, digest, envelope, now, read, run
-from catalog import records, runtime
+from catalog import applies_here, is_background, records, runtime
 
 
 def stale(timestamp, hours=48):
@@ -350,7 +350,7 @@ def refresh(ctx):
         result['editor'] = {**editor.get('value', {}), 'error': editor.get('error'),
                             'attempted_at': editor.get('attempted_at')}
         for item in records(ctx):
-            if item.get('runtime', {}).get('mode') == 'service':
+            if is_background(item):
                 observed = observe({}, lambda item=item: runtime(item))
                 result['runtime'].append({'id': item['id'], **observed.get('value', {'state': 'unknown'}),
                                           'observed_at': observed.get('observed_at'),
@@ -372,9 +372,21 @@ def refresh(ctx):
     return cached(ctx)
 
 
+def runtime_has_state(observation, state):
+    """Grouped probes can contain both a failed unit and an unobserved unit."""
+    return observation.get('state') == state or any(
+        runtime_has_state(unit, state) for unit in observation.get('units', {}).values())
+
+
 def cached(ctx, group=None):
     """No subprocess, network request, lock, or state write belongs in this path."""
     result = ctx.load('status.json', envelope('status', observed_at=None, upstream={}))
+    observed = {item['id'] for item in result.get('runtime', [])}
+    for item in records(ctx):
+        if is_background(item) and applies_here(item) and item['id'] not in observed:
+            result.setdefault('runtime', []).append({
+                'id': item['id'], 'state': 'unknown', 'observed_at': None,
+                'evidence': 'No cached runtime observation for this declared background component; run dotctl status --refresh.'})
     if platform.system() == 'Darwin':
         result['upstream'] = {name: item for name, item in result.get('upstream', {}).items() if name == 'claude'}
     hours = ctx.policy.get('metadata_stale_hours', 48)
@@ -402,8 +414,8 @@ def cached(ctx, group=None):
     degraded = [name for name, item in result.get('upstream', {}).items() if item.get('error') or item['stale']]
     degraded += [name for name in ('local', 'inventory', 'brew', 'editor')
                  if name in result and (result[name].get('error') or result[name].get('stale'))]
-    result['health'] = {'runtime_issues': [r['id'] for r in result.get('runtime', []) if r.get('state') == 'failed'],
-                        'unknown_runtime': [r['id'] for r in result.get('runtime', []) if r.get('state') == 'unknown']}
+    result['health'] = {'runtime_issues': [r['id'] for r in result.get('runtime', []) if runtime_has_state(r, 'failed')],
+                        'unknown_runtime': [r['id'] for r in result.get('runtime', []) if runtime_has_state(r, 'unknown')]}
     result['freshness'] = {'stale': result['stale'], 'unverified_sources': degraded,
                            'declared_inventory_changed': inventory.get('source_changed', False)}
     result['deployment'] = {'reboot_required': result.get('local', {}).get('reboot_required'),

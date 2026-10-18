@@ -160,6 +160,7 @@ def run_job(ctx, name):
         should_run, slot = due(ctx, name)
         if not should_run:
             return envelope('schedule-run', status='already-ran', slot=slot)
+        previous = ctx.load('schedule-' + name + '.json', {})
         receipt = envelope('schedule-run', name=name, slot=slot, started_at=now(), status='running', results=[])
         ctx.save('schedule-' + name + '.json', receipt)
         try:
@@ -171,18 +172,43 @@ def run_job(ctx, name):
                 try:
                     receipt['results'].append(maintenance.review_inventory(ctx))
                 except Exception as exc:
-                    receipt['results'].append({'catalog_review': 'failed', 'error': str(exc)})
+                    receipt['results'].append({'catalog_review': 'failed', 'status': 'failed', 'error': str(exc)})
                 groups = ['mac'] if maintenance.local_profile() == 'macos-managed' else ['system', 'os-release', 'drivers', 'desktop', 'editor']
+                earlier = {item['group']: item for item in previous.get('results', []) if 'group' in item}
                 for group in groups:
+                    old = earlier.get(group, {})
+                    if previous.get('slot') == slot and old.get('status') in {'ready', 'no-change'}:
+                        receipt['results'].append(old)
+                        ctx.save('schedule-' + name + '.json', receipt)
+                        continue
+                    existing = next((item for item in maintenance.candidates(ctx) if item['id'] == old.get('candidate')), None)
+                    if (old.get('status') == 'held' and existing and existing.get('status') not in maintenance.TERMINAL
+                            and existing.get('error') == old.get('error')):
+                        receipt['results'].append(old)
+                        ctx.save('schedule-' + name + '.json', receipt)
+                        continue
                     try:
-                        result = maintenance.prepare(ctx, group)
-                        receipt['results'].append({'group': group, 'candidate': result['id'], 'status': result['status']})
+                        if existing and existing.get('status') in {'failed', 'publication-pending', 'validated', 'stale'}:
+                            result = maintenance.retry(ctx, existing['id'])
+                        else:
+                            result = maintenance.prepare(ctx, group)
+                        state = result['status'] if result['status'] in {'ready', 'no-change'} else 'failed'
+                        receipt['results'].append({'group': group, 'candidate': result['id'], 'status': state,
+                                                   'candidate_status': result['status'], 'error': result.get('error')})
                     except Exception as exc:
-                        receipt['results'].append({'group': group, 'status': 'failed', 'error': str(exc)})
+                        pending = [item for item in maintenance.candidates(ctx)
+                                   if item['group'] == group and item['status'] not in maintenance.TERMINAL]
+                        receipt['results'].append({'group': group,
+                            'status': 'held' if isinstance(exc, adapters.AdapterHold) else 'failed', 'error': str(exc),
+                            'candidate': pending[0]['id'] if len(pending) == 1 else None})
+                    # Preserve completed groups if a later group or cleanup is interrupted.
+                    ctx.save('schedule-' + name + '.json', receipt)
                 receipt['results'].append(storage.cleanup(ctx))
             else:
                 raise ValueError('Unknown scheduled job')
-            receipt['status'] = 'completed'
+            failed = any(item.get('status') == 'failed' or item.get('ok') is False for item in receipt['results'])
+            succeeded = any(item.get('status') in {'ready', 'no-change'} for item in receipt['results'])
+            receipt['status'] = ('partial' if succeeded else 'failed') if failed else 'completed'
         except BaseException as exc:
             receipt.update(status='failed', error=str(exc))
             raise

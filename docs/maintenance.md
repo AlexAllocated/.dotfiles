@@ -24,6 +24,8 @@ Inspection output is plain text, and `--json` returns a versioned document. `NO_
 
 The Windows Slack helper is indexed by purpose as well as name. It is a legacy scheduled task, not a Linux service. Its source does not prove that the Windows task is installed or running. A manual helper is on-demand, not unhealthy because it has no process.
 
+Background scope includes declared services whose runtime is unknown. Status counts missing local observations and unknown units within service groups explicitly; an intentionally inactive maintenance timer is not a runtime failure. Use `dotctl inspect <id>` for the individual unit evidence.
+
 `catalog/components.json` records ownership and intent. `catalog/surfaces.json` records reviewed operational entry points so a new helper or inline service cannot silently disappear into the repository. `catalog/patches.json` covers local patches and other custom source changes. Native package versions are derived, never copied into these descriptions. Unreviewed historical behavior stays visibly unreviewed until evidence supports a stronger classification.
 
 ## Preparing and applying updates

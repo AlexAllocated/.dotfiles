@@ -11,6 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts/dotfiles'))
 from core import Context, now
 import status
+import catalog
 
 
 class StatusTests(unittest.TestCase):
@@ -41,6 +42,55 @@ class StatusTests(unittest.TestCase):
         with patch.object(self.ctx, 'save', side_effect=AssertionError('write from cached status')):
             status.cached(self.ctx)
         self.assertEqual(before, (self.ctx.state / 'status.json').read_bytes())
+
+    def test_cached_missing_local_background_observation_is_unknown_without_probing(self):
+        (self.root / 'catalog/components.json').write_text(json.dumps([
+            {'id': 'radio', 'platforms': ['nixos'], 'startup': ['radio.service'], 'runtime': {'mode': 'unknown'}},
+            {'id': 'remote-task', 'platforms': ['windows'], 'runtime': {'mode': 'scheduled-task'}},
+            {'id': 'helper', 'platforms': ['nixos'], 'runtime': {'mode': 'manual'}},
+        ]))
+        with patch.object(catalog, '_platforms', return_value={'nixos', 'linux'}), \
+             patch.object(status, 'run', side_effect=AssertionError('cached status ran a probe')), \
+             patch.object(status, 'runtime', side_effect=AssertionError('cached status ran a probe')):
+            result = status.cached(self.ctx)
+        self.assertEqual(result['health']['unknown_runtime'], ['radio'])
+        self.assertEqual(result['health']['runtime_issues'], [])
+        self.assertFalse(self.ctx.state.exists())
+
+    def test_grouped_runtime_counts_failed_and_unknown_units_but_not_inactive_timers(self):
+        self.ctx.save('status.json', {'observed_at': now(), 'runtime': [
+            {'id': 'desktop', 'state': 'observed', 'units': {
+                'shell.service': {'state': 'failed'}, 'portal.service': {'state': 'unknown'}}},
+            {'id': 'maintenance-schedules', 'state': 'observed', 'units': {
+                'daily.timer': {'state': 'inactive'}, 'weekly.timer': {'state': 'inactive'}}},
+        ]})
+        result = status.cached(self.ctx)
+        self.assertEqual(result['health']['runtime_issues'], ['desktop'])
+        self.assertEqual(result['health']['unknown_runtime'], ['desktop'])
+
+    def test_refresh_probes_groups_and_retains_explicit_unknown_background_state(self):
+        (self.root / 'catalog/components.json').write_text(json.dumps([
+            {'id': 'radio', 'platforms': ['nixos'], 'startup': ['radio.service'],
+             'runtime': {'mode': 'unknown', 'reason': 'Radio availability needs verification'}},
+            {'id': 'maintenance-schedules', 'platforms': ['nixos'],
+             'runtime': {'mode': 'services', 'units': [
+                 {'unit': 'daily.timer', 'scope': 'user'}, {'unit': 'weekly.timer', 'scope': 'user'}]}},
+            {'id': 'manual-helper', 'runtime': {'mode': 'manual'}},
+        ]))
+        with patch.object(catalog, '_platforms', return_value={'nixos', 'linux'}), \
+             patch.object(catalog.Path, 'exists', return_value=True), \
+             patch.object(catalog, '_service', return_value={'state': 'inactive'}) as service, \
+             patch.object(status, 'providers', return_value={}), \
+             patch.object(status, 'os_local', return_value={}), \
+             patch.object(status, 'editor_local', return_value={}), \
+             patch.object(status.shutil, 'which', return_value=None), \
+             patch.object(status.platform, 'system', return_value='Linux'):
+            result = status.refresh(self.ctx)
+        self.assertEqual({item['id'] for item in result['runtime']}, {'radio', 'maintenance-schedules'})
+        self.assertEqual(service.call_count, 2)
+        self.assertEqual(result['health']['unknown_runtime'], ['radio'])
+        self.assertEqual(result['health']['runtime_issues'], [])
+        self.assertIn('Radio availability', next(item for item in result['runtime'] if item['id'] == 'radio')['evidence'])
 
     def test_failed_refresh_retains_value_and_old_observation(self):
         old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=4)).isoformat()

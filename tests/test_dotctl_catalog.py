@@ -302,6 +302,15 @@ class CatalogTests(unittest.TestCase):
         self.save()
         self.assertEqual(len(catalog.search(self.ctx, scope='legacy')['items']), 1)
 
+    def test_background_filter_preserves_unobserved_services_but_not_shells_or_manual_tools(self):
+        self.component('unobserved-service', startup=['Device-triggered service'], runtime={'mode': 'unknown'})
+        self.component('shell', startup=['Interactive shell startup'], runtime={'mode': 'configuration'})
+        self.component('manual-tool', runtime={'mode': 'manual'})
+        self.component('service-group', runtime={'mode': 'services', 'units': []})
+        self.save()
+        self.assertEqual({item['id'] for item in catalog.search(self.ctx, scope='background')['items']},
+                         {'unobserved-service', 'service-group'})
+
     def test_repository_catalog_is_complete_and_slack_remains_unverified(self):
         ctx = Context(ROOT, Path(self.tmp.name) / 'unused')
         result = catalog.validate(ctx)

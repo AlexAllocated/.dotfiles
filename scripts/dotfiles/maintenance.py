@@ -452,9 +452,13 @@ def updoot(ctx, identity=None):
 def activate(ctx, candidate):
     try:
         previous = str(Path('/run/current-system').resolve()) if Path('/run/current-system').exists() else None
-        candidate.setdefault('previous_system', previous)
+        recovery = None
         if candidate['group'] in SYSTEM_GROUPS:
-            candidate.setdefault('previous_active_source', active_source_snapshot(ctx))
+            recovery = begin_system_application(ctx, candidate['group'], candidate['merged_revision'],
+                candidate['activation_validation'], previous, active_source_snapshot(ctx),
+                root=candidate['activation_checkout'], candidate=candidate['id'])
+            candidate['previous_system'] = recovery['previous_system']
+            candidate['previous_active_source'] = recovery['previous_active_source']
         root = Path(candidate['activation_checkout'])
         work = Path(candidate['work']) / 'merged'
         result = journal(ctx, candidate, 'apply', lambda: apply_checked(
@@ -471,6 +475,8 @@ def activate(ctx, candidate):
             receipt['previous_active_source'] = candidate['previous_active_source']
             ctx.save('last-system-application.json', receipt)
         ctx.save('last-application.json', receipt)
+        if recovery:
+            clear_system_recovery(ctx, recovery)
         return candidate
     except BaseException as exc:
         candidate.update(status='apply-failed', error=str(exc))
@@ -603,6 +609,10 @@ def apply_revision(ctx, profile=None, group=None):
             raise RuntimeError('Source changed during validation; application cancelled')
         previous = str(Path('/run/current-system').resolve()) if Path('/run/current-system').exists() else None
         previous_source = active_source_snapshot(ctx) if group in SYSTEM_GROUPS else None
+        recovery = None
+        if group in SYSTEM_GROUPS:
+            recovery = begin_system_application(ctx, group, revision, result, previous, previous_source, root=str(selected))
+            previous, previous_source = recovery['previous_system'], recovery['previous_active_source']
         if legacy:
             if adapters._source_digest(selected) != result['source_digest']:
                 raise RuntimeError('Legacy source changed after validation')
@@ -618,6 +628,8 @@ def apply_revision(ctx, profile=None, group=None):
             ctx.save('last-system-application.json', receipt)
         ctx.save('active-deployments/' + group + '.json', {'root': str(selected), 'revision': revision, 'applied_at': now()})
         ctx.save('last-application.json', receipt)
+        if recovery:
+            clear_system_recovery(ctx, recovery)
         return receipt
 
 
@@ -633,14 +645,27 @@ def restore_active_source(ctx, snapshot):
         (ctx.state / 'active-source.json').unlink(missing_ok=True)
 
 
-def rollback(ctx):
-    application = ctx.load('last-system-application.json', {})
-    previous = application.get('previous_system')
-    if not previous or not re.fullmatch(r'/nix/store/[a-z0-9]{32}-nixos-system-[^/]+', previous):
-        raise RuntimeError('No recorded NixOS rollback target; inspect system generations manually')
-    if not (Path(previous) / 'bin/switch-to-configuration').exists():
-        raise RuntimeError('Recorded rollback target is unavailable; no profile was changed')
-    source = application.get('previous_active_source')
+def begin_system_application(ctx, group, revision, validation, previous, source, **identity):
+    """Keep recovery evidence durable before changing either native system pointer."""
+    pending = ctx.load('pending-system-application.json')
+    target = validation.get('build_path')
+    if pending:
+        if pending.get('revision') != revision or pending.get('target') != target:
+            raise RuntimeError('A different system application is unresolved; retry its exact source or run dotctl rollback first')
+        return pending
+    pending = envelope('pending-system-application', group=group, revision=revision, target=target,
+                       previous_system=previous, previous_active_source=source, started_at=now(), **identity)
+    ctx.save('pending-system-application.json', pending)
+    return pending
+
+
+def clear_system_recovery(ctx, recovery):
+    if ctx.load('pending-system-application.json') != recovery:
+        raise RuntimeError('System recovery evidence changed; retained it for inspection')
+    (ctx.state / 'pending-system-application.json').unlink()
+
+
+def validate_rollback_source(source):
     if not isinstance(source, dict) or not isinstance(source.get('present'), bool):
         raise RuntimeError('Rollback receipt has no prior source identity; no profile was changed')
     if source['present']:
@@ -650,9 +675,22 @@ def rollback(ctx):
         expected_revision = source['value'].get('revision')
         if not expected_revision or git(root, 'rev-parse', 'HEAD') != expected_revision or git(root, 'status', '--porcelain'):
             raise RuntimeError('Previous controller source changed since application; no profile was changed')
-    if not sys.stdin.isatty() or input(f'Activate previous system {previous}? [y/N] ').lower() not in {'y', 'yes'}:
-        raise RuntimeError('Rollback cancelled')
+
+
+def rollback(ctx):
     with ctx.lock():
+        pending = ctx.load('pending-system-application.json')
+        application = pending or ctx.load('last-system-application.json', {})
+        previous = application.get('previous_system')
+        if not previous or not re.fullmatch(r'/nix/store/[a-z0-9]{32}-nixos-system-[^/]+', previous):
+            raise RuntimeError('No recorded NixOS rollback target; inspect system generations manually')
+        if not (Path(previous) / 'bin/switch-to-configuration').exists():
+            raise RuntimeError('Recorded rollback target is unavailable; no profile was changed')
+        source = application.get('previous_active_source')
+        validate_rollback_source(source)
+        if not sys.stdin.isatty() or input(f'Activate previous system {previous}? [y/N] ').lower() not in {'y', 'yes'}:
+            raise RuntimeError('Rollback cancelled')
+        validate_rollback_source(source)
         run(['sudo', 'nix-env', '--profile', '/nix/var/nix/profiles/system', '--set', previous], timeout=120)
         run(['sudo', str(Path(previous) / 'bin/switch-to-configuration'), 'switch'], timeout=600)
         if str(Path('/run/current-system').resolve()) != previous:
@@ -662,6 +700,8 @@ def rollback(ctx):
         restore_active_source(ctx, source)
         receipt = envelope('rollback', target=previous, restored_source=source, observed_at=now(), rebooted=False)
         ctx.save('last-rollback.json', receipt)
+        if pending:
+            clear_system_recovery(ctx, pending)
         return receipt
 
 

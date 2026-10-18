@@ -272,6 +272,20 @@ def candidate_eligibility(ctx, item):
         identity = candidate['id']
         if identity != path.name or candidate.get('status') not in {'no-change', 'closed', 'superseded', 'applied'}:
             return False, 'Candidate is not terminal', None
+        # The producer owns only its receipt, registered checkouts and declared
+        # workspace. A clean Git checkout says nothing about a backup or notes
+        # someone placed beside it; never sweep those into recursive cleanup.
+        expected_children = {'candidate.json'}
+        for key, name in (('checkout', 'repo'), ('activation_checkout', 'merged-repo'), ('work', 'work')):
+            if candidate.get(key):
+                if absolute(candidate[key]) != path / name:
+                    return False, 'Candidate producer paths do not match the owned layout', None
+                expected_children.add(name)
+        unknown = sorted(child.name for child in path.iterdir() if child.name not in expected_children)
+        if unknown:
+            return False, 'Unclassified candidate siblings require explicit review: ' + ', '.join(unknown), None
+        if (path / 'candidate.json').is_symlink() or (candidate.get('work') and (path / 'work').is_symlink()):
+            return False, 'Candidate receipt or workspace was replaced with a symlink', None
         if item.get('active') or set(item.get('references', [])) - {identity} or referenced(ctx, path, exclude=identity):
             return False, 'Active or referenced candidate', None
         retention = max(30, ctx.policy.get('disposable_retention_days', 30)) * 86400
@@ -292,11 +306,11 @@ def candidate_eligibility(ctx, item):
         for reference in ('/run/current-system', '/run/booted-system'):
             if Path(reference).exists():
                 protected.add(str(Path(reference).resolve()))
-        for filename in ('last-application.json', 'last-system-application.json', 'last-good.json', 'last-confirmed-good.json', 'active-editor.json', 'active-source.json'):
+        for filename in ('last-application.json', 'last-system-application.json', 'pending-system-application.json', 'last-good.json', 'last-confirmed-good.json', 'active-editor.json', 'active-source.json'):
             receipt = ctx.load(filename, {})
             if receipt.get('candidate') == identity:
                 return False, 'Last application or last confirmed good candidate', None
-            if filename in {'active-editor.json', 'active-source.json', 'last-system-application.json'} and str(path) in json.dumps(receipt, sort_keys=True):
+            if filename in {'active-editor.json', 'active-source.json', 'last-system-application.json', 'pending-system-application.json'} and str(path) in json.dumps(receipt, sort_keys=True):
                 return False, 'Candidate provides the active editor or controller configuration', None
             protected.update(_store_paths(receipt))
         references = managed_symlink_references(ctx, path)

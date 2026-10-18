@@ -185,7 +185,7 @@ company profile excludes Codex desktop/CLI and AI editor extras. Mise is availab
 for project-local runtime versions but does not own global tools. Personal Mac
 apps belong in `platforms/macos-personal/Brewfile`.
 
-Preparation requires existing Homebrew, Git, and authenticated GitHub CLI.
+Preparation requires Python 3, Homebrew, Git, and authenticated GitHub CLI.
 It records exact package versions, recipes and artifacts for review. Once a
 reviewed `platforms/macos-managed/review.json` is committed, plain
 `./scripts/dotctl apply macos-managed` can apply it. The existing mutable
