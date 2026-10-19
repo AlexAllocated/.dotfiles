@@ -19,7 +19,21 @@ EFI = SYSTEMD / "lib/systemd/boot/efi/systemd-bootx64.efi"
 
 class WindowsFallback(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="dotfiles-bootctl-test-")
+        # bootctl syncfs() flushes the entire backing filesystem, so /build or
+        # /tmp can block on unrelated CI builds. Nix's Linux sandbox provides
+        # /dev/shm as tmpfs. Verify that contract instead of falling back to disk.
+        tmpfs = Path("/dev/shm").resolve(strict=True)
+        device = tmpfs.stat().st_dev
+        device_id = f"{os.major(device)}:{os.minor(device)}"
+        mounts = []
+        for line in Path("/proc/self/mountinfo").read_text().splitlines():
+            fields = line.split()
+            mount = Path(re.sub(r"\\([0-7]{3})", lambda match: chr(int(match[1], 8)), fields[4]))
+            if fields[2] == device_id and tmpfs.is_relative_to(mount):
+                mounts.append((len(mount.parts), fields[fields.index("-") + 1]))
+        self.assertTrue(mounts, "cannot identify /dev/shm backing filesystem")
+        self.assertEqual(max(mounts)[1], "tmpfs", "bootctl fixtures require a tmpfs filesystem")
+        self.tmp = tempfile.TemporaryDirectory(prefix="dotfiles-bootctl-test-", dir=tmpfs)
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
         self.esp = self.root / "esp"
