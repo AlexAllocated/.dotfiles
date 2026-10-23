@@ -1,4 +1,3 @@
-brew "azure-cli"
 brew "bat"
 brew "bun"
 brew "cmake"
