@@ -4744,6 +4744,24 @@
     "anchor": "postPatch = (oldAttrs.postPatch or \"\") + ''",
     "owner": "desktop-integration"
   },
+  "modules/home/gaming.nix::name = \"steam-display-scale\";": {
+    "source": "modules/home/gaming.nix",
+    "owner": "gaming-launchers",
+    "anchor": "name = \"steam-display-scale\";",
+    "type": "declaration"
+  },
+  "modules/home/gaming.nix::steamDisplayScale = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "owner": "gaming-launchers",
+    "anchor": "steamDisplayScale = pkgs.writeShellApplication {",
+    "type": "declaration"
+  },
+  "modules/home/gaming.nix::systemd.user.services.steam-display-scale = {": {
+    "source": "modules/home/gaming.nix",
+    "owner": "gaming-launchers",
+    "anchor": "systemd.user.services.steam-display-scale = {",
+    "type": "declaration"
+  },
   "modules/home/unreal-engine.nix": {
     "source": "modules/home/unreal-engine.nix",
     "type": "source",
@@ -4760,6 +4778,23 @@
     "type": "declaration",
     "anchor": "xdg.desktopEntries.unreal-engine = {",
     "owner": "unreal-engine"
+  },
+  "packages/cloudflared.nix": {
+    "source": "packages/cloudflared.nix",
+    "type": "source",
+    "owner": "bumblebee-resume"
+  },
+  "packages/cloudflared.nix::url = \"https://github.com/cloudflare/cloudflared/releases/download/${finalAttrs.version}/cloudflared-linux-amd64\";": {
+    "source": "packages/cloudflared.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://github.com/cloudflare/cloudflared/releases/download/${finalAttrs.version}/cloudflared-linux-amd64\";",
+    "owner": "bumblebee-resume"
+  },
+  "packages/cloudflared.nix::version = \"<native value>\";": {
+    "source": "packages/cloudflared.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "bumblebee-resume"
   },
   "packages/unreal-engine.nix": {
     "source": "packages/unreal-engine.nix",
@@ -4784,49 +4819,14 @@
     "anchor": "pkgs.writeShellApplication {",
     "owner": "unreal-engine"
   },
-  "scripts/unreal/engine.py": {
-    "source": "scripts/unreal/engine.py",
-    "type": "source",
-    "owner": "unreal-engine"
-  },
-  "modules/home/gaming.nix::name = \"steam-display-scale\";": {
-    "source": "modules/home/gaming.nix",
-    "owner": "gaming-launchers",
-    "anchor": "name = \"steam-display-scale\";",
-    "type": "declaration"
-  },
-  "modules/home/gaming.nix::steamDisplayScale = pkgs.writeShellApplication {": {
-    "source": "modules/home/gaming.nix",
-    "owner": "gaming-launchers",
-    "anchor": "steamDisplayScale = pkgs.writeShellApplication {",
-    "type": "declaration"
-  },
-  "modules/home/gaming.nix::systemd.user.services.steam-display-scale = {": {
-    "source": "modules/home/gaming.nix",
-    "owner": "gaming-launchers",
-    "anchor": "systemd.user.services.steam-display-scale = {",
-    "type": "declaration"
-  },
   "scripts/nixos/steam-display-scale.mjs": {
     "source": "scripts/nixos/steam-display-scale.mjs",
     "owner": "steam-health",
     "type": "source"
   },
-  "packages/cloudflared.nix": {
-    "source": "packages/cloudflared.nix",
+  "scripts/unreal/engine.py": {
+    "source": "scripts/unreal/engine.py",
     "type": "source",
-    "owner": "bumblebee-resume"
-  },
-  "packages/cloudflared.nix::url = \"https://github.com/cloudflare/cloudflared/releases/download/${finalAttrs.version}/cloudflared-linux-amd64\";": {
-    "source": "packages/cloudflared.nix",
-    "type": "declaration",
-    "anchor": "url = \"https://github.com/cloudflare/cloudflared/releases/download/${finalAttrs.version}/cloudflared-linux-amd64\";",
-    "owner": "bumblebee-resume"
-  },
-  "packages/cloudflared.nix::version = \"<native value>\";": {
-    "source": "packages/cloudflared.nix",
-    "type": "declaration",
-    "anchor": "version = \"<native value>\";",
-    "owner": "bumblebee-resume"
+    "owner": "unreal-engine"
   }
 }

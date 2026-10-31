@@ -820,13 +820,15 @@ in
           cpu_temperature = {
             type = "sysmon";
             stat = "cpu_temp";
-            display = "text";
+            visualization = "none";
+            show_value = true;
             glyph = "cpu-temperature";
           };
           gpu_temperature = {
             type = "sysmon";
             stat = "gpu_temp";
-            display = "text";
+            visualization = "none";
+            show_value = true;
             glyph = "gpu-usage";
           };
           weather = {
@@ -845,7 +847,7 @@ in
             }
           ];
           enabled = [ "alex/mullvad" ];
-          auto_update = false;
+          auto_update = "none";
         };
         weather = {
           enabled = true;

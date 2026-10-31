@@ -1062,7 +1062,7 @@
     "installed_locations": [],
     "disable": "Remove or disable this component in modules/home/compositors.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Build both compositor packages; verify session switching, portals, tray icons, fullscreen/floating input, output scaling and screen sharing on the actual desktop.",
+      "procedure": "Build both compositor packages; verify session switching, portals, tray icons, fullscreen/floating input, output scaling and screen sharing on the actual desktop. Verify Noctalia CPU/GPU temperatures remain visible with visualization = none and show_value = true, plugin auto-updates remain disabled with auto_update = none, and config validation reports no migration warnings.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },
