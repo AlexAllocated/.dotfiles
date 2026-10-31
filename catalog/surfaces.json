@@ -4788,5 +4788,28 @@
     "source": "scripts/unreal/engine.py",
     "type": "source",
     "owner": "unreal-engine"
+  },
+  "modules/home/gaming.nix::name = \"steam-display-scale\";": {
+    "source": "modules/home/gaming.nix",
+    "owner": "gaming-launchers",
+    "anchor": "name = \"steam-display-scale\";",
+    "type": "declaration"
+  },
+  "modules/home/gaming.nix::steamDisplayScale = pkgs.writeShellApplication {": {
+    "source": "modules/home/gaming.nix",
+    "owner": "gaming-launchers",
+    "anchor": "steamDisplayScale = pkgs.writeShellApplication {",
+    "type": "declaration"
+  },
+  "modules/home/gaming.nix::systemd.user.services.steam-display-scale = {": {
+    "source": "modules/home/gaming.nix",
+    "owner": "gaming-launchers",
+    "anchor": "systemd.user.services.steam-display-scale = {",
+    "type": "declaration"
+  },
+  "scripts/nixos/steam-display-scale.mjs": {
+    "source": "scripts/nixos/steam-display-scale.mjs",
+    "owner": "steam-health",
+    "type": "source"
   }
 }

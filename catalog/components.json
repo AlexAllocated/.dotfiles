@@ -790,7 +790,7 @@
   {
     "id": "chatgpt-desktop",
     "name": "ChatGPT desktop packaging and session supervisor",
-    "purpose": "Repackage the official Linux desktop app for NixOS, preserve mutable bundled-plugin copies, and supervise its process across graphical session replacement.",
+    "purpose": "Repackage the official Linux desktop app for NixOS with native Wayland display scaling, preserve mutable bundled-plugin copies, and supervise its process across graphical session replacement.",
     "capability": "development",
     "platforms": [
       "nixos",
@@ -826,7 +826,7 @@
     "installed_locations": [],
     "disable": "Remove or disable this component in packages/chatgpt-desktop.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Run watcher, bundled-copy and supervisor tests, then open the actual app and verify session handoff and writable plugin staging.",
+      "procedure": "Run watcher, bundled-copy and supervisor tests, then open the actual app and verify native Wayland scaling, session handoff and writable plugin staging.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },
@@ -1871,7 +1871,7 @@
   {
     "id": "steam-health",
     "name": "Steam startup and UI health checks",
-    "purpose": "Start Steam for the gaming session and periodically check its UI responsiveness without treating unrelated Wine sessions as Steam state.",
+    "purpose": "Start Steam, follow its main window output scale through the live desktop accessibility setting, and recover a missing UI without interrupting games.",
     "capability": "gaming",
     "platforms": [
       "nixos",
@@ -1880,22 +1880,27 @@
     "classification": "unreviewed",
     "aliases": [],
     "sources": [
-      "modules/home/gaming.nix"
+      "modules/home/gaming.nix",
+      "scripts/nixos/steam-display-scale.mjs"
     ],
-    "owns": [],
+    "owns": [
+      "scripts/nixos/steam-display-scale.mjs"
+    ],
     "commands": [
-      "steam-ui-healthcheck"
+      "steam-ui-healthcheck",
+      "steam-display-scale"
     ],
     "startup": [
       "steam-autostart.service",
-      "steam-ui-healthcheck.timer"
+      "steam-ui-healthcheck.timer",
+      "steam-display-scale.service"
     ],
     "effects": [],
     "state_locations": [],
     "installed_locations": [],
     "disable": "Remove or disable this component in modules/home/gaming.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Inspect the timer and logs, launch Steam and verify a real game starts and exits cleanly.",
+      "procedure": "Run node --test tests/test_steam_display_scale.mjs; verify loopback-only Steam CEF debugging, live UI scale updates on each Niri output, and a real game starting and exiting cleanly.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },
@@ -1911,6 +1916,10 @@
         },
         {
           "unit": "steam-ui-healthcheck.timer",
+          "scope": "user"
+        },
+        {
+          "unit": "steam-display-scale.service",
           "scope": "user"
         }
       ]

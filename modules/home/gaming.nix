@@ -351,6 +351,16 @@ let
       printf 'Halo started as PID %s with the declarative preset and GameMode.\n' "$halo_pid"
     '';
   };
+  steamDisplayScale = pkgs.writeShellApplication {
+    name = "steam-display-scale";
+    runtimeInputs = [
+      pkgs.nodejs
+      pkgs.niri
+    ];
+    text = ''
+      exec node ${../../scripts/nixos/steam-display-scale.mjs}
+    '';
+  };
   steamUiHealthcheck = pkgs.writeShellApplication {
     name = "steam-ui-healthcheck";
     runtimeInputs = [
@@ -549,7 +559,9 @@ in
         };
         Service = {
           ExecStartPre = lib.getExe steamVrDefaults;
-          ExecStart = "${lib.getExe pkgs.steam} -silent";
+          # Loopback-only CEF endpoint lets the scale helper use the same
+          # live accessibility setting as Steam's desktop slider.
+          ExecStart = "${lib.getExe pkgs.steam} -silent -cef-enable-debugging";
           # Steam exits successfully after forwarding to an existing client.
           # Restarting that helper repeatedly raises the existing Steam window.
           Restart = "on-failure";
@@ -560,6 +572,24 @@ in
           # CAP_SYS_NICE to the entire graphical session.
           LimitRTPRIO = 99;
           LimitNICE = -20;
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
+      };
+
+      systemd.user.services.steam-display-scale = {
+        Unit = {
+          Description = "Follow Steam's Niri output scale";
+          PartOf = [ "graphical-session.target" ];
+          After = [
+            "graphical-session.target"
+            "steam-autostart.service"
+          ];
+        };
+        Service = {
+          ExecStart = lib.getExe steamDisplayScale;
+          Restart = "on-failure";
+          RestartSec = 5;
+          Slice = "background.slice";
         };
         Install.WantedBy = [ "graphical-session.target" ];
       };

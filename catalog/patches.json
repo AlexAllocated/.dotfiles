@@ -924,7 +924,7 @@
       "packages/chatgpt-desktop/patch-bundled-copy.py",
       "packages/chatgpt-desktop/bundled-copy.cjs"
     ],
-    "reason": "Resolve ldd from the Nix closure, repair mutable bundled-plugin staging copies and point the desktop entry at the wrapped launcher.",
+    "reason": "Resolve ldd from the Nix closure, repair mutable bundled-plugin staging copies, point the desktop entry at the wrapped launcher and select native Wayland for per-output display scaling.",
     "upstream": {
       "url": "https://developers.openai.com/docs/linux/linux-app",
       "tracking": "manual",
@@ -932,7 +932,7 @@
     },
     "removal": {
       "target": "Vendor or Nixpkgs packaging with equivalent NixOS runtime and mutable copy behavior.",
-      "regression": "Run tests/chatgpt-watcher.cjs and tests/chatgpt-bundled-copy.cjs against a build without the rewrites, then verify plugin staging in the actual app.",
+      "regression": "Run tests/chatgpt-watcher.cjs and tests/chatgpt-bundled-copy.cjs against a build without the rewrites, then verify plugin staging and native Wayland scaling in the actual app.",
       "requires_live": true
     },
     "classification": "unreviewed",
@@ -943,7 +943,8 @@
     "review_surfaces": [
       "packages/chatgpt-desktop.nix::postPatch = ''",
       "packages/chatgpt-desktop.nix::substituteInPlace app-source/node_modules/@parcel/watcher/node_modules/detect-libc/lib/filesystem.js \\",
-      "packages/chatgpt-desktop.nix::substituteInPlace \"$out/share/applications/chatgpt.desktop\" \\"
+      "packages/chatgpt-desktop.nix::substituteInPlace \"$out/share/applications/chatgpt.desktop\" \\",
+      "packages/chatgpt-desktop.nix::makeWrapper \"$out/lib/chatgpt/ChatGPT\" \"$out/bin/chatgpt\" \\"
     ],
     "anchor": "postPatch"
   },
@@ -1338,7 +1339,7 @@
     "source_paths": [
       "modules/nixos/desktop.nix"
     ],
-    "reason": "Replace ALVR’s implicit adb lookup with the declared Nix Android-tools executable.",
+    "reason": "Replace ALVR\u2019s implicit adb lookup with the declared Nix Android-tools executable.",
     "upstream": {
       "url": "https://github.com/alvr-org/ALVR",
       "tracking": "manual",
@@ -1369,7 +1370,7 @@
     "source_paths": [
       "modules/nixos/desktop.nix"
     ],
-    "reason": "Expose current NSS/NSPR to Steam’s FHS environment because SteamVR 2.16 CEF requires newer libraries than the legacy Scout runtime carries.",
+    "reason": "Expose current NSS/NSPR to Steam\u2019s FHS environment because SteamVR 2.16 CEF requires newer libraries than the legacy Scout runtime carries.",
     "upstream": {
       "url": "https://github.com/NixOS/nixpkgs",
       "tracking": "manual",
@@ -1520,7 +1521,7 @@
     "source_paths": [
       "modules/home/gaming.nix"
     ],
-    "reason": "Share the prefix’s /tmp Wine server, clear the misparsed IANA TZ value, and prevent opportunistic runtime downloads on ordinary launch.",
+    "reason": "Share the prefix\u2019s /tmp Wine server, clear the misparsed IANA TZ value, and prevent opportunistic runtime downloads on ordinary launch.",
     "upstream": {
       "url": "https://github.com/Open-Wine-Components/umu-launcher",
       "tracking": "manual",

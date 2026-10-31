@@ -105,6 +105,7 @@
                 lua
                 neovim
                 nixfmt
+                nodejs
                 python3
                 rsync
                 shellcheck
@@ -145,6 +146,7 @@
             python3 -m unittest discover -s tests -p 'test_battlenet_settings.py'
             python3 -m unittest discover -s tests -p 'test_wow_display_settings.py'
             python3 -m unittest discover -s tests -p 'test_chatgpt*.py'
+            node --test tests/test_steam_display_scale.mjs
             python3 scripts/windows/configure-codex.py --self-test
             python3 scripts/codex/canonicalize-home.py --self-test
             python3 -m json.tool platforms/windows/winget.json >/dev/null
@@ -692,7 +694,6 @@
                 shellcheck
                 shfmt
                 stylua
-                unzip
                 treefmt
               ])
               ++ [ toolPkgs.prettier ];

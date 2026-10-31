@@ -104,6 +104,7 @@ pkgs.stdenvNoCC.mkDerivation {
   preFixup = ''
     makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
       "''${gappsWrapperArgs[@]}" \
+      --add-flags "--ozone-platform=wayland" \
       --prefix PATH : ${lib.makeBinPath [ pkgs.xdg-utils ]}
   '';
 
