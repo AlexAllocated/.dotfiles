@@ -9,25 +9,26 @@
       {
         matches = [
           {
-            "node.name" = "~alsa_input[.]usb-Generic_Blue_Microphones_LT_.*-00[.]analog-stereo";
+            "node.name" = "~alsa_input[.]usb-Logitech_Yeti_2_.*-00[.]analog-stereo";
           }
         ];
         actions.update-props = {
-          "node.name" = "creator.hardware.blue-yeti.mic";
-          "node.description" = "Blue Yeti Microphone";
-          "node.nick" = "Blue Yeti Microphone";
+          "node.name" = "creator.hardware.yeti-2.mic";
+          "node.description" = "Yeti 2 Microphone";
+          "node.nick" = "Yeti 2 Microphone";
         };
       }
       {
         matches = [
           {
-            "node.name" = "~alsa_output[.]usb-Generic_Blue_Microphones_LT_.*-00[.]analog-stereo";
+            "node.name" = "~alsa_output[.]usb-Logitech_Yeti_2_.*-00[.]analog-stereo";
           }
         ];
         actions.update-props = {
-          "node.name" = "creator.hardware.blue-yeti.output";
-          "node.description" = "Blue Yeti Headphones";
-          "node.nick" = "Blue Yeti Headphones";
+          "node.name" = "creator.hardware.yeti-2.output";
+          "node.description" = "Yeti 2 Headphones";
+          "node.nick" = "Yeti 2 Headphones";
+          "device.form-factor" = "headphones";
         };
       }
       {

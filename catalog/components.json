@@ -1455,7 +1455,7 @@
   {
     "id": "audio-routing",
     "name": "PipeWire creator audio and spatial routing",
-    "purpose": "Define application buses, clean microphone processing, selectable spatial audio and hardware hotplug recovery independently of AMPS.",
+    "purpose": "Give Tracer's Yeti 2 microphone/headphone output, TX-Hifi headphones and Pebble V3 speakers stable hardware names for AMPS. Preserve application buses, microphone processing, spatial audio and old Blue Yeti hotplug recovery for the legacy creator-audio host.",
     "capability": "audio",
     "platforms": [
       "nixos",
