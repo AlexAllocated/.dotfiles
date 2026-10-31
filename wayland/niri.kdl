@@ -64,6 +64,23 @@ window-rule {
     clip-to-geometry true
 }
 window-rule {
+    // Satellite promotes the transparent XEmbed host to a toplevel when no
+    // X11 parent has focus (especially at login). It must never claim a tile.
+    // Keep it mapped so Wine can paint the icons captured by the bridge.
+    match app-id="^wine-sni-bridge$"
+    open-floating true
+    open-focused false
+    default-column-width { fixed 32; }
+    default-window-height { fixed 32; }
+    open-animation false
+    on-xdg-activate "ignore"
+    geometry-corner-radius 0
+    clip-to-geometry false
+    focus-ring { off; }
+    border { off; }
+    shadow { off; }
+}
+window-rule {
     match app-id=r#"firefox$"# title="^Picture-in-Picture$"
     match title="^Picture in picture$"
     open-floating true

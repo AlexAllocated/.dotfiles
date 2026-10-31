@@ -1070,7 +1070,8 @@
       "desktop-integration",
       "xwayland-display",
       "sunshine",
-      "desktop-appearance"
+      "desktop-appearance",
+      "wine-tray"
     ],
     "runtime": {
       "mode": "services",
@@ -1845,12 +1846,14 @@
     "startup": [
       "Started with desktop tray integration"
     ],
-    "effects": [],
+    "effects": [
+      "Niri keeps the transparent XEmbed helper floating, unfocused and undecorated so it never reserves a tiled column."
+    ],
     "state_locations": [],
     "installed_locations": [],
     "disable": "Remove or disable this component in packages/wine-sni-bridge.nix, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Run D-Bus menu and Xvfb tray-host tests, then open a Wine tray icon and use its menu on the active desktop.",
+      "procedure": "Run D-Bus menu and Xvfb tray-host tests. Start the bridge with no other X11 windows focused; verify the helper is a small unfocused floating window without borders or shadows, then dock an icon and verify its pixels and click forwarding on the actual desktop.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },

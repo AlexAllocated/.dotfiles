@@ -565,7 +565,7 @@
       "patches/wine-sni-bridge-niri.patch",
       "packages/wine-sni-bridge.nix"
     ],
-    "reason": "Keep the XEmbed host invisible and input-transparent while presenting Wine tray icons on Niri.",
+    "reason": "Keep the XEmbed host invisible and input-transparent while presenting Wine tray icons on Niri. The matching rule in wayland/niri.kdl prevents a tiled column when Satellite promotes the parentless helper to a toplevel.",
     "upstream": {
       "url": "https://github.com/waliori/wine-sni-bridge",
       "tracking": "manual",
@@ -573,7 +573,7 @@
     },
     "removal": {
       "target": "A selected upstream release or commit that preserves this behavior without the local patch.",
-      "regression": "Run tests/test_wine_tray_menu.py and tests/test_wine_tray_host.py against the unpatched package, then verify the actual desktop tray and safe recovery action.",
+      "regression": "Run tests/test_wine_tray_menu.py and tests/test_wine_tray_host.py against the unpatched package, then verify the actual desktop tray and safe recovery action. Start with no other X11 windows focused and confirm the helper stays unfocused, undecorated and outside the tiling layout.",
       "requires_live": true
     },
     "classification": "unreviewed",
