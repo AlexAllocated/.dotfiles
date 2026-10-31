@@ -1921,5 +1921,33 @@
     "evidence": "Actual systemd 260.4 and 260.5 have identical ownership-check code. The selected 260.5 binary reproduces the ordinary foreign-fallback failure in temporary ESP/XBOOTLDR directories; graceful update preserves foreign bytes, succeeds on retry, and still rejects malformed version metadata and a managed-path I/O error. Live activation and boot remain separate evidence.",
     "review_surfaces": [],
     "anchor": "graceful = true;"
+  },
+  {
+    "id": "bumblebee-cloudflared-trust-pin",
+    "owner": "bumblebee-resume",
+    "kind": "pin",
+    "source": "packages/cloudflared.nix",
+    "source_paths": [
+      "packages/cloudflared.nix"
+    ],
+    "reason": "Keep the resume tunnel on the reviewed connector with the compromised certificate-authority trust removed, independently of the host package set and private application runtime.",
+    "upstream": {
+      "url": "https://github.com/cloudflare/cloudflared/releases",
+      "tracking": "manual",
+      "issue": "https://blog.cloudflare.com/emudhra-certificate-compromise/"
+    },
+    "removal": {
+      "target": "A reviewed host package containing the corrected certificate trust and an equal or newer connector release.",
+      "regression": "Build and verify the exact connector version, then verify its active tunnel connections and the published resume route without changing credentials or DNS.",
+      "requires_live": true
+    },
+    "classification": "supported",
+    "review_state": "required",
+    "enabled": "Selected by the declarative resume tunnel; live activation is verified separately.",
+    "last_reviewed": "2026-10-26",
+    "evidence": "Official release digest verified. The Nix package builds and reports the pinned release; the original connector remains running until the coordinated rollout.",
+    "review_surfaces": [
+      "packages/cloudflared.nix::version = \"<native value>\";"
+    ]
   }
 ]

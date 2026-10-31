@@ -1,8 +1,12 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
+let
+  cloudflared = pkgs.callPackage ../../packages/cloudflared.nix { };
+in
 {
   options.dotfiles.bumblebeeResume.enable = lib.mkEnableOption "Alex's private Bumblebee resume services";
 
@@ -51,13 +55,12 @@
           PartOf = [ "graphical-session.target" ];
           ConditionPathExists = [
             "%h/code/bumblebee-resume/build/index.js"
-            "%h/code/bumblebee-resume/ops/runtime/bin/cloudflared"
             "%h/.config/bumblebee-resume/tunnel.yml"
           ];
         };
         Service = {
           Type = "simple";
-          ExecStart = "%h/code/bumblebee-resume/ops/runtime/bin/cloudflared --no-autoupdate --config %h/.config/bumblebee-resume/tunnel.yml tunnel run";
+          ExecStart = "${cloudflared}/bin/cloudflared --no-autoupdate --config %h/.config/bumblebee-resume/tunnel.yml tunnel run";
           Restart = "on-failure";
           RestartSec = 10;
           TimeoutStopSec = 30;

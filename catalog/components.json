@@ -2356,7 +2356,7 @@
   {
     "id": "bumblebee-resume",
     "name": "Private resume site and tunnel",
-    "purpose": "Start the separate private resume repository and its Cloudflare tunnel only when its build, pinned runtime and local tunnel config exist. The application remains owned by that repository.",
+    "purpose": "Start the separate private resume repository and its Cloudflare tunnel only when the site build, pinned application runtime and local tunnel config exist. Dotfiles pins the tunnel connector independently; the application remains owned by its private repository.",
     "capability": "development",
     "platforms": [
       "nixos",
@@ -2365,10 +2365,12 @@
     "classification": "experimental",
     "aliases": [],
     "sources": [
-      "modules/home/bumblebee-resume.nix"
+      "modules/home/bumblebee-resume.nix",
+      "packages/cloudflared.nix"
     ],
     "owns": [
-      "modules/home/bumblebee-resume.nix"
+      "modules/home/bumblebee-resume.nix",
+      "packages/cloudflared.nix"
     ],
     "commands": [],
     "startup": [

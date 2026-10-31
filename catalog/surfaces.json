@@ -4811,5 +4811,22 @@
     "source": "scripts/nixos/steam-display-scale.mjs",
     "owner": "steam-health",
     "type": "source"
+  },
+  "packages/cloudflared.nix": {
+    "source": "packages/cloudflared.nix",
+    "type": "source",
+    "owner": "bumblebee-resume"
+  },
+  "packages/cloudflared.nix::url = \"https://github.com/cloudflare/cloudflared/releases/download/${finalAttrs.version}/cloudflared-linux-amd64\";": {
+    "source": "packages/cloudflared.nix",
+    "type": "declaration",
+    "anchor": "url = \"https://github.com/cloudflare/cloudflared/releases/download/${finalAttrs.version}/cloudflared-linux-amd64\";",
+    "owner": "bumblebee-resume"
+  },
+  "packages/cloudflared.nix::version = \"<native value>\";": {
+    "source": "packages/cloudflared.nix",
+    "type": "declaration",
+    "anchor": "version = \"<native value>\";",
+    "owner": "bumblebee-resume"
   }
 }
