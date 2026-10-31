@@ -110,6 +110,7 @@
                 shellcheck
                 shfmt
                 stylua
+                unzip
               ])
               ++ [ toolPkgs.prettier ];
           }
@@ -135,6 +136,7 @@
             python3 -m unittest discover -s tests -p 'test_dotctl*.py'
             python3 scripts/dotfiles/cli.py catalog --validate
             python3 -m unittest discover -s tests -p 'test_release_updates.py'
+            python3 -m unittest discover -s tests -p 'test_unreal_engine.py'
             python3 -m unittest discover -s tests -p 'test_sunshine_display_policy.py'
             python3 -m unittest discover -s tests -p 'test_wine_display_dpi.py'
             python3 -m unittest discover -s tests -p 'test_wine_session.py'
@@ -690,6 +692,7 @@
                 shellcheck
                 shfmt
                 stylua
+                unzip
                 treefmt
               ])
               ++ [ toolPkgs.prettier ];

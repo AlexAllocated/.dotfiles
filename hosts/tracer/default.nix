@@ -363,6 +363,7 @@ in
         dotfiles = {
           inherit profile;
           bumblebeeResume.enable = true;
+          unrealEngine.enable = true;
           wallpaper = {
             connector = "DP-1";
             outputMatch = "LG Electronics LG ULTRAGEAR 101NTCZMT555";

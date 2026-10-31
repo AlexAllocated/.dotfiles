@@ -4743,5 +4743,50 @@
     "type": "declaration",
     "anchor": "postPatch = (oldAttrs.postPatch or \"\") + ''",
     "owner": "desktop-integration"
+  },
+  "modules/home/unreal-engine.nix": {
+    "source": "modules/home/unreal-engine.nix",
+    "type": "source",
+    "owner": "unreal-engine"
+  },
+  "modules/home/unreal-engine.nix::name = \"Unreal Engine\";": {
+    "source": "modules/home/unreal-engine.nix",
+    "type": "declaration",
+    "anchor": "name = \"Unreal Engine\";",
+    "owner": "unreal-engine"
+  },
+  "modules/home/unreal-engine.nix::xdg.desktopEntries.unreal-engine = {": {
+    "source": "modules/home/unreal-engine.nix",
+    "type": "declaration",
+    "anchor": "xdg.desktopEntries.unreal-engine = {",
+    "owner": "unreal-engine"
+  },
+  "packages/unreal-engine.nix": {
+    "source": "packages/unreal-engine.nix",
+    "type": "source",
+    "owner": "unreal-engine"
+  },
+  "packages/unreal-engine.nix::name = \"unreal-engine\";": {
+    "source": "packages/unreal-engine.nix",
+    "type": "declaration",
+    "anchor": "name = \"unreal-engine\";",
+    "owner": "unreal-engine"
+  },
+  "packages/unreal-engine.nix::name = \"unreal-engine-runtime\";": {
+    "source": "packages/unreal-engine.nix",
+    "type": "declaration",
+    "anchor": "name = \"unreal-engine-runtime\";",
+    "owner": "unreal-engine"
+  },
+  "packages/unreal-engine.nix::pkgs.writeShellApplication {": {
+    "source": "packages/unreal-engine.nix",
+    "type": "declaration",
+    "anchor": "pkgs.writeShellApplication {",
+    "owner": "unreal-engine"
+  },
+  "scripts/unreal/engine.py": {
+    "source": "scripts/unreal/engine.py",
+    "type": "source",
+    "owner": "unreal-engine"
   }
 }

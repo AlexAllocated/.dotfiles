@@ -680,7 +680,7 @@
   {
     "id": "codex-tooling",
     "name": "Codex CLI and platform integration",
-    "purpose": "Install the pinned Codex CLI and platform wrappers without managing the user’s model preferences, plugins, authentication or config.toml. The company-managed Mac is excluded; its declared assistant is Claude Code.",
+    "purpose": "Install the pinned Codex CLI and platform wrappers without managing the user\u2019s model preferences, plugins, authentication or config.toml. The company-managed Mac is excluded; its declared assistant is Claude Code.",
     "capability": "development",
     "platforms": [
       "nixos",
@@ -3100,7 +3100,7 @@
     "installed_locations": [],
     "disable": "Remove or disable this component in scripts/windows/configure-always-on.ps1, review its relationships, then use the approved apply flow. Preserve its state until removal is verified.",
     "verification": {
-      "procedure": "Inspect each helper’s declared scope and read back the selected settings on the actual Windows host.",
+      "procedure": "Inspect each helper\u2019s declared scope and read back the selected settings on the actual Windows host.",
       "last_verified": null,
       "evidence": "Source indexed during the rewrite. No fresh live acceptance or retirement decision is claimed."
     },
@@ -3555,5 +3555,63 @@
       "evidence": "The exporter runs only when explicitly invoked with source and destination; no background process is expected."
     },
     "replacement": null
+  },
+  {
+    "id": "unreal-engine",
+    "name": "Unreal Engine Linux development",
+    "purpose": "Install Epic licensed Linux engine archives and launch the editor and its child tools in a declarative FHS runtime. Project MCP settings remain project-local.",
+    "capability": "development",
+    "platforms": [
+      "nixos"
+    ],
+    "classification": "supported",
+    "aliases": [
+      "unreal",
+      "holodeck"
+    ],
+    "sources": [
+      "packages/unreal-engine.nix",
+      "modules/home/unreal-engine.nix",
+      "scripts/unreal"
+    ],
+    "owns": [
+      "packages/unreal-engine.nix",
+      "modules/home/unreal-engine.nix",
+      "scripts/unreal"
+    ],
+    "commands": [
+      "unreal-engine"
+    ],
+    "startup": [],
+    "effects": [
+      "Explicit --install extracts an authenticated Epic archive into writable user data; launching starts the editor in an FHS environment."
+    ],
+    "state_locations": [
+      "~/.local/share/unreal-engine"
+    ],
+    "installed_locations": [
+      "user profile/bin/unreal-engine",
+      "applications/unreal-engine.desktop"
+    ],
+    "disable": "Set dotfiles.unrealEngine.enable = false and apply the host configuration. Preserve licensed engine files and projects.",
+    "verification": {
+      "procedure": "Validate catalog, build and activate tracer, install official Linux ZIP, launch the project and verify MCP and rendered room.",
+      "last_verified": null,
+      "evidence": "Tracer activation, official archive installation, map generation, native MCP tool calls and Play mode were verified locally. Engine version and checksum are in the local installation receipt."
+    },
+    "relationships": [
+      "native-manifests"
+    ],
+    "runtime": {
+      "mode": "manual",
+      "commands": [
+        "unreal-engine"
+      ]
+    },
+    "replacement": null,
+    "desired": {
+      "state": "native-evaluation-required",
+      "evidence": "Enabled for tracer in the native Home Manager configuration."
+    }
   }
 ]

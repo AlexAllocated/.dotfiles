@@ -45,6 +45,7 @@
     "~/migration-recovery",
     "~/save-recovery",
     "~/.local/share/dotfiles",
+    "~/.local/share/unreal-engine",
     "~/.backup_dotfiles",
     "~/Archives/codex-history"
   ],
